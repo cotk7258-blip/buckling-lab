@@ -26,7 +26,7 @@ const SHRINK_MEAN = SHRINK.reduce((a, b) => a + b, 0) / N;
 const K_LOST = 17.5 / 28;
 const BAR_H = 3.2;
 
-function springGeometry(): THREE.BufferGeometry {
+export function springGeometry(): THREE.BufferGeometry {
   const pts: THREE.Vector3[] = [];
   const turns = 9;
   for (let i = 0; i <= 260; i++) {

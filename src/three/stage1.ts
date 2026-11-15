@@ -1,0 +1,574 @@
+import * as THREE from 'three';
+import { writeStressColor } from './common.ts';
+import { springGeometry } from './explain.ts';
+import { ShowBase, arrow, label, line, ramp, setArrow, setLine, tintArrow } from './kit.ts';
+
+const NEUTRAL = new THREE.Color('#8794a8');
+const DARK = () => new THREE.MeshStandardMaterial({ color: '#1c2740', metalness: 0.7, roughness: 0.45 });
+
+/** 曲がる棒(中央が原点、両端が下がる向きに円弧で曲がる。上側が伸びる) */
+class BendBeam {
+  group = new THREE.Group();
+  mesh: THREE.Mesh;
+  private base: Float32Array = new Float32Array(0);
+  private lines: THREE.LineSegments;
+  private linePts: [number, number, number][] = [];
+  L: number;
+  h = 1;
+  w = 1;
+
+  constructor(L: number, h: number, w: number, withLines: boolean, steel = true) {
+    this.L = L;
+    this.mesh = new THREE.Mesh(
+      new THREE.BufferGeometry(),
+      new THREE.MeshStandardMaterial({ vertexColors: true, metalness: steel ? 0.4 : 0.1, roughness: 0.5 }),
+    );
+    this.mesh.frustumCulled = false;
+    this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true }));
+    this.lines.frustumCulled = false;
+    this.lines.visible = withLines;
+    this.group.add(this.mesh, this.lines);
+    this.setSize(h, w);
+  }
+
+  setSize(h: number, w: number) {
+    if (h === this.h && w === this.w && this.base.length) return;
+    this.h = h;
+    this.w = w;
+    const geo = new THREE.BoxGeometry(this.L, h, w, 48, 8, 1);
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3));
+    this.base = new Float32Array(geo.attributes.position.array as Float32Array);
+    this.mesh.geometry.dispose();
+    this.mesh.geometry = geo;
+    // 表面に引く線: 長手の線7本(真ん中は白)と、輪切りの線
+    const pts: [number, number, number][] = [];
+    const cols: number[] = [];
+    const z = w / 2 + 0.004;
+    for (let k = 0; k < 7; k++) {
+      const y = (k / 6 - 0.5) * h * 0.96;
+      for (let i = 0; i < 48; i++) {
+        pts.push([(i / 48 - 0.5) * this.L, y, z], [((i + 1) / 48 - 0.5) * this.L, y, z]);
+        const c = k === 3 ? [1, 1, 1] : [0.05, 0.08, 0.16];
+        cols.push(...c, ...c);
+      }
+    }
+    for (let i = 0; i <= 12; i++) {
+      const x = (i / 12 - 0.5) * this.L;
+      pts.push([x, -h / 2, z], [x, h / 2, z]);
+      cols.push(0.05, 0.08, 0.16, 0.05, 0.08, 0.16);
+    }
+    this.linePts = pts;
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts.length * 3), 3));
+    lg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cols), 3));
+    this.lines.geometry.dispose();
+    this.lines.geometry = lg;
+  }
+
+  private map(x: number, y: number, k: number, out: number[]) {
+    if (Math.abs(k) < 1e-5) {
+      out[0] = x;
+      out[1] = y;
+      return;
+    }
+    const R = 1 / k;
+    out[0] = (R + y) * Math.sin(x * k);
+    out[1] = (R + y) * Math.cos(x * k) - R;
+  }
+
+  /** k: 曲率(絵の単位)。sAt(y): 高さ y の応力/σy(圧縮を正)。mix: 色の濃さ */
+  update(k: number, sAt: (y: number) => number, mix: number) {
+    const pos = this.mesh.geometry.attributes.position as THREE.BufferAttribute;
+    const col = this.mesh.geometry.attributes.color as THREE.BufferAttribute;
+    const pa = pos.array as Float32Array;
+    const ca = col.array as Float32Array;
+    const o = [0, 0];
+    for (let i = 0; i < pos.count; i++) {
+      const y = this.base[i * 3 + 1];
+      this.map(this.base[i * 3], y, k, o);
+      pa[i * 3] = o[0];
+      pa[i * 3 + 1] = o[1];
+      writeStressColor(ca, i * 3, sAt(y), mix, NEUTRAL);
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    this.mesh.geometry.computeVertexNormals();
+    if (this.lines.visible) {
+      const lp = this.lines.geometry.attributes.position as THREE.BufferAttribute;
+      this.linePts.forEach((p, i) => {
+        this.map(p[0], p[1], k, o);
+        lp.setXYZ(i, o[0], o[1], p[2]);
+      });
+      lp.needsUpdate = true;
+    }
+  }
+
+  /** 端(x = ±L/2)の上面の位置 */
+  end(k: number, side: number): [number, number] {
+    const o = [0, 0];
+    this.map((side * this.L) / 2, this.h / 2, k, o);
+    return [o[0], o[1]];
+  }
+}
+
+/** バネの束(横向き)。左の板が固定、右の板が傾く。上のバネほど伸びる向きを正の傾きとする */
+class Bank {
+  group = new THREE.Group();
+  inner = new THREE.Group();
+  xs: number[] = [];
+  private springs: THREE.Mesh[] = [];
+  private mats: THREE.MeshStandardMaterial[] = [];
+  private plate: THREE.Mesh;
+  private arrows: THREE.Group[] = [];
+  private col = new Float32Array(3);
+
+  constructor(public n: number, public gap: number, public L0: number, geo: THREE.BufferGeometry) {
+    // 中では「縦のバネ・水平の板」で作り、全体を90度回して横向きにする
+    this.inner.rotation.z = -Math.PI / 2;
+    this.group.add(this.inner);
+    const w = n * gap + 0.25;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, 0.6), DARK());
+    base.position.y = -0.06;
+    this.plate = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, 0.6), new THREE.MeshStandardMaterial({ color: '#2a3a60', metalness: 0.7, roughness: 0.45 }));
+    this.inner.add(base, this.plate);
+    for (let i = 0; i < n; i++) {
+      const x = (i - (n - 1) / 2) * gap;
+      this.xs.push(x);
+      const m = new THREE.MeshStandardMaterial({ metalness: 0.6, roughness: 0.35 });
+      const s = new THREE.Mesh(geo, m);
+      s.position.x = x;
+      s.scale.set(gap / 0.56, 1, gap / 0.56);
+      this.inner.add(s);
+      this.springs.push(s);
+      this.mats.push(m);
+      const a = arrow('#ffffff');
+      a.scale.set(0.8, 1, 0.8);
+      this.inner.add(a);
+      this.arrows.push(a);
+    }
+  }
+
+  /** 絵の上で、バネ i の高さ(束の中心からの上下の位置) */
+  rowY(i: number) {
+    return -this.xs[i];
+  }
+
+  /** tilt: 傾き(正で上が伸びる)。force: 矢印の出し具合 0〜1。stiff: バネの硬さの見せ方(矢印の長さに掛ける) */
+  update(tilt: number, force: number, stiff = 1) {
+    const half = ((this.n - 1) / 2) * this.gap;
+    for (let i = 0; i < this.n; i++) {
+      const len = this.L0 - tilt * this.xs[i];
+      const s = (this.L0 - len) / Math.max(0.2, half * 0.2 * 1.3);
+      this.springs[i].scale.y = len;
+      writeStressColor(this.col, 0, Math.max(-1, Math.min(0.95, s)), Math.min(1, Math.abs(s) * 6), NEUTRAL);
+      const m = this.mats[i];
+      m.color.setRGB(this.col[0], this.col[1], this.col[2]);
+      m.emissive.copy(m.color);
+      m.emissiveIntensity = 0.25 + 0.5 * Math.min(1, Math.abs(s) * 2);
+      const f = Math.abs(len - this.L0) * 3.2 * force * stiff;
+      const a = this.arrows[i];
+      if (f < 0.05) a.visible = false;
+      else if (len > this.L0) setArrow(a, this.xs[i], len + 0.14 + f + 0.2, -(f + 0.2), 0.34);
+      else setArrow(a, this.xs[i], len + 0.14, f + 0.2, 0.34);
+      tintArrow(a, len > this.L0 ? '#ffa24a' : '#5cd0ff');
+    }
+    this.plate.position.y = this.L0 + 0.06;
+    this.plate.rotation.z = Math.atan(-tilt);
+  }
+}
+
+function gauge(color: string) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 0.16, 0.3),
+    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, roughness: 0.4 }),
+  );
+  return m;
+}
+/** 左端を x0 にそろえて長さ len の棒にする */
+function setGauge(m: THREE.Mesh, x0: number, y: number, len: number, z = 0) {
+  m.visible = len > 0.01;
+  m.scale.x = Math.max(0.01, len);
+  m.position.set(x0 + len / 2, y, z);
+}
+function tag(text: string, color: string, size = 0.7, wide = 1) {
+  const s = label(text, color, wide);
+  s.scale.multiplyScalar(size);
+  return s;
+}
+
+// H形(H-300×300×10×16、強軸まわり)と、同じ面積の長方形(幅100)
+const H = { b: 300, tf: 16, hw: 268, tw: 10 };
+const AREA = 2 * H.b * H.tf + H.hw * H.tw;
+const RECT = { b: 100, h: AREA / 100 };
+const I_RECT = (RECT.b * RECT.h ** 3) / 12;
+const iOf = (bf: number, tf: number, hw: number, tw: number) => 2 * ((bf * tf ** 3) / 12 + bf * tf * ((hw + tf) / 2) ** 2) + (tw * hw ** 3) / 12;
+/** 同じ量の鉄を H形にしたとき、踏ん張り(断面二次モーメント)が長方形の何倍になるか */
+export const H_GAIN = iOf(H.b, H.tf, H.hw, H.tw) / I_RECT;
+
+export interface LabState {
+  b: number; // mm
+  h: number; // mm
+  k: number; // 曲率 1/m
+}
+
+export class Stage1Show extends ShowBase {
+  private gRuler = new THREE.Group();
+  private rulerFlat: BendBeam;
+  private rulerEdge: BendBeam;
+  private rulerArrows: THREE.Group[] = [];
+  private gBlock = new THREE.Group();
+  private block: BendBeam;
+  private blockTags: THREE.Sprite[] = [];
+  private radius: THREE.Line;
+  private gBank = new THREE.Group();
+  private bank7: Bank;
+  private bars: THREE.Mesh[] = [];
+  private barTags: THREE.Sprite[] = [];
+  private arm: THREE.Line;
+  private armTag: THREE.Sprite;
+  private gPair = new THREE.Group();
+  private bank4: Bank;
+  private bank8: Bank;
+  private gA: THREE.Mesh;
+  private gB: THREE.Mesh;
+  private pairTags: THREE.Sprite[] = [];
+  private gMorph = new THREE.Group();
+  private parts: THREE.Mesh[] = [];
+  private gM0: THREE.Mesh;
+  private gM1: THREE.Mesh;
+  private morphTags: THREE.Sprite[] = [];
+  /** 式の場面で注目する記号(-1 で自動で順に) */
+  focus = -1;
+  lab: LabState = { b: 100, h: 150, k: 0.006 };
+
+  constructor(canvas: HTMLCanvasElement) {
+    super(canvas);
+    this.addFloor(-0.05);
+    const geo = springGeometry();
+    this.scene.add(this.gRuler, this.gBlock, this.gBank, this.gPair, this.gMorph);
+
+    // 定規
+    this.rulerFlat = new BendBeam(4.4, 0.06, 0.5, false, false);
+    this.rulerEdge = new BendBeam(4.4, 0.5, 0.06, false, false);
+    const ful = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.32, 0.55, 4), DARK());
+    ful.rotation.y = Math.PI / 4;
+    ful.position.y = 1.1;
+    this.gRuler.add(this.rulerFlat.group, this.rulerEdge.group, ful);
+    for (let i = 0; i < 2; i++) {
+      const a = arrow('#ffffff');
+      a.scale.set(1.6, 1, 1.6);
+      this.gRuler.add(a);
+      this.rulerArrows.push(a);
+    }
+
+    // 太い棒
+    this.block = new BendBeam(4.2, 1.0, 0.7, true);
+    this.block.group.position.y = 1.55;
+    this.gBlock.add(this.block.group);
+    for (const [t, c] of [['伸びる', '#ffa24a'], ['縮む', '#5cd0ff'], ['変わらない', '#ffffff']] as const) {
+      const s = tag(t, c, 0.75);
+      this.gBlock.add(s);
+      this.blockTags.push(s);
+    }
+    this.radius = line('#fbbf24', true);
+    this.gBlock.add(this.radius);
+
+    // バネの束(7本)
+    this.bank7 = new Bank(7, 0.4, 1.9, geo);
+    this.bank7.group.position.set(-2.6, 1.6, 0);
+    this.gBank.add(this.bank7.group);
+    for (let i = 0; i < 7; i++) {
+      const b = gauge('#fbbf24');
+      this.gBank.add(b);
+      this.bars.push(b);
+      const d = Math.abs(i - 3);
+      const s = tag(d === 0 ? '0' : `${d * d}`, '#fbbf24', 0.6);
+      this.gBank.add(s);
+      this.barTags.push(s);
+    }
+    this.arm = line('#fbbf24');
+    this.armTag = tag('腕', '#fbbf24', 0.7);
+    this.gBank.add(this.arm, this.armTag);
+
+    // 高さ1倍と2倍
+    this.bank4 = new Bank(4, 0.36, 1.5, geo);
+    this.bank4.group.position.set(-3.5, 1.95, 0);
+    this.bank8 = new Bank(8, 0.36, 1.5, geo);
+    this.bank8.group.position.set(0.3, 1.95, 0);
+    this.gA = gauge('#fbbf24');
+    this.gB = gauge('#fbbf24');
+    this.gPair.add(this.bank4.group, this.bank8.group, this.gA, this.gB);
+    for (const [t, x] of [['高さ 1', -2.7], ['高さ 2', 1.1], ['踏ん張り 1', -2.2], ['踏ん張り 8', 2.3]] as const) {
+      const s = tag(t, t.startsWith('踏') ? '#fbbf24' : '#e8eefc', 0.7);
+      s.position.set(x, t.startsWith('踏') ? -0.02 : 3.75, 0.3);
+      this.gPair.add(s);
+      this.pairTags.push(s);
+    }
+
+    // 同じ量の鉄: 長方形と H形
+    const steel = () => new THREE.MeshStandardMaterial({ color: '#8794a8', metalness: 0.7, roughness: 0.35 });
+    for (let i = 0; i < 6; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), steel());
+      this.gMorph.add(m);
+      this.parts.push(m);
+    }
+    this.gM0 = gauge('#fbbf24');
+    this.gM1 = gauge('#fbbf24');
+    this.gMorph.add(this.gM0, this.gM1);
+    for (const [t, x, y] of [['1倍', -2.6, 0.05], [`約${Math.round(H_GAIN)}倍`, 1.1, 0.05], ['同じ量の鉄', -0.75, 3.55]] as const) {
+      const s = tag(t, t === '同じ量の鉄' ? '#e8eefc' : '#fbbf24', 0.75);
+      s.position.set(x, y, 0.4);
+      this.gMorph.add(s);
+      this.morphTags.push(s);
+    }
+    this.setScene(0);
+  }
+
+  private showOnly(...gs: THREE.Group[]) {
+    for (const g of [this.gRuler, this.gBlock, this.gBank, this.gPair, this.gMorph]) g.visible = gs.includes(g);
+  }
+
+  private tickRuler(c: number) {
+    const t = c % 17;
+    const push = ramp(t, 1, 3.5) - ramp(t, 5, 6.3);
+    const roll = ramp(t, 6.5, 8.5) - ramp(t, 16, 17);
+    const push2 = ramp(t, 9, 11) - ramp(t, 15, 16);
+    const edge = roll > 0.999;
+    this.rulerFlat.group.visible = !edge;
+    this.rulerEdge.group.visible = edge;
+    const kFlat = 0.4 * push;
+    // 立てた向きは (幅/厚み)² = 約70倍 曲がりにくい
+    const kEdge = (0.4 * push2) / (0.5 / 0.06) ** 2;
+    this.rulerFlat.update(kFlat, () => 0, 0);
+    this.rulerFlat.group.rotation.x = (roll * Math.PI) / 2;
+    this.rulerEdge.update(kEdge, () => 0, 0);
+    const y0 = 1.375 + (edge ? 0.25 : 0.03 + 0.22 * roll);
+    this.rulerFlat.group.position.y = y0;
+    this.rulerEdge.group.position.y = 1.375 + 0.25;
+    const b = edge ? this.rulerEdge : this.rulerFlat;
+    const k = edge ? kEdge : kFlat;
+    const f = Math.max(push, push2);
+    for (let i = 0; i < 2; i++) {
+      const [ex, ey] = b.end(k, i ? 1 : -1);
+      const top = b.group.position.y + ey;
+      setArrow(this.rulerArrows[i], ex * 0.96, top + 0.08 + 0.75 * f, -0.75 * f);
+    }
+    this.caption =
+      t < 1
+        ? 'プラスチックの定規。両端を同じ力で押し下げる'
+        : t < 6.5
+          ? '平らな向きなら、簡単にしなる'
+          : t < 9
+            ? '同じ定規を、立てる'
+            : t < 13
+              ? '同じ力では、びくともしない'
+              : '材料も量も同じ。違うのは向きだけ。なぜ?';
+    this.look(0, 1.5, 3.0, 2.3, 16, 14);
+  }
+
+  private tickBlock(c: number, kMax = 0.36, cap = true) {
+    const t = c % 16;
+    const k = kMax * (ramp(t, 1, 4) - ramp(t, 15, 16));
+    const hh = this.block.h / 2;
+    this.block.update(k, (y) => (-k * y) / (kMax * hh) * 0.8, Math.min(1, (k / kMax) * 3));
+    const y0 = this.block.group.position.y;
+    const pos: [number, number][] = [
+      [0, y0 + hh + 0.3],
+      [0, y0 - hh - 0.3],
+      [2.75, y0 - (k ? (1 / k) * (1 - Math.cos(2.1 * k)) : 0)],
+    ];
+    this.blockTags.forEach((s, i) => {
+      s.position.set(pos[i][0], pos[i][1], 0.5);
+      s.visible = cap && k > 0.1 && (i < 2 || t > 6);
+    });
+    this.radius.visible = false;
+    if (cap)
+      this.caption =
+        t < 1
+          ? '太い棒に、線を引いておく'
+          : t < 6
+            ? '曲げると、外側の線は伸び、内側の線は縮む'
+            : t < 10.5
+              ? '真ん中の線だけは、長さが変わらない'
+              : '伸び縮みは、真ん中から離れるほど大きい';
+    return k;
+  }
+
+  private tickBank(c: number, lever: boolean) {
+    const t = c % (lever ? 20 : 15);
+    const tilt = 0.15 * (lever ? 1 : ramp(t, 1, 3.5));
+    this.bank7.update(tilt, lever ? 1 : ramp(t, 7, 8.5));
+    const bx = this.bank7.group.position.x;
+    const by = this.bank7.group.position.y;
+    const x0 = bx + this.bank7.L0 + 1.35;
+    const grow = lever ? ramp(t, 10.5, 12.5) : 0;
+    for (let i = 0; i < 7; i++) {
+      const d = Math.abs(i - 3);
+      const y = by + this.bank7.rowY(i);
+      const len = 0.24 * d * d * grow;
+      setGauge(this.bars[i], x0, y, len, 0.2);
+      this.barTags[i].visible = grow > 0.9;
+      this.barTags[i].position.set(x0 + len + 0.3, y, 0.3);
+    }
+    const armOn = lever && t > 5;
+    this.arm.visible = armOn;
+    this.armTag.visible = armOn;
+    if (armOn) {
+      const xa = bx + this.bank7.L0 + 0.95;
+      setLine(this.arm, xa, by, xa, by + this.bank7.rowY(0), 0.35);
+      this.armTag.position.set(xa + 0.25, by + this.bank7.rowY(0) / 2, 0.35);
+    }
+    if (!lever)
+      this.caption =
+        t < 1
+          ? '棒を薄く輪切りにした1枚を、バネの束で表す'
+          : t < 7
+            ? '曲がる = 輪切りの面が傾く。上のバネは伸び、下は縮む'
+            : '伸びたバネは引き戻し、縮んだバネは押し返す。傾きを戻そうとする';
+    else
+      this.caption =
+        t < 5
+          ? 'バネの力は、真ん中から遠いほど大きい(大きく伸び縮みするから)'
+          : t < 10.5
+            ? '面を回す効き目は、力 × 腕の長さ。腕も、真ん中からの距離'
+            : '効き目は 距離 × 距離。3倍遠いバネは、9倍効く';
+    this.look(lever ? 0.3 : -0.9, 1.6, lever ? 3.4 : 2.6, 2.4, 10, 8);
+  }
+
+  private tickPair(c: number) {
+    const t = c % 22;
+    const tilt = 0.13 * ramp(t, 1, 3);
+    this.bank4.update(tilt, 1);
+    this.bank8.update(tilt, 1);
+    const step = t < 3.5 ? 1 : t < 8 ? 2 : t < 12.5 ? 4 : 8;
+    const k = 0.34;
+    setGauge(this.gA, -3.4, 0.3, k * ramp(t, 3, 3.5), 0.3);
+    const cur = this.gB.scale.x;
+    const goal = k * step * ramp(t, 3, 3.5);
+    setGauge(this.gB, 0.4, 0.3, cur + (goal - cur) * 0.12, 0.3);
+    this.pairTags[2].visible = t > 3.5;
+    this.pairTags[3].visible = t > 17.5;
+    this.caption =
+      t < 3.5
+        ? '高さが2倍の断面と比べる(同じ角度だけ傾ける)'
+        : t < 8
+          ? '① バネの数が 2倍'
+          : t < 12.5
+            ? '② 端のバネの伸び縮みが 2倍(だから力も 2倍)'
+            : t < 17.5
+              ? '③ 端のバネの腕の長さが 2倍'
+              : '2 × 2 × 2 = 8倍。踏ん張りは、高さの3乗で効く';
+    this.look(0, 1.75, 4.0, 2.75, 8, 7);
+  }
+
+  /** p: 0 で長方形、1 で H形 */
+  private setMorph(p: number) {
+    const S = 1 / 105;
+    const lerp = (a: number, b: number) => a + (b - a) * p;
+    const cy = 1.9;
+    // 左: 長方形のまま(3分割して置く)。右: 上下がフランジに、中がウェブになる
+    const third = RECT.h / 3;
+    for (let side = 0; side < 2; side++) {
+      const q = side ? p : 0;
+      const x = side ? 1.1 : -2.6;
+      const tf = third + (H.tf - third) * q;
+      const bf = RECT.b + (H.b - RECT.b) * q;
+      const hw = third + (H.hw - third) * q;
+      const tw = RECT.b + (H.tw - RECT.b) * q;
+      const dims: [number, number, number][] = [
+        [bf, tf, (hw + tf) / 2],
+        [tw, hw, 0],
+        [bf, tf, -(hw + tf) / 2],
+      ];
+      dims.forEach(([w, h, y], i) => {
+        const m = this.parts[side * 3 + i];
+        m.scale.set(w * S, h * S, 0.6);
+        m.position.set(x, cy + y * S, 0);
+      });
+    }
+    const third2 = lerp(third, H.tf);
+    const gain = iOf(lerp(RECT.b, H.b), third2, lerp(third, H.hw), lerp(RECT.b, H.tw)) / I_RECT;
+    const k = 3.0 / H_GAIN;
+    setGauge(this.gM0, -3.0, 0.42, k, 0.4);
+    setGauge(this.gM1, 0.0, 0.42, k * gain, 0.4);
+    return gain;
+  }
+
+  private tickMorph(c: number, cap = true) {
+    const t = c % 18;
+    const p = ramp(t, 2.5, 7.5) - ramp(t, 17, 18);
+    this.setMorph(p);
+    this.morphTags[1].visible = p > 0.98;
+    if (cap)
+      this.caption =
+        t < 2.5
+          ? '同じ量の鉄でできた、2つの断面'
+          : t < 8
+            ? '鉄を、真ん中から遠い上下へ移していく'
+            : t < 13
+              ? `同じ量の鉄で、踏ん張りは約${Math.round(H_GAIN)}倍`
+              : 'これが、H形鋼があの形をしている理由';
+    this.look(-0.4, 1.75, 3.9, 2.6, 16, 10);
+  }
+
+  protected tick() {
+    const s = this.sceneIndex;
+    const c = this.clock;
+    if (s === 0) {
+      this.showOnly(this.gRuler);
+      this.tickRuler(c);
+    } else if (s === 1) {
+      this.showOnly(this.gBlock);
+      this.block.setSize(1.0, 0.7);
+      this.tickBlock(c);
+      this.look(0, 1.35, 3.2, 2.4, 10, 8);
+    } else if (s === 2 || s === 3) {
+      this.showOnly(this.gBank);
+      this.tickBank(c, s === 3);
+    } else if (s === 4) {
+      this.showOnly(this.gPair);
+      this.tickPair(c);
+    } else if (s === 5) {
+      this.showOnly(this.gMorph);
+      this.tickMorph(c);
+    } else if (s === 6) {
+      // 式の記号を1つずつ絵で見せる
+      const f = this.focus >= 0 ? this.focus : Math.floor(c / 6) % 3;
+      if (f === 0) {
+        this.showOnly(this.gBank);
+        const stiff = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(c * 1.2));
+        this.bank7.update(0.15, 1, stiff);
+        for (const b of this.bars) b.visible = false;
+        for (const b of this.barTags) b.visible = false;
+        this.arm.visible = false;
+        this.armTag.visible = false;
+        this.caption = 'E = バネ1本の硬さ。材料で決まる(鋼はアルミの約3倍)';
+        this.look(-0.9, 1.6, 2.6, 2.4, 10, 8);
+      } else if (f === 1) {
+        this.showOnly(this.gMorph);
+        this.tickMorph(c, false);
+        this.caption = 'I = バネの並び方。形で決まる(断面二次モーメント)';
+      } else {
+        this.showOnly(this.gBlock);
+        this.block.setSize(1.0, 0.7);
+        const k = 0.2 + 0.16 * Math.sin(c * 0.9);
+        this.block.update(k, (y) => (-k * y) / (0.36 * 0.5) * 0.8, 1);
+        for (const t of this.blockTags) t.visible = false;
+        this.caption = '曲率 = 曲がり具合。きつく曲げるほど、抵抗する力も大きい';
+        this.look(0, 1.35, 3.2, 2.4, 10, 8);
+      }
+    } else {
+      // 実験室: 断面の幅・高さ・曲げ具合
+      this.showOnly(this.gBlock);
+      const { b, h, k } = this.lab;
+      const S = 1 / 150;
+      this.block.setSize(h * S, b * S);
+      const kv = k * 30; // 絵の上の曲率(誇張)
+      const ey = 355 / 200000;
+      this.block.update(kv, (y) => (-(k / 1000) * (y / S)) / ey, 1);
+      for (const t of this.blockTags) t.visible = false;
+      this.caption = '';
+      this.look(0, 1.35, 3.2, 2.4, 18, 12);
+    }
+  }
+}
