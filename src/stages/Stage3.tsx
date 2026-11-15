@@ -31,6 +31,8 @@ interface SceneDef {
   pose: CameraPose;
   /** 断面の表示を出すか */
   section: boolean;
+  /** バネの束で説明する場面 */
+  explain?: 'spring' | 'weld';
 }
 
 const SCENES: SceneDef[] = [
@@ -46,10 +48,34 @@ const SCENES: SceneDef[] = [
     section: false,
   },
   {
+    kicker: 'そもそも',
+    head: () => '鋼の中は、バネの束だと思えばいい',
+    body: () =>
+      '鋼は硬く見えても、押せばわずかに縮み、引けばわずかに伸びます。縮んだ所は押し返し、伸びた所は引き戻す。この「中で踏ん張っている力」が応力です。押し返しているのが圧縮(青)、引き戻しているのが引張(オレンジ)。バネには限界があり、そこに達した状態が降伏(赤)です。',
+    stress: false,
+    target: () => 0,
+    speed: 0.2,
+    pose: { az: 24, el: 9, focus: 'both' },
+    section: false,
+    explain: 'spring',
+  },
+  {
+    kicker: '溶接',
+    head: () => '溶接が、柱の中に力を閉じ込める',
+    body: () =>
+      '溶接された所は、冷えるときに縮もうとします。でも鋼はひとつながりなので、そこだけ短くはなれません。溶接部は引き伸ばされたまま(引張)。まわりは、縮もうとする溶接部の道連れで押し縮められます(圧縮)。外からは誰も押していないので、引張と圧縮は必ず打ち消し合う。溶接部から遠い先端が、押される側になります。(バネの絵は、しくみを示す模式図です)',
+    stress: false,
+    target: () => 0,
+    speed: 0.2,
+    pose: { az: 24, el: 9, focus: 'both' },
+    section: false,
+    explain: 'weld',
+  },
+  {
     kicker: '透視',
     head: () => '現実の柱には、押す前から力が潜んでいる',
     body: () =>
-      '応力が見える目に切り替えました。青は圧縮、オレンジは引張。溶接の熱が冷えて縮むとき、柱の中に力が閉じ込められます。これが「残留応力」。フランジの先端は、最初から押されています。',
+      '応力が見える目に切り替えました。さっきのバネの色です。右の柱は、まだ押していないのに色がついています。ウェブとつないだ溶接部(フランジの中央)がオレンジの引張、フランジの先端が青の圧縮。これが「残留応力」です。右上の図は、断面のバネ1本ずつの応力の大きさです。',
     stress: true,
     target: () => 0,
     speed: 0.2,
@@ -139,6 +165,7 @@ export default function Stage3() {
   const mainRef = useRef<HTMLCanvasElement>(null);
   const secRef = useRef<HTMLCanvasElement>(null);
   const labelRefs = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
+  const capRef = useRef<HTMLParagraphElement>(null);
   const stageRef = useRef<Stage3D | null>(null);
   // 毎フレーム読む値(React の再描画を待たずに使う)
   const live = useRef({ load: 0, target: 0, speed: 0.1, mix: 0, mixTarget: 0, ctx, auto: true, playing, slow, focusReal });
@@ -153,6 +180,7 @@ export default function Stage3() {
     if (isLab) {
       L.auto = false;
       L.mixTarget = stressOn ? 1 : 0;
+      stageRef.current?.setExplain(null);
       stageRef.current?.setPose({ az: 24, el: 9, focus: 'both' });
     } else {
       const sc = SCENES[scene];
@@ -161,6 +189,7 @@ export default function Stage3() {
       L.speed = sc.speed;
       L.mixTarget = sc.stress ? 1 : 0;
       stageRef.current?.setPose(sc.pose);
+      stageRef.current?.setExplain(sc.explain ?? null);
     }
   }, [scene, isLab, ctx, stressOn]);
 
@@ -207,6 +236,10 @@ export default function Stage3() {
         el.style.opacity = p ? '1' : '0';
         if (p) el.style.transform = `translate(-50%, 0) translate(${p.x}px, ${p.y}px)`;
       });
+      if (capRef.current && capRef.current.textContent !== stage.caption) {
+        capRef.current.textContent = stage.caption;
+        capRef.current.style.opacity = stage.caption ? '1' : '0';
+      }
       const h = {
         s: L.load,
         ie: fv.step.ieRatio,
@@ -269,6 +302,11 @@ export default function Stage3() {
           <canvas ref={mainRef} className="block h-[37dvh] min-h-[280px] w-full lg:h-[72dvh]" />
           <ColumnLabel refEl={labelRefs[0]} name="理想の柱" load={hud.pI} buckled={hud.cI} color="#86efac" />
           <ColumnLabel refEl={labelRefs[1]} name="現実の柱" load={hud.pR} buckled={hud.cR} color="#e2e8f0" />
+          <p
+            ref={capRef}
+            className="pointer-events-none absolute inset-x-3 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
+            style={{ opacity: 0 }}
+          />
           <div
             key={scene}
             className="telop pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-studio-950 via-studio-950/85 to-transparent px-3 pb-2.5 pt-10 sm:px-5 sm:pb-4"

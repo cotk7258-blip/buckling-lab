@@ -14,6 +14,7 @@
 - `src/physics/column.ts`: 溶接 H形鋼柱(弱軸座屈)の繊維モデル(仮定はファイル先頭)。テスト `npm test`。
 - `src/three/`: 3D(three.js)。`stage.ts`=試験機と柱2本(たわみ・応力の色・輪切り・カメラ)、`section.ts`=断面の上に応力の柱を立てる表示、`common.ts`=色の表と光る材質。
 - `src/stages/StageN.tsx`: 各ステージ。Stage 3 は番組仕立て(SCENES の順に「次へ」で進み、最後が実験室)。`src/ui/`: 共通部品(数式 Tex)。
+- Stage 3 の冒頭2場面(`src/three/explain.ts`、バネの束の模式図): 「応力とは(押すと縮んで押し返す=圧縮、引くと伸びて引き戻す=引張、限界=降伏)」「溶接でなぜ先端が圧縮になるか(冷えて縮みたい溶接部が引っ張られ、つり合いで先端が押される)」。2026-11-15 ユーザー指摘「一般の人は内部応力の圧縮・引張がイメージできない。そこから解説すべき」。**専門用語は、絵で意味を見せてから使う**。
 - 色: 圧縮=シアン、引張=オレンジ、降伏=クリムゾン、弾性限界=ゴールド(`src/index.css` の @theme と `src/three/common.ts` の表)。
 - 2026-11-15 ユーザーの指摘「もっと立体的に、H鋼が座屈していくイメージを。NHKレベルの分かりやすさ」で 2D の図から 3D の番組仕立てに作り直した。図やグラフを並べるだけの画面に戻さない。
 - 公開: main に push すると GitHub Actions が https://cotk7258-blip.github.io/buckling-lab/ へ出す。クラウドの作業環境からはこの URL に接続できないので、見た目は `npx vite preview` + Playwright(`--use-angle=swiftshader`)の画像で確かめる。

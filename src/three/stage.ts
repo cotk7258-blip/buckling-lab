@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { SECTION } from '../physics/column.ts';
 import type { ColumnPath, ColumnView } from '../physics/column.ts';
+import { ExplainScene } from './explain.ts';
+import type { ExplainMode } from './explain.ts';
 import { BG, addStudioEnvironment, makeGlowMaterial, makeRenderer, writeStressColor } from './common.ts';
 
 /** たわみを絵の上で何倍に見せるか */
@@ -281,6 +283,10 @@ export class Stage3D {
   private shake = 0;
   private wasCollapsed = [false, false];
   private aspect = 1;
+  private explain: ExplainScene;
+  private explainMode: ExplainMode | null = null;
+  /** 説明用の場面の、いまの段階の文 */
+  caption = '';
   private w = 1;
   private h = 1;
 
@@ -289,6 +295,8 @@ export class Stage3D {
     this.scene.background = BG;
     this.scene.fog = new THREE.Fog(BG, 14, 42);
     addStudioEnvironment(this.renderer, this.scene, 0.55);
+
+    this.explain = new ExplainScene(this.scene.environment, BG);
 
     const machine = new THREE.MeshStandardMaterial({ color: '#1c2740', metalness: 0.7, roughness: 0.45 });
     const floor = new THREE.Mesh(
@@ -360,9 +368,16 @@ export class Stage3D {
     if (resetUser) this.userAz = 0;
   }
 
+  /** 説明用の場面(バネの束)に切り替える。null で試験機に戻す */
+  setExplain(mode: ExplainMode | null) {
+    if (mode === this.explainMode) return;
+    this.explainMode = mode;
+    this.explain.reset();
+  }
+
   /** 柱の上のラベルを置く画面上の位置(px)。映っていなければ null */
   labelPos(i: number): { x: number; y: number } | null {
-    if (this.pose.focus === 'realMid') return null;
+    if (this.pose.focus === 'realMid' || this.explainMode) return null;
     const v = new THREE.Vector3(COL_X[i], TOP_BEAM_Y - 0.05, 0.6).project(this.camera);
     if (v.z > 1 || Math.abs(v.x) > 0.98) return null;
     return { x: ((v.x + 1) / 2) * this.w, y: Math.max(4, ((1 - v.y) / 2) * this.h) };
@@ -370,6 +385,13 @@ export class Stage3D {
 
   update(paths: ColumnPath[], views: ColumnView[], stressMix: number, time: number, dt: number) {
     this.resize();
+    if (this.explainMode) {
+      this.explain.update(this.explainMode, dt, this.aspect);
+      this.caption = this.explain.caption;
+      this.renderer.render(this.explain.scene, this.explain.camera);
+      return;
+    }
+    this.caption = '';
     this.glow.value = stressMix;
     views.forEach((v, i) => {
       this.cols[i].update(paths[i], v, stressMix, time, i === 1 && this.pose.focus === 'realMid' ? 1 : 0, dt);
