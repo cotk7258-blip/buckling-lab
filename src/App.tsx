@@ -3,6 +3,7 @@ import Stage1 from './stages/Stage1.tsx';
 import Stage2 from './stages/Stage2.tsx';
 import Stage3 from './stages/Stage3.tsx';
 import Stage4 from './stages/Stage4.tsx';
+import Stage5 from './stages/Stage5.tsx';
 
 const STAGES = [
   { no: 1, title: '曲げとテコ', sub: 'なぜ M = EI × 曲率 なのか' },
@@ -51,13 +52,7 @@ export default function App() {
       ) : stage === 4 ? (
         <Stage4 />
       ) : (
-        <div className="mt-8 rounded-xl border border-studio-600 bg-studio-900 p-8 text-center">
-          <p className="text-lg font-bold">
-            STAGE {stage} {STAGES[stage - 1].title}
-          </p>
-          <p className="mt-1 text-ink-dim">{STAGES[stage - 1].sub}</p>
-          <p className="mt-4 text-ink-dim">このステージは制作中です。まず STAGE 3 をお試しください。</p>
-        </div>
+        <Stage5 />
       )}
     </div>
   );

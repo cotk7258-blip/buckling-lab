@@ -122,3 +122,17 @@ test('各国の曲線: 区間の境目でつながり、理想の線を超えな
     }
   }
 });
+
+test('板の局部座屈: 幅が半分で弾性座屈応力は4倍、強さは降伏で頭打ち', async () => {
+  const p = await import('./plate.ts');
+  assert.ok(Math.abs(p.sigmaEl(500, 10) / p.sigmaEl(1000, 10) - 4) < 1e-9);
+  assert.ok(Math.abs(p.sigmaEl(1000, 20) / p.sigmaEl(1000, 10) - 4) < 1e-9);
+  // σel = 4π²E/(12(1-ν²))·(t/b)² ≈ 723,000·(t/b)²
+  assert.ok(Math.abs(p.sigmaEl(1000, 10) - 72.3) < 0.1);
+  const R = p.plateR(1000, 10, 355);
+  assert.ok(Math.abs(p.plateR(500, 10, 355) - R / 2) < 1e-9);
+  assert.equal(p.plateStrength(0.5), 1);
+  assert.ok(p.plateStrength(0.7001) <= 1);
+  assert.ok(Math.abs(p.plateStrength(1.4) - 0.5 / 1.96) < 1e-9);
+  for (let r = 0.1; r < 3; r += 0.1) assert.ok(p.plateStrength(r) <= Math.min(1, p.plateTheory(r)) + 1e-9);
+});
