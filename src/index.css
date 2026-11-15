@@ -1,17 +1,18 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-studio-950: #060b18;
-  --color-studio-900: #0a1224;
-  --color-studio-800: #111c36;
-  --color-studio-700: #1b2a4d;
-  --color-studio-600: #2a3d68;
-  --color-ink: #e8eefc;
-  --color-ink-dim: #9fb0d0;
-  --color-comp: #38bdf8;
-  --color-tens: #fb923c;
-  --color-yield: #f43f5e;
-  --color-gold: #fbbf24;
+  /* 明るい背景の配色(2026-11-15 に黒基調から変更)。studio-* は名前はそのままで、背景〜枠線の明るい色 */
+  --color-studio-950: #f3f6fa;
+  --color-studio-900: #ffffff;
+  --color-studio-800: #eef2f8;
+  --color-studio-700: #e3e9f2;
+  --color-studio-600: #cbd5e3;
+  --color-ink: #1b2740;
+  --color-ink-dim: #55637b;
+  --color-comp: #0b6fc2;
+  --color-tens: #c2410c;
+  --color-yield: #e11d48;
+  --color-gold: #6d28d9; /* 目印・注目の色(名前は gold のまま、紫) */
   --font-sans: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo', system-ui, sans-serif;
 }
 
@@ -27,11 +28,7 @@ body {
   margin: 0;
   overflow-x: clip;
   min-height: 100dvh;
-  background:
-    radial-gradient(1200px 600px at 70% -10%, rgba(56, 189, 248, 0.1), transparent 60%),
-    radial-gradient(900px 500px at 0% 110%, rgba(244, 63, 94, 0.07), transparent 60%),
-    var(--color-studio-950);
-  background-attachment: fixed;
+  background: var(--color-studio-950);
 }
 
 .num {
@@ -50,12 +47,12 @@ input[type='range'] {
 input[type='range']::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 3px;
-  background: var(--color-studio-600);
+  background: #c3cedd;
 }
 input[type='range']::-moz-range-track {
   height: 6px;
   border-radius: 3px;
-  background: var(--color-studio-600);
+  background: #c3cedd;
 }
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -64,7 +61,7 @@ input[type='range']::-webkit-slider-thumb {
   margin-top: -9px;
   border-radius: 50%;
   background: var(--thumb, var(--color-ink));
-  border: 3px solid var(--color-studio-900);
+  border: 3px solid #ffffff;
   box-shadow: 0 0 0 1px var(--thumb, var(--color-ink));
 }
 input[type='range']::-moz-range-thumb {
@@ -72,7 +69,7 @@ input[type='range']::-moz-range-thumb {
   height: 20px;
   border-radius: 50%;
   background: var(--thumb, var(--color-ink));
-  border: 3px solid var(--color-studio-900);
+  border: 3px solid #ffffff;
 }
 
 @keyframes pulse-yield {

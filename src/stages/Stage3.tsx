@@ -5,6 +5,7 @@ import { Stage3D, DEFL_AMP } from '../three/stage.ts';
 import type { CameraPose } from '../three/stage.ts';
 import { Section3D } from '../three/section.ts';
 import { Tex } from '../ui/Tex.tsx';
+import { Rich, Term } from '../ui/glossary.tsx';
 
 const E_OVER_FY = 200000 / 355; // E = 2.0×10^5 N/mm²、σy = 355 N/mm²(SM490Y 相当)
 const IMP_CHOICES = [0, 5000, 2000, 1000, 500, 250]; // 初期たわみ L/n(0 は無し)
@@ -40,7 +41,7 @@ const SCENES: SceneDef[] = [
     kicker: '実験',
     head: () => '同じ2本の柱を、同じ力で押す',
     body: () =>
-      '長さも太さも同じ H形鋼。左は傷ひとつない「理想の柱」。右は工場で溶接して作った「現実の柱」。先に折れるのは、どちらでしょう。',
+      '長さも太さも同じ H形鋼。左は傷ひとつない「理想の柱」。右は工場で溶接して作った「現実の柱」。先に耐えられなくなるのは、どちらでしょう。',
     stress: false,
     target: () => 0,
     speed: 0.2,
@@ -86,7 +87,7 @@ const SCENES: SceneDef[] = [
     kicker: '載荷',
     head: (c) => `降伏の ${pct(c.real.Pfy * 0.85)} まで押す`,
     body: () =>
-      '理想の柱は、どこも同じ青。断面全体で均等に受けています。現実の柱は不公平。先端だけ、潜んでいた力の分が上乗せされて、もう金色の天井(降伏)のすぐ下です。',
+      '理想の柱は、どこも同じ青。断面全体で均等に受けています。現実の柱は不公平。先端だけ、潜んでいた力の分が上乗せされて、もう赤い天井(降伏)のすぐ下です。',
     stress: true,
     target: (c) => c.real.Pfy * 0.85,
     speed: 0.12,
@@ -120,7 +121,7 @@ const SCENES: SceneDef[] = [
     kicker: 'なぜ連鎖',
     head: () => '曲がるほど、押す力が「曲げる力」に化ける',
     body: () =>
-      '柱が少しでも曲がると、中央が力の通り道からずれます。このずれに押す力を掛けたものが、柱をさらに曲げようとする力です。踏ん張りが十分なら押し戻して止まります。でも踏ん張りが落ちると、曲がる → ずれが増える → 曲げる力が増える → さらに曲がる、の連鎖が止まりません。(模式図です)',
+      '柱が少しでも曲がると、中央が力の通り道からずれます。このずれに押す力を掛けたものが、柱をさらに曲げようとする力です。踏ん張りが十分なら押し戻して止まります。でも踏ん張りが落ちると、曲がる → ずれが増える → 曲げる力が増える → さらに曲がる、の連鎖が止まりません。ドミノ倒しです。(模式図です)',
     stress: false,
     target: (c) => c.real.Pfy + 0.012,
     speed: 0.05,
@@ -141,7 +142,7 @@ const SCENES: SceneDef[] = [
   },
   {
     kicker: '座屈',
-    head: (c) => `現実の柱が折れた。理論値の ${pct(c.real.Pu / c.ideal.Pu)}`,
+    head: (c) => `現実の柱が座屈した。理想の柱の ${pct(c.real.Pu / c.ideal.Pu)}`,
     body: () => '押す力に踏ん張りが追い越され、一気に曲がりました。理想の柱は、まだまっすぐ立っています。',
     stress: true,
     target: (c) => c.real.Pu + 0.08,
@@ -153,7 +154,7 @@ const SCENES: SceneDef[] = [
     kicker: '理論値',
     head: (c) => `理想の柱は ${pct(c.ideal.Pu)} まで耐えた`,
     body: (c) =>
-      `傷のない柱は、理論どおりの力まで耐えてから座屈します。現実の柱はその ${pct(
+      `傷のない柱は、材料の限界(降伏荷重、100%)まで耐えます。この長さでは、オイラーの座屈荷重(${pct(c.ideal.Pe)})より降伏の方が先に来るからです。現実の柱はその ${pct(
         c.real.Pu / c.ideal.Pu,
       )}。設計で使う曲線が理論の線より下に引かれているのは、この差のためです。`,
     stress: true,
@@ -315,7 +316,7 @@ export default function Stage3() {
   const head = sc ? sc.head(ctx) : '条件を変えて、自分で押してみる';
   const body = sc
     ? sc.body(ctx)
-    : '柱の細長さ、残留応力、初期たわみを変えると、折れ方と限界が変わります。細長い柱ほど、理想と現実の差は小さくなります。';
+    : '柱の細長さ、残留応力、初期たわみを変えると、座屈のしかたと限界が変わります。理想と現実の差は、細長さが 1 のあたりでいちばん大きく、ずっと短い柱でも、ずっと長い柱でも小さくなります。';
   const kicker = sc ? sc.kicker : '実験室';
 
   return (
@@ -324,11 +325,11 @@ export default function Stage3() {
         {/* 3D の舞台。見出しのテロップは映像に重ねる */}
         <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
           <canvas ref={mainRef} className="block h-[37dvh] min-h-[280px] w-full lg:h-[72dvh]" />
-          <ColumnLabel refEl={labelRefs[0]} name="理想の柱" load={hud.pI} buckled={hud.cI} color="#86efac" />
-          <ColumnLabel refEl={labelRefs[1]} name="現実の柱" load={hud.pR} buckled={hud.cR} color="#e2e8f0" />
+          <ColumnLabel refEl={labelRefs[0]} name="理想の柱" term="ideal" load={hud.pI} buckled={hud.cI} color="#16a34a" />
+          <ColumnLabel refEl={labelRefs[1]} name="現実の柱" term="real" load={hud.pR} buckled={hud.cR} color="#1f2a44" />
           <p
             ref={capRef}
-            className="pointer-events-none absolute inset-x-3 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
+            className="pointer-events-none absolute inset-x-3 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
             style={{ opacity: 0 }}
           />
           <div
@@ -339,7 +340,7 @@ export default function Stage3() {
             <p className="text-[11px] font-bold tracking-[0.25em] text-comp sm:text-xs">
               {String(scene + 1).padStart(2, '0')} — {kicker}
             </p>
-            <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] sm:text-3xl">
+            <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] sm:text-3xl">
               {head}
             </p>
           </div>
@@ -348,7 +349,7 @@ export default function Stage3() {
         <div className="flex min-w-0 flex-col gap-2 lg:gap-3">
           {/* 語り */}
           <p key={`b${scene}`} className="telop rounded-xl bg-studio-800/70 px-3 py-2 text-[14px] leading-relaxed text-ink sm:px-4 sm:py-3 sm:text-base lg:order-2">
-            {body}
+            <Rich text={body} />
           </p>
 
           {/* 断面 */}
@@ -359,11 +360,13 @@ export default function Stage3() {
           >
             <canvas ref={secRef} className="block h-[21dvh] min-h-[170px] w-full lg:h-[36dvh]" />
             <div className="pointer-events-none absolute left-3 top-2">
-              <p className="text-[11px] font-bold tracking-wider text-ink-dim">柱の中央を輪切り</p>
+              <p className="text-[11px] font-bold tracking-wider text-ink-dim">
+                <Term id="section">柱の中央を輪切り(図の見方)</Term>
+              </p>
               <p className="text-sm font-bold">{focusReal ? '現実の柱' : '理想の柱'}の断面の応力</p>
             </div>
             <p className="pointer-events-none absolute right-3 top-2 text-right text-xs font-bold text-gold">
-              金色の天井 = 降伏
+              <Term id="yield">赤い天井 = 降伏</Term>
             </p>
             {isLab && (
               <button
@@ -374,14 +377,16 @@ export default function Stage3() {
               </button>
             )}
             <div className="grid grid-cols-2 gap-3 border-t border-studio-700 bg-studio-900/60 px-3 py-2">
-              <Meter label="押す力" value={focusReal ? hud.pR : hud.pI} color="#38bdf8" marker={hud.limit} />
-              <Meter label="踏ん張り Ie/I" value={hud.ie} color={hud.ie < 0.999 ? '#ff1f4b' : '#86efac'} />
+              <Meter label="押す力" term="load" value={focusReal ? hud.pR : hud.pI} color="#0284c7" marker={hud.limit} />
+              <Meter label="残っている踏ん張り" term="ie" value={hud.ie} color={hud.ie < 0.999 ? '#e11d48' : '#16a34a'} />
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-ink-dim lg:order-3">
             <Legend />
-            <span>たわみは {DEFL_AMP} 倍に誇張・横になぞると回り込めます</span>
+            <span>
+              <Term id="amp">たわみは {DEFL_AMP} 倍に誇張</Term>・横になぞると回り込めます
+            </span>
           </div>
 
           {/* 進行(スマホでは画面の下に固定) */}
@@ -453,7 +458,7 @@ export default function Stage3() {
                   step={0.001}
                   value={Math.min(hud.s, loadMax)}
                   onChange={(e) => setLoad(Number(e.target.value))}
-                  style={{ ['--thumb' as string]: '#38bdf8' }}
+                  style={{ ['--thumb' as string]: '#0284c7' }}
                   aria-label="押す力"
                 />
               </label>
@@ -466,6 +471,7 @@ export default function Stage3() {
               <h3 className="text-base font-bold">条件を変える</h3>
               <Slider
                 label="細長比パラメータ"
+                term="lambda"
                 symbol="\bar{\lambda}"
                 hint="「降伏」と「座屈」の勝負指標。1 より大きいと座屈が先。大きいほど細長い柱"
                 value={params.lambda}
@@ -473,11 +479,12 @@ export default function Stage3() {
                 max={2}
                 step={0.05}
                 show={params.lambda.toFixed(2)}
-                color="#fbbf24"
+                color="#6d28d9"
                 onChange={(v) => changeParam({ lambda: v })}
               />
               <Slider
                 label="残留応力"
+                term="resid"
                 symbol="\sigma_{rc}"
                 hint="溶接で閉じ込められた力。押す前から先端にかかっている圧縮"
                 value={params.resid}
@@ -485,11 +492,12 @@ export default function Stage3() {
                 max={0.4}
                 step={0.05}
                 show={`${pct(params.resid)} σy`}
-                color="#ff1f4b"
+                color="#e11d48"
                 onChange={(v) => changeParam({ resid: v })}
               />
               <Slider
                 label="初期たわみ"
+                term="imp"
                 symbol="v_0"
                 hint="作ったときからある、わずかな曲がり"
                 value={params.impIdx}
@@ -497,7 +505,7 @@ export default function Stage3() {
                 max={IMP_CHOICES.length - 1}
                 step={1}
                 show={IMP_CHOICES[params.impIdx] ? `L/${IMP_CHOICES[params.impIdx]}` : 'なし'}
-                color="#fb923c"
+                color="#ea580c"
                 onChange={(v) => changeParam({ impIdx: v })}
               />
               <p className="mt-2 text-xs text-ink-dim">
@@ -508,8 +516,8 @@ export default function Stage3() {
             <div className="rounded-2xl border border-studio-600 bg-studio-900 p-4">
               <h3 className="text-base font-bold">この条件での限界</h3>
               <dl className="mt-2 space-y-2">
-                <ResultRow label="理想の柱(理論値)" value={ideal.Pu} color="#86efac" />
-                <ResultRow label="現実の柱" value={real.Pu} color="#e2e8f0" />
+                <ResultRow label="理想の柱(理論値)" value={ideal.Pu} color="#16a34a" />
+                <ResultRow label="現実の柱" value={real.Pu} color="#1f2a44" />
               </dl>
               <p className="mt-3 text-base">
                 現実の柱は理論値の <strong className="num text-2xl text-gold">{pct(real.Pu / ideal.Pu)}</strong>
@@ -535,12 +543,13 @@ export default function Stage3() {
         </div>
       )}
 
-      <p className="mt-4 px-1 text-xs leading-relaxed text-ink-dim">
-        計算の前提: 両端ピンの溶接 H形鋼(H-300×300×10×16)が弱軸まわりに座屈する場合。断面を繊維に分け(フランジ 41 本、ウェブ 15 本)、
-        完全弾塑性、E = 2.0×10⁵ N/mm²、σy = 355 N/mm²。残留応力は板ごとに直線分布(フランジ先端とウェブ中央が圧縮、溶接部が引張)。
+      <details className="mt-4 px-1 text-xs leading-relaxed text-ink-dim">
+        <summary className="cursor-pointer py-1 text-sm font-bold">計算の前提を見る</summary>
+        両端ピンの溶接 H形鋼(H-300×300×10×16)が弱軸まわりに座屈する場合。断面を繊維に分け(フランジ 41 本、ウェブ 15 本)、
+        完全弾塑性、E = 2.0×10⁵ N/mm²、σy = 355 N/mm²。残留応力は板ごとに直線分布(フランジ先端とウェブ中央が圧縮、溶接部が引張)。実際の溶接 H形鋼では、溶接部の引張は降伏点近くに達して狭い範囲に集中し、板の切り方によっては先端が引張になることもあります。ここでは仕組みを見やすくするため、大きさをそろえた直線分布に単純化しています。
         たわみは正弦波の形とし、柱の中央の断面で力のつり合いを解く。柱の色は、各断面でその位置の軸力と曲げにつり合う応力を解いた値。
         理想の柱は、残留応力なし・初期たわみ L/1,000,000。
-      </p>
+      </details>
     </div>
   );
 }
@@ -550,6 +559,7 @@ export default function Stage3() {
 function ColumnLabel(props: {
   refEl: React.RefObject<HTMLDivElement | null>;
   name: string;
+  term: string;
   load: number;
   buckled: boolean;
   color: string;
@@ -560,10 +570,10 @@ function ColumnLabel(props: {
       className="pointer-events-none absolute left-0 top-0 whitespace-nowrap text-center transition-opacity duration-300"
       style={{ opacity: 0 }}
     >
-      <p className="text-sm font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] sm:text-base" style={{ color: props.color }}>
-        {props.name}
+      <p className="text-sm font-bold drop-shadow-[0_1px_3px_rgba(255,255,255,0.95)] sm:text-base" style={{ color: props.color }}>
+        <Term id={props.term}>{props.name}</Term>
       </p>
-      <p className="num text-xl font-bold leading-tight drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] sm:text-2xl">
+      <p className="num text-xl font-bold leading-tight drop-shadow-[0_1px_3px_rgba(255,255,255,0.95)] sm:text-2xl">
         {pct(props.load)}
       </p>
       {props.buckled && (
@@ -576,25 +586,35 @@ function ColumnLabel(props: {
 function Legend() {
   return (
     <span className="flex items-center gap-1.5">
-      <span className="text-tens">引張</span>
+      <span className="text-tens">
+        <Term id="tens">引張</Term>
+      </span>
       <span
         className="h-2 w-24 rounded-full"
-        style={{ background: 'linear-gradient(90deg,#ffa24a,#b4530a 25%,#2a3a60 50%,#1d4ed8 75%,#5cd0ff 96%)' }}
+        style={{ background: 'linear-gradient(90deg,#ea580c,#fdba74 25%,#b9c3d2 50%,#60a5fa 75%,#1d4ed8 96%)' }}
       />
-      <span className="text-comp">圧縮</span>
-      <span className="ml-1 font-bold text-yield">■ 降伏</span>
+      <span className="text-comp">
+        <Term id="comp">圧縮</Term>
+      </span>
+      <span className="ml-1 font-bold text-yield">
+        ■ <Term id="yield">降伏</Term>
+      </span>
     </span>
   );
 }
 
-function Meter(props: { label: string; value: number; color: string; marker?: number }) {
+function Meter(props: { label: string; term: string; value: number; color: string; marker?: number }) {
   const w = Math.max(0, Math.min(1, props.value)) * 100;
   return (
     <div>
       <div className="flex items-baseline justify-between text-[11px] text-ink-dim">
         <span>
-          {props.label}
-          {props.marker !== undefined && <span className="ml-1 text-gold">┃いまの限界</span>}
+          <Term id={props.term}>{props.label}</Term>
+          {props.marker !== undefined && (
+            <span className="ml-1.5 text-gold">
+              <Term id="limit">┃いまの限界</Term>
+            </span>
+          )}
         </span>
         <span className="num text-sm font-bold text-ink">{pct(props.value)}</span>
       </div>
@@ -657,15 +677,15 @@ function LoadGraph(props: { ideal: ColumnPath; real: ColumnPath; s: number }) {
   };
   const dot = (path: ColumnPath, color: string) => {
     const st = viewAtLoad(path, s).step;
-    return <circle cx={X((path.v0 + st.v) / path.L)} cy={Y(st.P)} r={6} fill={color} stroke="#0a1224" strokeWidth={2} />;
+    return <circle cx={X((path.v0 + st.v) / path.L)} cy={Y(st.P)} r={6} fill={color} stroke="#ffffff" strokeWidth={2} />;
   };
   return (
     <div className="rounded-2xl border border-studio-600 bg-studio-900 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4">
         <h3 className="text-base font-bold">押す力と、たわみ</h3>
         <p className="text-sm">
-          <span style={{ color: '#86efac' }}>● 理想の柱</span>
-          <span className="ml-3" style={{ color: '#e2e8f0' }}>
+          <span style={{ color: '#16a34a' }}>● 理想の柱</span>
+          <span className="ml-3" style={{ color: '#1f2a44' }}>
             ● 現実の柱
           </span>
         </p>
@@ -673,29 +693,29 @@ function LoadGraph(props: { ideal: ColumnPath; real: ColumnPath; s: number }) {
       <svg viewBox={`0 0 ${W} ${Hh}`} className="mt-1 block w-full" role="img" aria-label="荷重とたわみの関係">
         {[0, 0.25, 0.5, 0.75, 1].map((t) => (
           <g key={t}>
-            <line x1={m.l} y1={Y(t)} x2={W - m.r} y2={Y(t)} stroke="#1b2a4d" strokeWidth={1} />
-            <text x={m.l - 6} y={Y(t) + 4} fill="#9fb0d0" fontSize={12} textAnchor="end" className="num">
+            <line x1={m.l} y1={Y(t)} x2={W - m.r} y2={Y(t)} stroke="#d5dce8" strokeWidth={1} />
+            <text x={m.l - 6} y={Y(t) + 4} fill="#64748b" fontSize={12} textAnchor="end" className="num">
               {Math.round(t * 100)}%
             </text>
           </g>
         ))}
-        <line x1={m.l} y1={Y(1)} x2={W - m.r} y2={Y(1)} stroke="#ff1f4b" strokeWidth={1.2} strokeDasharray="6 4" />
-        <text x={W - m.r - 4} y={Y(1) - 5} fill="#ff1f4b" fontSize={12} textAnchor="end">
+        <line x1={m.l} y1={Y(1)} x2={W - m.r} y2={Y(1)} stroke="#e11d48" strokeWidth={1.2} strokeDasharray="6 4" />
+        <text x={W - m.r - 4} y={Y(1) - 5} fill="#e11d48" fontSize={12} textAnchor="end">
           {narrow ? '降伏荷重 Py' : '降伏荷重 Py(全断面が降伏)'}
         </text>
         {ideal.Pe < yMax && Math.abs(ideal.Pe - 1) > 0.06 && (
           <>
-            <line x1={m.l} y1={Y(ideal.Pe)} x2={W - m.r} y2={Y(ideal.Pe)} stroke="#fbbf24" strokeWidth={1.2} strokeDasharray="6 4" />
-            <text x={W - m.r - 4} y={Y(ideal.Pe) - 5} fill="#fbbf24" fontSize={12} textAnchor="end">
+            <line x1={m.l} y1={Y(ideal.Pe)} x2={W - m.r} y2={Y(ideal.Pe)} stroke="#6d28d9" strokeWidth={1.2} strokeDasharray="6 4" />
+            <text x={W - m.r - 4} y={Y(ideal.Pe) - 5} fill="#6d28d9" fontSize={12} textAnchor="end">
               {narrow ? 'オイラー荷重 Pe' : 'オイラー荷重 Pe(弾性の理論値)'}
             </text>
           </>
         )}
-        <polyline points={line(ideal)} fill="none" stroke="#86efac" strokeWidth={2.2} opacity={0.9} />
-        <polyline points={line(real)} fill="none" stroke="#e2e8f0" strokeWidth={2.2} />
-        {dot(ideal, '#86efac')}
-        {dot(real, '#e2e8f0')}
-        <text x={(W + m.l) / 2} y={Hh - 8} fill="#9fb0d0" fontSize={12} textAnchor="middle">
+        <polyline points={line(ideal)} fill="none" stroke="#16a34a" strokeWidth={2.2} opacity={0.9} />
+        <polyline points={line(real)} fill="none" stroke="#1f2a44" strokeWidth={2.2} />
+        {dot(ideal, '#16a34a')}
+        {dot(real, '#1f2a44')}
+        <text x={(W + m.l) / 2} y={Hh - 8} fill="#64748b" fontSize={12} textAnchor="middle">
           {narrow ? '中央のたわみ → 右端で L/40' : '中央のたわみ(柱の長さ L に対する割合)→ 右端で L/40'}
         </text>
       </svg>
@@ -705,6 +725,7 @@ function LoadGraph(props: { ideal: ColumnPath; real: ColumnPath; s: number }) {
 
 function Slider(props: {
   label: string;
+  term: string;
   symbol: string;
   hint: string;
   value: number;
@@ -719,7 +740,7 @@ function Slider(props: {
     <label className="mt-3 block">
       <span className="flex items-baseline justify-between gap-2">
         <span className="text-base font-bold">
-          {props.label} <Tex>{props.symbol}</Tex>
+          <Term id={props.term}>{props.label}</Term> <Tex>{props.symbol}</Tex>
         </span>
         <span className="num text-lg font-bold" style={{ color: props.color }}>
           {props.show}

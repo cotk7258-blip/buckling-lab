@@ -16,8 +16,8 @@ const L0 = 2.4; // バネのもとの長さ
 const GAP = 0.56;
 const X = Array.from({ length: N }, (_, i) => (i - (N - 1) / 2) * GAP);
 const NEUTRAL = new THREE.Color('#8794a8');
-const HOT = new THREE.Color('#ffd27a');
-const RED = new THREE.Color('#ff1f4b');
+const HOT = new THREE.Color('#f59e0b');
+const RED = new THREE.Color('#e11d48');
 // 溶接の熱で縮もうとする量(真ん中ほど大きい)
 const SHRINK = [0, 0.1, 0.55, 1, 0.55, 0.1, 0];
 const SHRINK_MAX = 0.5;
@@ -73,18 +73,18 @@ export class ExplainScene {
     this.scene.background = bg;
     this.scene.environment = env;
     this.scene.environmentIntensity = 0.5;
-    this.scene.add(new THREE.HemisphereLight('#a9c8ff', '#0a1020', 0.9));
+    this.scene.add(new THREE.HemisphereLight('#ffffff', '#c5cfdd', 0.9));
     const key = new THREE.DirectionalLight('#ffffff', 2.2);
     key.position.set(3, 6, 7);
     this.scene.add(key);
     this.scene.add(this.bundle, this.barGroup);
 
-    const plate = new THREE.MeshStandardMaterial({ color: '#1c2740', metalness: 0.7, roughness: 0.45 });
+    const plate = new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
     const bright = new THREE.MeshStandardMaterial({ color: '#c9d3e3', metalness: 0.9, roughness: 0.25 });
     const bottom = new THREE.Mesh(new THREE.BoxGeometry(N * GAP + 0.3, 0.16, 0.8), plate);
     bottom.position.y = -0.08;
     this.bundle.add(bottom);
-    this.topMat = new THREE.MeshStandardMaterial({ color: '#2a3a60', metalness: 0.7, roughness: 0.45, transparent: true });
+    this.topMat = new THREE.MeshStandardMaterial({ color: '#b9c3d2', metalness: 0.7, roughness: 0.45, transparent: true });
     this.top = new THREE.Mesh(new THREE.BoxGeometry(N * GAP + 0.3, 0.16, 0.8), this.topMat);
     this.bundle.add(this.top);
 
@@ -96,12 +96,12 @@ export class ExplainScene {
       this.bundle.add(s);
       this.springs.push(s);
       this.mats.push(m);
-      const a = arrow('#ffffff');
+      const a = arrow('#1f2a44');
       this.bundle.add(a);
       this.small.push(a);
     }
     for (let i = 0; i < 2; i++) {
-      const a = arrow('#ffffff');
+      const a = arrow('#1f2a44');
       a.scale.set(2.2, 1, 2.2);
       this.scene.add(a);
       this.big.push(a);
@@ -109,35 +109,35 @@ export class ExplainScene {
 
     // もとの長さの目印
     const w = (N * GAP) / 2 + 0.35;
-    this.ref = line('#fbbf24', true);
+    this.ref = line('#6d28d9', true);
     setLine(this.ref, -w, L0, w, L0);
     this.bundle.add(this.ref);
 
     // 溶接の場面の札
     for (const [text, x] of [['先端', X[0]], ['溶接部', 0], ['先端', X[N - 1]]] as const) {
-      const sp = label(text, text === '溶接部' ? '#ffd27a' : '#e8eefc');
+      const sp = label(text, text === '溶接部' ? '#f59e0b' : '#1f2a44');
       sp.position.set(x, -0.42, 0.5);
       this.weldLabels.add(sp);
     }
     this.bundle.add(this.weldLabels);
-    this.torch = new THREE.Mesh(new THREE.SphereGeometry(0.12, 20, 14), new THREE.MeshBasicMaterial({ color: '#fff4d0' }));
+    this.torch = new THREE.Mesh(new THREE.SphereGeometry(0.12, 20, 14), new THREE.MeshBasicMaterial({ color: '#fde68a' }));
     this.torchLight = new THREE.PointLight('#ffb347', 0, 5, 1.5);
     this.torch.add(this.torchLight);
     this.bundle.add(this.torch);
 
     // テコの腕(中心からの距離)
-    this.armLong = line('#fbbf24');
-    this.armShort = line('#fbbf24');
+    this.armLong = line('#6d28d9');
+    this.armShort = line('#6d28d9');
     setLine(this.armLong, 0, -0.32, X[N - 1], -0.32, 0.5);
     setLine(this.armShort, 0, -0.62, X[4], -0.62, 0.5);
-    const l1 = label('腕が長い', '#fbbf24');
+    const l1 = label('腕が長い', '#6d28d9');
     l1.position.set(X[N - 1] + 0.95, -0.32, 0.5);
-    const l2 = label('腕が短い', '#fbbf24');
+    const l2 = label('腕が短い', '#6d28d9');
     l2.position.set(X[4] + 0.95, -0.62, 0.5);
     // 中心の目印
-    const tick = line('#fbbf24');
+    const tick = line('#6d28d9');
     setLine(tick, 0, -0.2, 0, -0.74, 0.5);
-    const l0 = label('中心', '#fbbf24');
+    const l0 = label('中心', '#6d28d9');
     l0.position.set(-0.6, -0.47, 0.5);
     this.armLabels.add(this.armLong, this.armShort, l1, l2, tick, l0);
     this.bundle.add(this.armLabels);
@@ -162,9 +162,9 @@ export class ExplainScene {
     head.position.y = 0.29;
     this.barTop.add(pinT, head);
     this.barGroup.add(this.barTop);
-    this.forceLine = line('#fbbf24', true);
-    this.offLine = line('#fbbf24');
-    this.offLabel = label('ずれ', '#fbbf24');
+    this.forceLine = line('#6d28d9', true);
+    this.offLine = line('#6d28d9');
+    this.offLabel = label('ずれ', '#6d28d9');
     this.barGroup.add(this.forceLine, this.offLine, this.offLabel);
   }
 
@@ -245,7 +245,7 @@ export class ExplainScene {
           // 引っ張られたバネは板を下へ引き、押されたバネは板を上へ押す
           if (s < -0.05) setArrow(this.small[i], X[i], topY + 0.08 + 0.9 * -s * k + 0.3, -(0.9 * -s * k + 0.3), 0.45);
           else if (s > 0.05) setArrow(this.small[i], X[i], topY + 0.08, 1.6 * s * k + 0.3, 0.45);
-          tintArrow(this.small[i], s < 0 ? '#ffa24a' : '#5cd0ff');
+          tintArrow(this.small[i], s < 0 ? '#ea580c' : '#0284c7');
         }
       }
       if (t > 2.5 && t < 5.2) {
@@ -274,7 +274,7 @@ export class ExplainScene {
         const f = s * (1 - dead) * show;
         if (f > 0.03) setArrow(this.small[i], X[i], len + 0.2, 2.0 * f + 0.25, 0.45);
         else if (f < -0.03) setArrow(this.small[i], X[i], len + 0.2 + 2.0 * -f + 0.25, -(2.0 * -f + 0.25), 0.45);
-        tintArrow(this.small[i], s < 0 ? '#ffa24a' : '#5cd0ff');
+        tintArrow(this.small[i], s < 0 ? '#ea580c' : '#0284c7');
       }
       topY = L0 - tilt * pivot;
       // 曲げようとする力(左を押し下げ、右を持ち上げる)

@@ -1,0 +1,425 @@
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+
+/** 用語の説明。short=ひとことで、body=くわしく、ex=たとえ、sym=記号、see=関連する用語 */
+interface Entry {
+  title: string;
+  short: string;
+  body: string;
+  ex?: string;
+  sym?: string;
+  see?: string[];
+  /** 本文の中でこの用語として拾う書き方(長いものを優先して拾う) */
+  match?: string[];
+}
+
+export const GLOSSARY: Record<string, Entry> = {
+  stress: {
+    title: '応力',
+    short: '物の中で踏ん張っている力。',
+    body: '物を押したり引いたりすると、物の中に、それに逆らう力が生まれます。その力を面積あたりで表したものが応力です。このサイトでは、鋼を小さなバネの束に見立て、バネ1本ずつが出している力として描いています。',
+    ex: '満員電車で押されたとき、体が押し返している力のようなもの。',
+    sym: 'σ(シグマ)',
+    see: ['comp', 'tens', 'yield'],
+    match: ['応力'],
+  },
+  comp: {
+    title: '圧縮',
+    short: '押し縮められて、押し返している状態。',
+    body: '縮んだバネが押し返すのと同じで、押された鋼は元の長さに戻ろうとして押し返します。この状態を圧縮と呼び、図では青で表しています。色が濃いほど強く押されています。',
+    see: ['tens', 'stress'],
+    match: ['圧縮'],
+  },
+  tens: {
+    title: '引張(ひっぱり)',
+    short: '引き伸ばされて、引き戻そうとしている状態。',
+    body: '伸びたバネが縮もうとするのと同じで、引っ張られた鋼は元の長さに戻ろうとして引き戻します。この状態を引張と呼び、図ではオレンジで表しています。',
+    see: ['comp', 'stress'],
+    match: ['引張'],
+  },
+  yield: {
+    title: '降伏(こうふく)',
+    short: '材料の限界。これ以上、力を増やせなくなること。',
+    body: '鋼はある応力までは、力を抜けば元に戻るバネのようにふるまいます。その限界を超えると、伸び縮みは進むのに、受け持つ力はほとんど増えなくなります。これが降伏です。図では赤で表しています。降伏した部分は壊れたわけではありませんが、追加の力に対しては踏ん張れません。',
+    ex: 'ゴムひもを引っ張りすぎると、伸びきって戻らなくなる状態。',
+    sym: '降伏するときの応力 σy(このサイトの鋼は 355 N/mm²)',
+    see: ['py', 'stress'],
+    match: ['降伏'],
+  },
+  py: {
+    title: '降伏荷重',
+    short: '断面の全部が降伏するときの力。材料として出せる最大の力。',
+    body: '断面のどこもかしこも降伏の応力に達したときの力です。降伏の応力 × 断面積で求まります。柱がどんなに短くても、これより大きな力は受けられません。このサイトで「押す力 60%」と書いてあれば、降伏荷重の 60% という意味です。',
+    sym: 'Py = σy × A',
+    see: ['yield', 'load'],
+    match: ['降伏荷重'],
+  },
+  load: {
+    title: '押す力(%)',
+    short: '柱を上から押している力。降伏荷重を 100% として表す。',
+    body: '柱の種類が変わっても比べやすいように、押す力はその柱の降伏荷重に対する割合で表しています。100% は、断面の全部が降伏する力です。理想の短い柱は 100% まで耐え、長い柱や現実の柱はもっと手前で限界になります。',
+    see: ['py'],
+    match: ['押す力'],
+  },
+  resid: {
+    title: '残留応力',
+    short: '外から何も押していないのに、鋼の中に閉じ込められている応力。',
+    body: '溶接された所は、冷えるときに縮もうとします。しかし鋼はひとつながりなので、そこだけ短くはなれません。その結果、溶接部は引き伸ばされたまま(引張)、まわりは押し縮められたまま(圧縮)になります。外から力をかけていないので、引張と圧縮は断面の中でちょうど打ち消し合っています。',
+    ex: '縮んだゴムひもを板に貼ると、ゴムは引っ張られたまま、板は押されたままになる。',
+    see: ['comp', 'tens', 'imp'],
+    match: ['残留応力'],
+  },
+  imp: {
+    title: '初期たわみ',
+    short: '作ったときからある、わずかな曲がり。',
+    body: '現実の柱は、完全にまっすぐには作れません。長さの 1000 分の 1 程度の、目では分からない曲がりがあります。わずかな曲がりでも、押す力が「曲げる力」に化けるきっかけになります。',
+    sym: 'L/1000 は、長さ L の 1000 分の 1 のたわみ',
+    see: ['resid', 'real'],
+    match: ['初期たわみ'],
+  },
+  funbari: {
+    title: '踏ん張り(曲げ剛性)',
+    short: '曲げようとする力に逆らう強さ。',
+    body: '柱や梁が曲がるまいとする強さです。材料の硬さ(E)と、断面の形の踏ん張りやすさ(I)の掛け算で決まります。専門用語では曲げ剛性と呼びます。踏ん張りが大きいほど、座屈しにくくなります。',
+    sym: 'EI',
+    see: ['E', 'I', 'ie'],
+    match: ['踏ん張り', '曲げ剛性'],
+  },
+  ie: {
+    title: '残っている踏ん張り',
+    short: '降伏していない部分だけで数えた踏ん張り。はじめを 100% とする。',
+    body: '降伏した(赤い)部分は、もう追加の力に踏ん張れません。そこで、まだ降伏していない部分だけで断面の踏ん張りやすさを計算し直し、元の値に対する割合で表しています。100% なら全部が健全。先端が赤くなると、先端はテコがよく効く場所なので、数字は急に落ちます。',
+    sym: 'Ie / I(Ie は健全な部分だけの断面二次モーメント)',
+    see: ['funbari', 'I', 'limit'],
+    match: ['残っている踏ん張り'],
+  },
+  limit: {
+    title: 'いまの限界(目印)',
+    short: 'いまの踏ん張りで計算した、座屈する力の目安。',
+    body: '座屈する力は踏ん張りに比例します。そこで、残っている踏ん張りを使って「いま座屈する力」を計算し、押す力のゲージの上に縦の線で示しています。赤が広がると、この線は左へ下がってきます。右へ伸びる押す力とぶつかるあたりで、柱は座屈します。初期たわみのある柱ではぴったり一致しないので、目安です。',
+    sym: 'π²E·Ie / L²(降伏荷重が上限)',
+    see: ['ie', 'pe'],
+    match: ['いまの限界'],
+  },
+  I: {
+    title: '断面二次モーメント',
+    short: '断面の形で決まる、曲げへの踏ん張りやすさ。',
+    body: '断面の中の鉄が、曲げの中心からどれだけ遠くにあるかを表す数字です。遠くにある鉄ほど、大きく伸び縮みして大きな力を出し、しかもテコがよく効くので、距離の2乗で数えます。長方形なら 幅 × 高さ³ ÷ 12。高さを2倍にすると8倍になります。',
+    sym: 'I',
+    see: ['funbari', 'E'],
+    match: ['断面二次モーメント'],
+  },
+  E: {
+    title: 'ヤング係数',
+    short: '材料の硬さ。バネ1本の硬さにあたる。',
+    body: '同じ形でも、材料が違えば伸び縮みのしにくさが違います。その硬さを表すのがヤング係数です。鋼は約 200,000 N/mm² で、アルミの約3倍です。鋼の種類(強さ)を変えても、この値はほとんど変わりません。',
+    sym: 'E',
+    see: ['funbari'],
+    match: ['ヤング係数'],
+  },
+  curv: {
+    title: '曲率',
+    short: '曲がり具合。きつく曲がるほど大きい。',
+    body: 'カーブを円の一部と見たときの、半径の逆数です。半径が小さい(きついカーブ)ほど曲率は大きくなります。曲げに抵抗する力は、踏ん張り × 曲率 です。',
+    sym: '1/R(R は曲がりの半径)',
+    see: ['funbari'],
+    match: ['曲率'],
+  },
+  neutral: {
+    title: '中立軸',
+    short: '曲げても長さが変わらない、真ん中の線。',
+    body: '棒を曲げると外側は伸び、内側は縮みます。その境目に、伸びも縮みもしない線があります。これが中立軸です。伸び縮みの量は、中立軸から離れるほど大きくなります。',
+    match: ['中立軸'],
+  },
+  buckling: {
+    title: '座屈(ざくつ)',
+    short: '押された部材が、ある力で突然横へ曲がること。',
+    body: '細長い物を押すと、材料がつぶれる前に、横へ曲がって逃げてしまいます。少しずつ曲がるのではなく、ある力を境に突然起きるのが特徴です。材料が壊れるのではなく、形として踏ん張れなくなる現象です。',
+    ex: '定規やストローを両手で押すと、ある所でぐにゃりと曲がる。',
+    see: ['pe', 'global', 'local'],
+    match: ['座屈'],
+  },
+  pe: {
+    title: '座屈荷重(オイラー荷重)',
+    short: '傷のない理想の柱が、座屈する力。',
+    body: '柱が横にずれると、「さらに曲げようとする力」と「まっすぐに戻そうとする力」が生まれます。この2つがちょうど互角になる力が座屈荷重です。約280年前にオイラーが式にしました。踏ん張りに比例し、長さの2乗に反比例します。',
+    sym: 'Pe = π²EI / le²',
+    see: ['le', 'funbari', 'lambda'],
+    match: ['座屈荷重', 'オイラー荷重', 'オイラーの線'],
+  },
+  le: {
+    title: '有効座屈長',
+    short: '座屈した形の中の、サインカーブ半分にあたる長さ。',
+    body: '両端をピンで支えた柱は、サインカーブ半分の形に曲がります。端を固定すると形が変わりますが、その中にも必ずサインカーブ半分の部分があります。その長さが有効座屈長です。支え方の違いは、この長さの違いに置きかえて計算できます。短いほど強い。',
+    sym: 'le(両端ピン 1.0L、両端固定 0.5L、片持ち 2.0L)',
+    see: ['pe'],
+    match: ['有効座屈長'],
+  },
+  lambda: {
+    title: '細長比パラメータ',
+    short: '「降伏」と「座屈」のどちらが先に来るかを表す物差し。',
+    body: '柱の細長さを、材料の強さも含めて1つの数字にしたものです。理想の柱で、降伏する力と座屈する力がちょうど同じになる細長さを 1 と決めています。1 より小さい柱は降伏が先(ずんぐり)、1 より大きい柱は座屈が先(ひょろ長)です。',
+    sym: 'λ̄(ラムダバー)= √(降伏の応力 ÷ 座屈の応力)',
+    see: ['pe', 'py', 'curve'],
+    match: ['細長比パラメータ', '細長さ'],
+  },
+  ideal: {
+    title: '理想の柱',
+    short: '完全にまっすぐで、残留応力もない、計算の中だけの柱。',
+    body: '傷もゆがみもない柱です。理論どおり、降伏する力と座屈する力の低い方まで耐えます。現実には作れませんが、現実の柱がどれだけ弱いかを測る基準になります。',
+    see: ['real'],
+    match: ['理想の柱'],
+  },
+  real: {
+    title: '現実の柱',
+    short: '残留応力と初期たわみを持つ、実際に作られる柱。',
+    body: '工場で溶接して作る柱には、残留応力と、わずかな初期たわみがあります。この2つのせいで、理想の柱より小さな力で限界になります。このサイトでは、残留応力を降伏の 30%、初期たわみを長さの 1000 分の 1 として計算しています。',
+    see: ['ideal', 'resid', 'imp'],
+    match: ['現実の柱'],
+  },
+  curve: {
+    title: '設計曲線',
+    short: '設計で使う、柱の強さの線。細長さごとの強さを決めている。',
+    body: '現実の柱の強さは、不整の大きさで1本ずつばらつきます。設計では、多くの実験と計算の結果の下側を通る線を決めておき、それを柱の強さとして使います。専門用語では基準耐荷力曲線と呼びます。国や基準によって線は少しずつ違います。',
+    see: ['lambda', 'real'],
+    match: ['設計曲線', '設計の線'],
+  },
+  inelastic: {
+    title: '非弾性座屈',
+    short: '一部が降伏して踏ん張りが落ち、それが引き金になる座屈。',
+    body: '中くらいの細長さの柱で起きます。全体が降伏する前、理論の座屈荷重にも届かないうちに、断面の一部(先端)が降伏し、踏ん張りが落ちて座屈します。現実の柱の強さが理想より低くなる、いちばんの原因です。',
+    see: ['buckling', 'ie'],
+    match: ['非弾性座屈'],
+  },
+  hshape: {
+    title: 'H形鋼',
+    short: '断面が H の形をした鋼材。',
+    body: '上下の板(フランジ)と、それをつなぐ真ん中の板(ウェブ)でできています。鉄を真ん中から遠くに置いて、少ない量で曲げに強くした形です。このサイトの柱は、幅 300 mm・高さ 300 mm の溶接 H形鋼です。',
+    see: ['flange', 'web'],
+    match: ['H形鋼'],
+  },
+  flange: {
+    title: 'フランジ',
+    short: 'H形の、上下(両側)の板。',
+    body: 'H の字の2本の縦棒にあたる板です。曲げの中心から遠い所にあるので、曲げへの踏ん張りの大半を受け持ちます。柱が弱い向き(弱軸)に曲がるときは、フランジの先端がいちばん大きく伸び縮みします。',
+    see: ['web', 'hshape'],
+    match: ['フランジ'],
+  },
+  web: {
+    title: 'ウェブ',
+    short: 'H形の、真ん中の板。',
+    body: 'H の字の横棒にあたる板で、2枚のフランジをつないでいます。フランジとの境目は溶接されます。',
+    see: ['flange', 'hshape'],
+    match: ['ウェブ'],
+  },
+  global: {
+    title: '全体座屈',
+    short: '柱が、柱ごと弓なりに曲がる座屈。',
+    body: '部材全体が横へ曲がる座屈です。断面の形は変わりません。起きやすさは柱の細長さ(細長比パラメータ)で決まります。STAGE 2〜4 で見てきた座屈はこれです。',
+    see: ['local', 'coupled', 'lambda'],
+    match: ['全体座屈'],
+  },
+  local: {
+    title: '局部座屈',
+    short: '柱はまっすぐのまま、断面を作っている板が波打つ座屈。',
+    body: '薄い板でできた断面で起きます。柱全体ではなく、板の1枚1枚が、手前と奥へ交互にふくらみます。起きやすさは、板の幅と厚みの比(幅厚比)で決まります。',
+    see: ['panel', 'global', 'R'],
+    match: ['局部座屈'],
+  },
+  panel: {
+    title: 'パネル座屈',
+    short: 'リブで区切られた板の1区画(パネル)が波打つ座屈。',
+    body: '板にリブ(補剛材)を付けると、板はリブで区切られたいくつかの区画に分かれます。その1区画をパネルと呼びます。リブがしっかりしていれば、リブの線は動かず、その間のパネルだけが波打ちます。これがパネル座屈で、局部座屈の一種です。なお橋の桁では、縦横の補剛材で囲まれた腹板の1区画もパネルと呼びます。',
+    see: ['local', 'rib', 'plateglobal'],
+    match: ['パネル座屈', 'パネル'],
+  },
+  plateglobal: {
+    title: '補剛板の全体座屈',
+    short: 'リブごと、板全体が波打つ座屈。',
+    body: 'リブが細くて弱いと、リブの線も板と一緒にたわんでしまい、板全体が大きな波になります。リブを付けた板(補剛板)が、板として丸ごと座屈する現象です。リブに十分な硬さがあれば、これは起きず、パネル座屈になります。',
+    see: ['panel', 'rib', 'gamma'],
+    match: ['補剛板の全体座屈'],
+  },
+  coupled: {
+    title: '連成座屈(複合座屈)',
+    short: '局部座屈と全体座屈が、互いを早め合って起きる座屈。',
+    body: '板が先に波打つと、波打った板は縁の近くしか働かなくなり、柱全体の踏ん張りが落ちます。すると柱全体の座屈が、板が健全な場合より小さな力で起きます。2つの座屈が別々に起きるのではなく、連なって起きるので連成座屈と呼びます。',
+    see: ['local', 'global', 'consider'],
+    match: ['連成座屈', '複合座屈'],
+  },
+  consider: {
+    title: '局部座屈を考慮する/しない',
+    short: '柱の強さを決めるとき、板が波打つ影響を入れるかどうか。',
+    body: '「局部座屈を考慮しない強さ」は、板は波打たないものとして、全体座屈だけで決めた柱の強さです(STAGE 4 の設計曲線)。「考慮する強さ」は、そこに板の局部座屈の強さを掛け算したものです。板が十分に厚ければ掛ける数は 1 なので、2つは同じになります。',
+    sym: '考慮する強さ = 全体座屈の強さ × 局部座屈の強さ',
+    see: ['coupled', 'R', 'curve'],
+    match: ['局部座屈を考慮'],
+  },
+  bt: {
+    title: '幅厚比',
+    short: '板の幅 ÷ 厚み。大きいほど、薄くて広い板。',
+    body: '板の波打ちやすさを決める数字です。板が座屈する応力は、幅厚比の2乗に反比例します。幅が半分になれば4倍、厚みが2倍になっても4倍強くなります。柱の「細長さ」にあたるものです。',
+    sym: 'b/t',
+    see: ['R', 'local'],
+    match: ['幅厚比'],
+  },
+  R: {
+    title: '幅厚比パラメータ',
+    short: '板で「降伏」と「座屈」のどちらが先に来るかを表す物差し。',
+    body: '幅厚比を、材料の強さも含めて1つの数字にしたものです。柱の細長比パラメータの、板版です。小さいほど厚くて狭い板。道路橋示方書(平成24年版まで)の式では、0.7 以下なら座屈より先に降伏し、板は波打ちません。',
+    sym: 'R = √(降伏の応力 ÷ 板の座屈の応力)',
+    see: ['bt', 'lambda'],
+    match: ['幅厚比パラメータ'],
+  },
+  beff: {
+    title: '有効幅',
+    short: '波打った板のうち、まだ働いている部分の幅。',
+    body: '座屈してふくらんだ板の真ん中は、力を受け流してしまいます。働いているのは、支えられてまっすぐなままの縁の近くだけです。板の幅のうち、実際に効いている分を有効幅と呼びます。',
+    see: ['local', 'coupled'],
+    match: ['有効幅'],
+  },
+  rib: {
+    title: 'リブ(補剛材)',
+    short: '板が波打たないように、板に溶接する細長い板。',
+    body: '板の真ん中に縦に付けると、その線では板が動けなくなり、1枚の広い板が幅の狭い板に分かれます。幅が半分になれば、座屈する応力は4倍です。少しの鉄で板を強くできます。',
+    see: ['panel', 'gamma'],
+    match: ['補剛材', 'リブ'],
+  },
+  gamma: {
+    title: '必要剛比',
+    short: 'リブが板をまっすぐに保つために必要な、リブの硬さ。',
+    body: 'リブが細すぎると、リブごと板がたわんでしまい、板を分ける役目を果たせません。リブの曲げの踏ん張りが、板の踏ん張りの何倍以上あればよいかを決めた値が必要剛比です。設計では、これを満たすことを確かめます。',
+    see: ['rib', 'plateglobal'],
+    match: ['必要剛比'],
+  },
+  section: {
+    title: '輪切りの図の見方',
+    short: '柱の中央を輪切りにして、断面のバネ1本ずつの応力を柱の高さで表した図。',
+    body: 'H の形の上に立っている柱が、その場所の応力です。上へ伸びていれば圧縮、下へ伸びていれば引張。赤い枠は降伏の高さ(天井)で、柱がここに届くと赤くなり、それ以上は伸びません。細い線は、押す前から入っている残留応力です。',
+    see: ['stress', 'yield', 'resid'],
+    match: ['輪切り'],
+  },
+  amp: {
+    title: '誇張について',
+    short: '実際のたわみは小さすぎて見えないので、拡大して描いています。',
+    body: '柱が座屈する直前のたわみは、長さの数百分の1ほどで、そのまま描くとまっすぐにしか見えません。そこで、たわみや波の高さを何倍かに拡大して描いています。色(応力)と数字は、拡大していない実際の計算結果です。',
+    match: ['誇張'],
+  },
+  model: {
+    title: '模式図',
+    short: 'しくみを伝えるための、単純化した絵。',
+    body: 'バネの束の絵などは、考え方を伝えるための絵で、実際の柱の計算結果そのものではありません。バネの本数や縮む量は、見やすいように決めています。',
+    match: ['模式図'],
+  },
+};
+
+const Ctx = createContext<(id: string) => void>(() => {});
+
+/** 用語のポップアップを出す仕組み。アプリの外側に1つ置く */
+export function GlossaryProvider({ children }: { children: ReactNode }) {
+  const [id, setId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    const on = (e: KeyboardEvent) => e.key === 'Escape' && setId(null);
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, [id]);
+  const e = id ? GLOSSARY[id] : null;
+  return (
+    <Ctx.Provider value={setId}>
+      {children}
+      {e && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 sm:items-center sm:p-6" onClick={() => setId(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={e.title}
+            onClick={(ev) => ev.stopPropagation()}
+            className="max-h-[78dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-studio-900 p-5 shadow-2xl sm:rounded-2xl"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-2xl font-bold">{e.title}</h2>
+              <button onClick={() => setId(null)} className="-mr-1 -mt-1 h-10 w-10 shrink-0 rounded-full text-2xl text-ink-dim" aria-label="閉じる">
+                ×
+              </button>
+            </div>
+            <p className="mt-2 rounded-xl bg-studio-800 px-3 py-2 text-lg font-bold leading-snug text-comp">{e.short}</p>
+            <p className="mt-3 text-base leading-relaxed">{e.body}</p>
+            {e.ex && (
+              <p className="mt-3 border-l-4 border-gold pl-3 text-[15px] leading-relaxed">
+                <span className="font-bold text-gold">たとえば </span>
+                {e.ex}
+              </p>
+            )}
+            {e.sym && (
+              <p className="mt-3 text-sm text-ink-dim">
+                <span className="font-bold">記号・式 </span>
+                {e.sym}
+              </p>
+            )}
+            {e.see && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-sm text-ink-dim">関連</span>
+                {e.see.map((k) => (
+                  <button key={k} onClick={() => setId(k)} className="rounded-full border border-studio-600 px-3 py-1 text-sm font-bold text-comp">
+                    {GLOSSARY[k].title}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Ctx.Provider>
+  );
+}
+
+/** 押すと説明が出る言葉 */
+export function Term({ id, children }: { id: string; children?: ReactNode }) {
+  const open = useContext(Ctx);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        open(id);
+      }}
+      className="pointer-events-auto cursor-help border-b-2 border-dotted border-comp/70 font-[inherit] leading-[inherit] text-inherit"
+      aria-label={`${GLOSSARY[id].title}の説明を見る`}
+    >
+      {children ?? GLOSSARY[id].title}
+    </button>
+  );
+}
+
+// 本文から用語を拾うための表(長い書き方を先に)
+const SURFACE: [string, string][] = Object.entries(GLOSSARY)
+  .flatMap(([id, e]) => (e.match ?? []).map((m) => [m, id] as [string, string]))
+  .sort((a, b) => b[0].length - a[0].length);
+const RE = new RegExp(SURFACE.map(([m]) => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+const ID_OF = new Map(SURFACE);
+
+/** 文の中の用語を、押すと説明が出る言葉に変える(同じ用語は最初の1回だけ) */
+export function Rich({ text }: { text: string }) {
+  const parts = useMemo(() => {
+    const out: ReactNode[] = [];
+    const seen = new Set<string>();
+    let last = 0;
+    for (const m of text.matchAll(RE)) {
+      const id = ID_OF.get(m[0])!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (m.index! > last) out.push(text.slice(last, m.index));
+      out.push(
+        <Term key={m.index} id={id}>
+          {m[0]}
+        </Term>,
+      );
+      last = m.index! + m[0].length;
+    }
+    out.push(text.slice(last));
+    return out;
+  }, [text]);
+  return <>{parts}</>;
+}

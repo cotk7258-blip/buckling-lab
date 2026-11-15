@@ -5,7 +5,7 @@ import { BG, addStudioEnvironment, makeGlowMaterial, makeRenderer, writeStressCo
 
 const S = 1 / 100; // mm → 絵の単位
 const HS = 1.45; // σy あたりの高さ
-const STEEL = new THREE.Color('#2a3a60');
+const STEEL = new THREE.Color('#b9c3d2');
 
 /** 輪切りにした H 形断面の上に、応力の柱を立てて見せる(上=圧縮、下=引張、金色の枠=降伏の天井) */
 export class Section3D {
@@ -26,7 +26,7 @@ export class Section3D {
     this.renderer = makeRenderer(canvas);
     this.scene.background = BG;
     addStudioEnvironment(this.renderer, this.scene, 0.35);
-    this.scene.add(new THREE.HemisphereLight('#a9c8ff', '#0a1020', 0.9));
+    this.scene.add(new THREE.HemisphereLight('#ffffff', '#c5cfdd', 0.9));
     const key = new THREE.DirectionalLight('#ffffff', 1.6);
     key.position.set(3, 6, 4);
     this.scene.add(key);
@@ -74,10 +74,10 @@ export class Section3D {
         this.scene.add(m);
       }
     };
-    outline(0, '#e8eefc', 0.9);
-    outline(HS, '#fbbf24', 1);
-    plates(HS, '#fbbf24', 0.16);
-    outline(-HS, '#fb923c', 0.35);
+    outline(0, '#1f2a44', 0.9);
+    outline(HS, '#e11d48', 1);
+    plates(HS, '#e11d48', 0.12);
+    outline(-HS, '#ea580c', 0.35);
     // 天井と床をつなぐ柱(四隅)
     const posts: THREE.Vector3[] = [];
     for (const x of [-b * S * 0.5, b * S * 0.5])
@@ -85,7 +85,7 @@ export class Section3D {
     this.scene.add(
       new THREE.LineSegments(
         new THREE.BufferGeometry().setFromPoints(posts),
-        new THREE.LineBasicMaterial({ color: '#2a3d68', transparent: true, opacity: 0.8 }),
+        new THREE.LineBasicMaterial({ color: '#b4c0d2', transparent: true, opacity: 0.8 }),
       ),
     );
   }
@@ -113,7 +113,7 @@ export class Section3D {
     const mk = (pts: THREE.Vector3[]) => {
       const l = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(pts),
-        new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.75 }),
+        new THREE.LineBasicMaterial({ color: '#1f2a44', transparent: true, opacity: 0.75 }),
       );
       l.visible = path.params.resid > 0;
       this.scene.add(l);

@@ -39,7 +39,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '実験室',
     head: '支え方と長さを変えて、押してみる',
-    body: '支え方と長さを選ぶと、座屈荷重が出ます。押す力を 100% まで上げると座屈します。計算上の座屈荷重が「降伏荷重」を超えるほど短い柱では、座屈より先に材料の限界が来ます。その先の話が STAGE 3 と STAGE 4 です。',
+    body: '支え方と長さを選ぶと、座屈荷重が出ます。押す力を 100% まで上げると座屈します。短い柱では、計算上の座屈荷重が降伏荷重(材料が元に戻らなくなる限界の力)を超えてしまい、オイラーの式は使えません。その先の話が STAGE 3 と STAGE 4 です。',
   },
 ];
 
@@ -50,21 +50,24 @@ const PY = (355 * (2 * 300 * 16 + 268 * 10)) / 1000; // kN
 
 export default function Stage2() {
   const [scene, setScene] = useState(0);
-  const [lab, setLab] = useState<Lab2>({ sup: 'pp', L: 5, load: 0.5 });
+  const [lab, setLab] = useState<Lab2>({ sup: 'pp', L: 8, load: 0.5, yieldFirst: false });
   const { canvasRef, capRef, show } = useShow((c) => new Stage2Show(c));
   const go = (n: number) => {
     const next = Math.max(0, Math.min(SCENES.length - 1, n));
     setScene(next);
     show.current?.setScene(next);
   };
+  const peOf = (sup: Support, L: number) => (Math.PI ** 2 * E * I) / (SUPPORTS[sup].le * L * 1000) ** 2 / 1000; // kN
   const change = (p: Partial<Lab2>) => {
     const next = { ...lab, ...p };
+    next.yieldFirst = peOf(next.sup, next.L) > PY;
     setLab(next);
     if (show.current) show.current.lab = next;
   };
   const info = SUPPORTS[lab.sup];
   const le = info.le * lab.L;
-  const pe = (Math.PI ** 2 * E * I) / (le * 1000) ** 2 / 1000; // kN
+  const pe = peOf(lab.sup, lab.L);
+  const cap = Math.min(pe, PY); // 理想の柱が耐えられる上限
 
   return (
     <StoryShell
@@ -116,16 +119,17 @@ export default function Stage2() {
               ))}
             </div>
             <div className="mt-3">
-              <LabSlider label="柱の長さ L" value={lab.L} min={2} max={8} step={0.5} show={`${lab.L.toFixed(1)} m`} color="#fbbf24" onChange={(v) => change({ L: v })} />
+              <LabSlider label="柱の長さ L" value={lab.L} min={4} max={16} step={0.5} show={`${lab.L.toFixed(1)} m`} color="#6d28d9" onChange={(v) => change({ L: v })} />
               <LabSlider
                 label="押す力"
-                hint="座屈荷重に対する割合。100% で座屈"
+                term="pe"
+                hint={lab.yieldFirst ? '降伏荷重に対する割合(この長さでは降伏が上限)' : '座屈荷重に対する割合。100% で座屈'}
                 value={lab.load}
                 min={0}
                 max={1.2}
                 step={0.01}
-                show={`${Math.round(lab.load * 100)}%`}
-                color="#38bdf8"
+                show={`${Math.round(lab.load * 100)}%(${Math.round(cap * Math.min(lab.load, 1.2)).toLocaleString()} kN)`}
+                color="#0284c7"
                 onChange={(v) => change({ load: v })}
               />
             </div>
@@ -155,8 +159,10 @@ export default function Stage2() {
                 <dd className="num text-lg font-bold">{Math.round(PY).toLocaleString()} kN</dd>
               </div>
             </dl>
-            <p className={`mt-2 text-sm font-bold ${pe > PY ? 'text-yield' : 'text-ideal'}`} style={{ color: pe > PY ? undefined : '#86efac' }}>
-              {pe > PY ? '座屈荷重が降伏荷重を超えています。この柱は、座屈より先に材料の限界が来ます。' : '座屈荷重が降伏荷重より小さいので、座屈で強さが決まります。'}
+            <p className={`mt-2 text-sm font-bold ${pe > PY ? 'text-yield' : 'text-ideal'}`} style={{ color: pe > PY ? undefined : '#16a34a' }}>
+              {pe > PY
+                ? `オイラーの式が使えない長さです。計算上の座屈荷重は降伏荷重を超えますが、理想の柱でも降伏荷重 ${Math.round(PY).toLocaleString()} kN が上限。現実の柱は、さらに手前で座屈します(STAGE 3・4)。`
+                : '座屈荷重が降伏荷重より小さいので、理想の柱の強さは座屈で決まります。現実の柱は、これより少し手前で座屈します(STAGE 3・4)。'}
             </p>
             <p className="mt-2 text-xs leading-relaxed text-ink-dim">
               断面は H-300×300×10×16(弱軸まわり、I = {(I / 1e4).toLocaleString(undefined, { maximumFractionDigits: 0 })} cm⁴)、E = 2.0×10⁵ N/mm²、σy = 355 N/mm²。

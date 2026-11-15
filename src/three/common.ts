@@ -6,12 +6,12 @@ const LUT_N = 512;
 const LUT = new Float32Array(LUT_N * 3);
 {
   // 0 → 0.5 → 0.9 の3段で色を変え、応力の大小が見分けられるようにする
-  const neutral = new THREE.Color('#2a3a60');
-  const compMid = new THREE.Color('#1d4ed8');
-  const comp = new THREE.Color('#5cd0ff');
-  const tensMid = new THREE.Color('#b4530a');
-  const tens = new THREE.Color('#ffa24a');
-  const yld = new THREE.Color('#ff1f4b');
+  const neutral = new THREE.Color('#b9c3d2');
+  const compMid = new THREE.Color('#60a5fa');
+  const comp = new THREE.Color('#1d4ed8');
+  const tensMid = new THREE.Color('#fdba74');
+  const tens = new THREE.Color('#ea580c');
+  const yld = new THREE.Color('#e11d48');
   const c = new THREE.Color();
   for (let i = 0; i < LUT_N; i++) {
     const s = (i / (LUT_N - 1)) * 2 - 1;
@@ -46,10 +46,10 @@ export function makeGlowMaterial(glow: { value: number }, opts: THREE.MeshStanda
     sh.fragmentShader =
       'uniform float uGlow;\n' +
       sh.fragmentShader
-        .replace('#include <color_fragment>', '#include <color_fragment>\n#ifdef USE_COLOR\n diffuseColor.rgb *= (1.0 - 0.6 * uGlow);\n#endif')
+        .replace('#include <color_fragment>', '#include <color_fragment>\n#ifdef USE_COLOR\n diffuseColor.rgb *= (1.0 - 0.7 * uGlow);\n#endif')
         .replace(
           '#include <emissivemap_fragment>',
-          '#include <emissivemap_fragment>\n#ifdef USE_COLOR\n totalEmissiveRadiance += vColor.rgb * uGlow * 0.8;\n#endif',
+          '#include <emissivemap_fragment>\n#ifdef USE_COLOR\n totalEmissiveRadiance += vColor.rgb * uGlow * 0.62;\n#endif',
         );
   };
   return m;
@@ -72,4 +72,4 @@ export function addStudioEnvironment(renderer: THREE.WebGLRenderer, scene: THREE
   pm.dispose();
 }
 
-export const BG = new THREE.Color('#060b18');
+export const BG = new THREE.Color('#eef2f8');

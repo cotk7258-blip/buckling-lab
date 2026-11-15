@@ -47,7 +47,7 @@ export interface ColumnStep {
   sig: Float32Array;
   /** 端から中央までの各断面の応力/σy。[断面 j][繊維 i] = sigS[j*n + i]。最後の断面が中央 */
   sigS: Float32Array;
-  /** 弾性のまま残っている部分の断面二次モーメント / 元の I(中央断面) */
+  /** 降伏していない部分の断面二次モーメント(その部分の中心まわり)/ 元の I。中央断面 */
   ieRatio: number;
   /** 降伏した部分の面積の割合(中央断面) */
   yieldFrac: number;
@@ -60,13 +60,13 @@ export interface ColumnPath {
   nw: number;
   ns: number;
   /** 繊維の位置 z/b(フランジ: -0.5〜0.5、ウェブ: 0) */
-  z: Float32Array;
+  z: Float64Array;
   /** ウェブの繊維のウェブ高さ方向の位置(-0.5〜0.5)。フランジは 0 */
-  u: Float32Array;
+  u: Float64Array;
   /** 繊維の面積 / A */
-  w: Float32Array;
+  w: Float64Array;
   /** 残留応力/σy(圧縮を正) */
-  sigR: Float32Array;
+  sigR: Float64Array;
   steps: ColumnStep[];
   /** 最大荷重の刻みの番号 */
   peak: number;
@@ -97,10 +97,10 @@ export function solveColumn(params: ColumnParams): ColumnPath {
   const { b, tf, hw, tw } = SECTION;
   const A = 2 * b * tf + hw * tw;
 
-  const z = new Float32Array(n);
-  const u = new Float32Array(n);
-  const w = new Float32Array(n);
-  const sigR = new Float32Array(n);
+  const z = new Float64Array(n);
+  const u = new Float64Array(n);
+  const w = new Float64Array(n);
+  const sigR = new Float64Array(n);
   for (let i = 0; i < nf; i++) {
     z[i] = (i + 0.5) / nf - 0.5;
     w[i] = (2 * b * tf) / A / nf;
@@ -200,13 +200,22 @@ export function solveColumn(params: ColumnParams): ColumnPath {
     const P = evalSection(mid, eps0, phi).N;
     const sigS = new Float32Array(ns * n);
     const sMid = new Float32Array(n);
-    let ie = 0;
+    // 降伏していない部分だけの面積 At・一次モーメント St・二次モーメント It
+    let At = 0;
+    let St = 0;
+    let It = 0;
     let yf = 0;
     for (let i = 0; i < n; i++) {
       sMid[i] = sig[i];
       if (Math.abs(sig[i]) >= 1 - YIELD_TOL) yf += w[i];
-      else ie += w[i] * z[i] * z[i];
+      else {
+        At += w[i];
+        St += w[i] * z[i];
+        It += w[i] * z[i] * z[i];
+      }
     }
+    // 軸力を保ったまま曲げたときの踏ん張り = 残った部分の中心まわりの値(降伏が片側から進むと中心が動く)
+    const ie = At > 1e-12 ? It - (St * St) / At : 0;
     sigS.set(sMid, mid);
     commit(mid, eps0, phi);
     eS[ns - 1] = eps0;

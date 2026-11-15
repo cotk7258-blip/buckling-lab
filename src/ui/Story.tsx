@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { ShowBase } from '../three/kit.ts';
+import { Rich, Term } from './glossary.tsx';
 
 export interface SceneText {
   kicker: string;
@@ -73,7 +74,7 @@ export function StoryShell(props: {
           <canvas ref={props.canvasRef} className="block h-[44dvh] min-h-[300px] w-full lg:h-[72dvh]" />
           <p
             ref={props.capRef}
-            className="pointer-events-none absolute inset-x-3 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
+            className="pointer-events-none absolute inset-x-3 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
             style={{ opacity: 0 }}
           />
           {props.overlay}
@@ -85,7 +86,7 @@ export function StoryShell(props: {
             <p className="text-[11px] font-bold tracking-[0.25em] text-comp sm:text-xs">
               {String(scene + 1).padStart(2, '0')} — {text.kicker}
             </p>
-            <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] sm:text-3xl">
+            <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] sm:text-3xl">
               {text.head}
             </p>
           </div>
@@ -93,10 +94,14 @@ export function StoryShell(props: {
 
         <div className="flex min-w-0 flex-col gap-2 lg:gap-3">
           <p key={`b${scene}`} className="telop rounded-xl bg-studio-800/70 px-3 py-2 text-[14px] leading-relaxed text-ink sm:px-4 sm:py-3 sm:text-base">
-            {text.body}
+            <Rich text={text.body} />
           </p>
           {props.side}
-          {props.hint && <p className="px-1 text-[11px] text-ink-dim">{props.hint}</p>}
+          {props.hint && (
+            <p className="px-1 text-[11px] text-ink-dim">
+              {props.hint}(<Term id="amp">誇張について</Term>)
+            </p>
+          )}
           <div className="sticky bottom-0 z-10 -mx-3 flex items-center gap-2 bg-studio-950/90 px-3 py-2 backdrop-blur lg:static lg:mx-0 lg:bg-transparent lg:p-0">
             <button
               onClick={() => props.onScene(scene - 1)}
@@ -123,7 +128,12 @@ export function StoryShell(props: {
         </div>
       </div>
       {isLab && props.lab && <div className="mt-3">{props.lab}</div>}
-      {props.note && <p className="mt-4 px-1 text-xs leading-relaxed text-ink-dim">{props.note}</p>}
+      {props.note && (
+        <details className="mt-4 px-1 text-xs leading-relaxed text-ink-dim">
+          <summary className="cursor-pointer py-1 text-sm font-bold">計算の前提を見る</summary>
+          {props.note}
+        </details>
+      )}
     </div>
   );
 }
@@ -131,6 +141,8 @@ export function StoryShell(props: {
 /** 実験室のスライダー */
 export function LabSlider(props: {
   label: string;
+  /** 押すと説明が出る用語の id */
+  term?: string;
   hint?: string;
   value: number;
   min: number;
@@ -143,7 +155,7 @@ export function LabSlider(props: {
   return (
     <label className="mt-3 block first:mt-0">
       <span className="flex items-baseline justify-between gap-2">
-        <span className="text-base font-bold">{props.label}</span>
+        <span className="text-base font-bold">{props.term ? <Term id={props.term}>{props.label}</Term> : props.label}</span>
         <span className="num text-lg font-bold" style={{ color: props.color }}>
           {props.show}
         </span>

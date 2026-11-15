@@ -20,7 +20,7 @@ export const SUPPORTS: Record<Support, { name: string; w: (x: number) => number;
 // fp: Pcr = k²EI/L² = (k/π)²·Pe
 SUPPORTS.fp.gain = (KFP / Math.PI) ** 2;
 
-const DARK = () => new THREE.MeshStandardMaterial({ color: '#1c2740', metalness: 0.7, roughness: 0.45 });
+const DARK = () => new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
 const BRIGHT = () => new THREE.MeshStandardMaterial({ color: '#c9d3e3', metalness: 0.9, roughness: 0.25 });
 
 /** 細い棒1本(下端が原点)。支え方に合わせた形で横にずれる */
@@ -71,7 +71,7 @@ class Bar {
       block.position.y = 0.02;
       this.topGroup.add(block);
     }
-    this.arrow = arrow('#ffffff');
+    this.arrow = arrow('#1f2a44');
     this.arrow.scale.set(1.6, 1, 1.6);
     this.group.add(this.arrow);
     // サインカーブ半分(有効座屈長)の目印
@@ -81,7 +81,7 @@ class Bar {
       const x = a + ((b - a) * i) / 40;
       pts.push(new THREE.Vector3(Dfin * w(Math.abs(x)), x * H, 0.12));
     }
-    this.wave = tube(pts, 0.035, '#ff1f4b', 0.9);
+    this.wave = tube(pts, 0.035, '#e11d48', 0.9);
     this.wave.visible = false;
     this.group.add(this.wave);
   }
@@ -133,7 +133,9 @@ const ORDER: Support[] = ['cf', 'pp', 'fp', 'ff'];
 export interface Lab2 {
   sup: Support;
   L: number; // m
-  load: number; // P / Pcr
+  load: number; // P / (座屈荷重と降伏荷重の小さい方)
+  /** 座屈荷重が降伏荷重を超える(オイラーの式が使えない)長さか */
+  yieldFirst: boolean;
 }
 
 export class Stage2Show extends ShowBase {
@@ -159,7 +161,7 @@ export class Stage2Show extends ShowBase {
   private labBar: Bar | null = null;
   private labKey = '';
   private dyn = [0, 0, 0, 0];
-  lab: Lab2 = { sup: 'pp', L: 5, load: 0.5 };
+  lab: Lab2 = { sup: 'pp', L: 8, load: 0.5, yieldFirst: false };
 
   constructor(canvas: HTMLCanvasElement) {
     super(canvas);
@@ -167,14 +169,14 @@ export class Stage2Show extends ShowBase {
 
     this.main = new Bar('pp', 3.0, 0.5);
     this.g0.add(this.main.group);
-    this.hOut = arrow('#ffa24a');
-    this.hBack = arrow('#5cd0ff');
+    this.hOut = arrow('#ea580c');
+    this.hBack = arrow('#0284c7');
     for (const a of [this.hOut, this.hBack]) a.scale.set(1.5, 1, 1.5);
-    tintArrow(this.hOut, '#ffa24a');
-    tintArrow(this.hBack, '#5cd0ff');
-    this.tOut = tag('曲げる力', '#ffa24a', 0.75);
-    this.tBack = tag('戻す力', '#5cd0ff', 0.75);
-    this.offLine = line('#fbbf24', true);
+    tintArrow(this.hOut, '#ea580c');
+    tintArrow(this.hBack, '#0284c7');
+    this.tOut = tag('曲げる力', '#ea580c', 0.75);
+    this.tBack = tag('戻す力', '#0284c7', 0.75);
+    this.offLine = line('#6d28d9', true);
     this.g0.add(this.hOut, this.hBack, this.tOut, this.tBack, this.offLine);
 
     this.short = new Bar('pp', 1.6, 0.4);
@@ -182,7 +184,7 @@ export class Stage2Show extends ShowBase {
     this.long = new Bar('pp', 3.2, 0.4);
     this.long.group.position.x = 1.0;
     this.g2.add(this.short.group, this.long.group);
-    for (const [t, x, y, c] of [['長さ 1', -1.5, -0.75, '#e8eefc'], ['長さ 2', 1.0, -0.75, '#e8eefc'], ['限界 100%', -2.55, 1.0, '#fbbf24'], ['限界 25%', 2.35, 1.9, '#fbbf24']] as const) {
+    for (const [t, x, y, c] of [['長さ 1', -1.5, -0.75, '#1f2a44'], ['長さ 2', 1.0, -0.75, '#1f2a44'], ['限界 100%', -2.55, 1.0, '#6d28d9'], ['限界 25%', 2.35, 1.9, '#6d28d9']] as const) {
       const s = tag(t, c, 0.75);
       s.position.set(x, y, 0.3);
       this.g2.add(s);
@@ -193,14 +195,14 @@ export class Stage2Show extends ShowBase {
     this.bar3.group.position.x = -2.9;
     this.g3.add(this.bar3.group);
     const defs: [(x: number) => number, string, string, number][] = [
-      [(x) => Math.sin(Math.PI * x), '#ffffff', 'ずれ', -1.2],
-      [(x) => Math.cos(Math.PI * x), '#5cd0ff', '傾き', 0.6],
-      [(x) => -Math.sin(Math.PI * x), '#fbbf24', '曲がりのきつさ', 2.5],
+      [(x) => Math.sin(Math.PI * x), '#1f2a44', 'ずれ', -1.2],
+      [(x) => Math.cos(Math.PI * x), '#0284c7', '傾き', 0.6],
+      [(x) => -Math.sin(Math.PI * x), '#6d28d9', '曲がりのきつさ', 2.5],
     ];
     for (const [f, c, name, x] of defs) {
       const p = plot(f, c, 3.0);
       p.position.x = x;
-      const ax = line('#3a4d7a');
+      const ax = line('#b4c0d2');
       setLine(ax, x, 0, x, 3.0, -0.02);
       const s = tag(name, c, 0.7, name.length > 4 ? 2 : 1);
       s.position.set(x, -0.4, 0.2);
@@ -216,9 +218,9 @@ export class Stage2Show extends ShowBase {
       this.four.push(b);
       const info = SUPPORTS[sup];
       const gain = info.gain < 1 ? '1/4 倍' : info.gain === 1 ? '1 倍(基準)' : `${info.gain < 3 ? '約 2' : '4'} 倍`;
-      const t1 = tag(gain, '#fbbf24', 0.75);
+      const t1 = tag(gain, '#6d28d9', 0.75);
       t1.position.set(b.group.position.x + 0.15, 3.55, 0.3);
-      const t2 = tag(`波の長さ ${info.le === 1 ? '1' : info.le < 0.6 ? '0.5' : info.le > 1.5 ? '2' : '0.7'}`, '#ff8ca3', 0.6);
+      const t2 = tag(`波の長さ ${info.le === 1 ? '1' : info.le < 0.6 ? '0.5' : info.le > 1.5 ? '2' : '0.7'}`, '#e11d48', 0.6);
       t2.position.set(b.group.position.x + 0.15, 3.2, 0.3);
       this.g5.add(t1, t2);
       this.tags5.push([t1, t2]);
@@ -283,7 +285,7 @@ export class Stage2Show extends ShowBase {
       } else {
         p = 1.15;
         D = Math.min(0.5, 0.42 * Math.exp((t - 22) * 0.05)) * (1 - ramp(t, 28.5, 30));
-        this.caption = 'それを超えると、曲げる力の勝ち。もう止められない';
+        this.caption = 'それを超えると、曲げる力の勝ち。たわみが一気に大きくなる';
       }
       this.main.update(D, p);
       this.forces(D, p, true);
@@ -360,16 +362,17 @@ export class Stage2Show extends ShowBase {
       if (key !== this.labKey) {
         this.labKey = key;
         if (this.labBar) this.gLab.remove(this.labBar.group);
-        this.labBar = new Bar(sup, 0.42 * L, 0.1 * L);
+        this.labBar = new Bar(sup, 0.24 * L, 0.06 * L);
         this.gLab.add(this.labBar.group);
         this.dyn[0] = 0;
       }
       const b = this.labBar!;
-      const goal = load >= 1 ? b.H * 0.24 * Math.min(1, 0.6 + (load - 1) * 2) : 0;
+      // 降伏が先に来る長さでは、弾性座屈の形には曲げない
+      const goal = load >= 1 && !this.lab.yieldFirst ? b.H * 0.24 * Math.min(1, 0.6 + (load - 1) * 2) : 0;
       this.dyn[0] += (goal - this.dyn[0]) * (1 - Math.exp(-dt * 5));
       b.update(this.dyn[0], load * 0.8, true);
       this.caption = '';
-      this.look(0, 1.3, 2.8, 3.3, 10, 6);
+      this.look(0, 1.4, 2.8, 3.4, 10, 6);
     }
   }
 }

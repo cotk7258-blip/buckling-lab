@@ -47,7 +47,7 @@ class Column3D {
   constructor(x: number, glow: { value: number }, machine: THREE.Material) {
     this.mat = makeGlowMaterial(glow, { vertexColors: true, clippingPlanes: [this.clipLow] });
     this.ghostMat = new THREE.MeshBasicMaterial({
-      color: '#9fc4ff',
+      color: '#64748b',
       transparent: true,
       opacity: 0,
       depthWrite: false,
@@ -87,7 +87,7 @@ class Column3D {
     // 輪切りの位置を示す枠
     this.cut = new THREE.LineLoop(
       new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color: '#fbbf24', transparent: true }),
+      new THREE.LineBasicMaterial({ color: '#6d28d9', transparent: true }),
     );
     this.group.add(this.cut);
     this.light = new THREE.PointLight('#ff2d55', 0, 6, 1.6);
@@ -298,14 +298,14 @@ export class Stage3D {
 
     this.explain = new ExplainScene(this.scene.environment, BG);
 
-    const machine = new THREE.MeshStandardMaterial({ color: '#1c2740', metalness: 0.7, roughness: 0.45 });
+    const machine = new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(90, 90),
-      new THREE.MeshStandardMaterial({ color: '#070d1d', metalness: 0.2, roughness: 0.75 }),
+      new THREE.MeshStandardMaterial({ color: '#e4eaf2', metalness: 0.2, roughness: 0.75 }),
     );
     floor.rotation.x = -Math.PI / 2;
     this.scene.add(floor);
-    const grid = new THREE.GridHelper(60, 60, '#22335a', '#111c36');
+    const grid = new THREE.GridHelper(60, 60, '#bfcada', '#d3dbe6');
     grid.position.y = 0.002;
     this.scene.add(grid);
 
@@ -322,11 +322,11 @@ export class Stage3D {
     beam.position.set(0, TOP_BEAM_Y + 0.25, -0.3);
     this.scene.add(beam);
 
-    this.scene.add(new THREE.HemisphereLight('#a9c8ff', '#0a1020', 0.7));
+    this.scene.add(new THREE.HemisphereLight('#ffffff', '#c5cfdd', 0.7));
     const key = new THREE.DirectionalLight('#ffffff', 2.4);
     key.position.set(4, 8, 7);
     this.scene.add(key);
-    const rim = new THREE.DirectionalLight('#38bdf8', 1.6);
+    const rim = new THREE.DirectionalLight('#0284c7', 1.6);
     rim.position.set(-6, 4, -5);
     this.scene.add(rim);
 

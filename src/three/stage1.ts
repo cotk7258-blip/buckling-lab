@@ -4,7 +4,7 @@ import { springGeometry } from './explain.ts';
 import { ShowBase, arrow, label, line, ramp, setArrow, setLine, tintArrow } from './kit.ts';
 
 const NEUTRAL = new THREE.Color('#8794a8');
-const DARK = () => new THREE.MeshStandardMaterial({ color: '#1c2740', metalness: 0.7, roughness: 0.45 });
+const DARK = () => new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
 
 /** 曲がる棒(中央が原点、両端が下がる向きに円弧で曲がる。上側が伸びる) */
 class BendBeam {
@@ -129,7 +129,7 @@ class Bank {
     const w = n * gap + 0.25;
     const base = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, 0.6), DARK());
     base.position.y = -0.06;
-    this.plate = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, 0.6), new THREE.MeshStandardMaterial({ color: '#2a3a60', metalness: 0.7, roughness: 0.45 }));
+    this.plate = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, 0.6), new THREE.MeshStandardMaterial({ color: '#b9c3d2', metalness: 0.7, roughness: 0.45 }));
     this.inner.add(base, this.plate);
     for (let i = 0; i < n; i++) {
       const x = (i - (n - 1) / 2) * gap;
@@ -141,7 +141,7 @@ class Bank {
       this.inner.add(s);
       this.springs.push(s);
       this.mats.push(m);
-      const a = arrow('#ffffff');
+      const a = arrow('#1f2a44');
       a.scale.set(0.8, 1, 0.8);
       this.inner.add(a);
       this.arrows.push(a);
@@ -170,7 +170,7 @@ class Bank {
       if (f < 0.05) a.visible = false;
       else if (len > this.L0) setArrow(a, this.xs[i], len + 0.14 + f + 0.2, -(f + 0.2), 0.34);
       else setArrow(a, this.xs[i], len + 0.14, f + 0.2, 0.34);
-      tintArrow(a, len > this.L0 ? '#ffa24a' : '#5cd0ff');
+      tintArrow(a, len > this.L0 ? '#ea580c' : '#0284c7');
     }
     this.plate.position.y = this.L0 + 0.06;
     this.plate.rotation.z = Math.atan(-tilt);
@@ -248,14 +248,15 @@ export class Stage1Show extends ShowBase {
     this.scene.add(this.gRuler, this.gBlock, this.gBank, this.gPair, this.gMorph);
 
     // 定規
-    this.rulerFlat = new BendBeam(4.4, 0.06, 0.5, false, false);
-    this.rulerEdge = new BendBeam(4.4, 0.5, 0.06, false, false);
+    // 幅 30 mm・厚み 2 mm の定規と同じ比率(15:1)
+    this.rulerFlat = new BendBeam(4.4, 0.04, 0.6, false, false);
+    this.rulerEdge = new BendBeam(4.4, 0.6, 0.04, false, false);
     const ful = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.32, 0.55, 4), DARK());
     ful.rotation.y = Math.PI / 4;
     ful.position.y = 1.1;
     this.gRuler.add(this.rulerFlat.group, this.rulerEdge.group, ful);
     for (let i = 0; i < 2; i++) {
-      const a = arrow('#ffffff');
+      const a = arrow('#1f2a44');
       a.scale.set(1.6, 1, 1.6);
       this.gRuler.add(a);
       this.rulerArrows.push(a);
@@ -265,12 +266,12 @@ export class Stage1Show extends ShowBase {
     this.block = new BendBeam(4.2, 1.0, 0.7, true);
     this.block.group.position.y = 1.55;
     this.gBlock.add(this.block.group);
-    for (const [t, c] of [['伸びる', '#ffa24a'], ['縮む', '#5cd0ff'], ['変わらない', '#ffffff']] as const) {
+    for (const [t, c] of [['伸びる', '#ea580c'], ['縮む', '#0284c7'], ['変わらない', '#1f2a44']] as const) {
       const s = tag(t, c, 0.75);
       this.gBlock.add(s);
       this.blockTags.push(s);
     }
-    this.radius = line('#fbbf24', true);
+    this.radius = line('#6d28d9', true);
     this.gBlock.add(this.radius);
 
     // バネの束(7本)
@@ -278,16 +279,16 @@ export class Stage1Show extends ShowBase {
     this.bank7.group.position.set(-2.6, 1.6, 0);
     this.gBank.add(this.bank7.group);
     for (let i = 0; i < 7; i++) {
-      const b = gauge('#fbbf24');
+      const b = gauge('#6d28d9');
       this.gBank.add(b);
       this.bars.push(b);
       const d = Math.abs(i - 3);
-      const s = tag(d === 0 ? '0' : `${d * d}`, '#fbbf24', 0.6);
+      const s = tag(d === 0 ? '0' : `${d * d}`, '#6d28d9', 0.6);
       this.gBank.add(s);
       this.barTags.push(s);
     }
-    this.arm = line('#fbbf24');
-    this.armTag = tag('腕', '#fbbf24', 0.7);
+    this.arm = line('#6d28d9');
+    this.armTag = tag('腕', '#6d28d9', 0.7);
     this.gBank.add(this.arm, this.armTag);
 
     // 高さ1倍と2倍
@@ -295,11 +296,11 @@ export class Stage1Show extends ShowBase {
     this.bank4.group.position.set(-3.5, 1.95, 0);
     this.bank8 = new Bank(8, 0.36, 1.5, geo);
     this.bank8.group.position.set(0.3, 1.95, 0);
-    this.gA = gauge('#fbbf24');
-    this.gB = gauge('#fbbf24');
+    this.gA = gauge('#6d28d9');
+    this.gB = gauge('#6d28d9');
     this.gPair.add(this.bank4.group, this.bank8.group, this.gA, this.gB);
     for (const [t, x] of [['高さ 1', -2.7], ['高さ 2', 1.1], ['踏ん張り 1', -2.2], ['踏ん張り 8', 2.3]] as const) {
-      const s = tag(t, t.startsWith('踏') ? '#fbbf24' : '#e8eefc', 0.7);
+      const s = tag(t, t.startsWith('踏') ? '#6d28d9' : '#1f2a44', 0.7);
       s.position.set(x, t.startsWith('踏') ? -0.02 : 3.75, 0.3);
       this.gPair.add(s);
       this.pairTags.push(s);
@@ -312,11 +313,11 @@ export class Stage1Show extends ShowBase {
       this.gMorph.add(m);
       this.parts.push(m);
     }
-    this.gM0 = gauge('#fbbf24');
-    this.gM1 = gauge('#fbbf24');
+    this.gM0 = gauge('#6d28d9');
+    this.gM1 = gauge('#6d28d9');
     this.gMorph.add(this.gM0, this.gM1);
     for (const [t, x, y] of [['1倍', -2.6, 0.05], [`約${Math.round(H_GAIN)}倍`, 1.1, 0.05], ['同じ量の鉄', -0.75, 3.55]] as const) {
-      const s = tag(t, t === '同じ量の鉄' ? '#e8eefc' : '#fbbf24', 0.75);
+      const s = tag(t, t === '同じ量の鉄' ? '#1f2a44' : '#6d28d9', 0.75);
       s.position.set(x, y, 0.4);
       this.gMorph.add(s);
       this.morphTags.push(s);
@@ -337,14 +338,14 @@ export class Stage1Show extends ShowBase {
     this.rulerFlat.group.visible = !edge;
     this.rulerEdge.group.visible = edge;
     const kFlat = 0.4 * push;
-    // 立てた向きは (幅/厚み)² = 約70倍 曲がりにくい
-    const kEdge = (0.4 * push2) / (0.5 / 0.06) ** 2;
+    // 立てた向きは (幅/厚み)² = 225倍 曲がりにくい
+    const kEdge = (0.4 * push2) / 15 ** 2;
     this.rulerFlat.update(kFlat, () => 0, 0);
     this.rulerFlat.group.rotation.x = (roll * Math.PI) / 2;
     this.rulerEdge.update(kEdge, () => 0, 0);
-    const y0 = 1.375 + (edge ? 0.25 : 0.03 + 0.22 * roll);
+    const y0 = 1.375 + (edge ? 0.3 : 0.02 + 0.28 * roll);
     this.rulerFlat.group.position.y = y0;
-    this.rulerEdge.group.position.y = 1.375 + 0.25;
+    this.rulerEdge.group.position.y = 1.375 + 0.3;
     const b = edge ? this.rulerEdge : this.rulerFlat;
     const k = edge ? kEdge : kFlat;
     const f = Math.max(push, push2);

@@ -25,11 +25,11 @@ const VARIANTS: [number, number][] = [
 
 export type CurveKey = 'dohshi' | 'aisc' | 'ecb' | 'ecc' | 'aij';
 export const CURVES: { key: CurveKey; name: string; color: string; f: (l: number) => number }[] = [
-  { key: 'dohshi', name: '道路橋示方書(平成24年版まで)', color: '#5cd0ff', f: dohshiOld },
-  { key: 'aisc', name: '米国 AISC 360', color: '#c4b5fd', f: aisc },
-  { key: 'ecb', name: '欧州 Eurocode 3 曲線 b', color: '#f9a8d4', f: (l) => eurocode(l, 0.34) },
-  { key: 'ecc', name: '欧州 Eurocode 3 曲線 c', color: '#fda4af', f: (l) => eurocode(l, 0.49) },
-  { key: 'aij', name: '日本建築学会(安全率を除いた値)', color: '#fde68a', f: aij },
+  { key: 'dohshi', name: '道路橋示方書(平成24年版まで)', color: '#0284c7', f: dohshiOld },
+  { key: 'aisc', name: '米国 AISC 360', color: '#0d9488', f: aisc },
+  { key: 'ecb', name: '欧州 Eurocode 3 曲線 b', color: '#db2777', f: (l) => eurocode(l, 0.34) },
+  { key: 'ecc', name: '欧州 Eurocode 3 曲線 c', color: '#9f1239', f: (l) => eurocode(l, 0.49) },
+  { key: 'aij', name: '日本建築学会(安全率を除いた値)', color: '#a16207', f: aij },
 ];
 
 function curveTube(f: (l: number) => number, l0: number, l1: number, r: number, color: string) {
@@ -84,7 +84,7 @@ export class Stage4Show extends ShowBase {
     this.ideal = LAMS.map((l) => solveColumn({ lambda: l, resid: 0, imp: 0, ...quick }));
     this.real = LAMS.map((l) => solveColumn({ lambda: l, resid: 0.3, imp: 1 / 1000, ...quick }));
 
-    const dark = new THREE.MeshStandardMaterial({ color: '#1c2740', metalness: 0.7, roughness: 0.45 });
+    const dark = new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
     const slab = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.12, 1.0), dark);
     slab.position.set(0, -0.06, ZC);
     this.scene.add(slab);
@@ -97,7 +97,7 @@ export class Stage4Show extends ShowBase {
       const cap = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.4), dark);
       this.scene.add(cap);
       this.caps.push(cap);
-      const a = arrow('#ffffff');
+      const a = arrow('#1f2a44');
       a.scale.set(1.3, 1, 1.3);
       this.scene.add(a);
       this.arrows.push(a);
@@ -107,18 +107,18 @@ export class Stage4Show extends ShowBase {
     // グラフの壁
     const board = new THREE.Mesh(
       new THREE.PlaneGeometry(8.3, 4.4),
-      new THREE.MeshBasicMaterial({ color: '#0b1430', transparent: true, opacity: 0.85 }),
+      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, toneMapped: false, fog: false }),
     );
     board.position.set(-0.05, Y(0.56), ZG - 0.12);
     this.scene.add(board);
-    const axis = (x0: number, y0: number, x1: number, y1: number, color = '#9fb0d0') => {
+    const axis = (x0: number, y0: number, x1: number, y1: number, color = '#64748b') => {
       const l = line(color);
       setLine(l, x0, y0, x1, y1, ZG - 0.02);
       this.scene.add(l);
     };
     axis(X(0), Y(0), X(2.25), Y(0));
     axis(X(0), Y(0), X(0), Y(1.3));
-    const put = (text: string, x: number, y: number, color = '#9fb0d0', size = 0.5, wide = 1) => {
+    const put = (text: string, x: number, y: number, color = '#64748b', size = 0.5, wide = 1) => {
       const sp = label(text, color, wide);
       sp.scale.multiplyScalar(size);
       sp.position.set(x, y, ZG);
@@ -127,18 +127,18 @@ export class Stage4Show extends ShowBase {
     };
     for (const l of [0.5, 1, 1.5, 2]) {
       axis(X(l), Y(0), X(l), Y(0) - 0.07);
-      put(l.toFixed(1), X(l), Y(0) - 0.22, '#d3def2', 0.85);
+      put(l.toFixed(1), X(l), Y(0) - 0.22, '#44536e', 0.85);
     }
     for (const s of [0.5, 1]) {
-      axis(X(0), Y(s), X(2.25), Y(s), '#1b2a4d');
-      put(`${s * 100}%`, X(0) - 0.38, Y(s), '#d3def2', 0.85);
+      axis(X(0), Y(s), X(2.25), Y(s), '#d5dce8');
+      put(`${s * 100}%`, X(0) - 0.38, Y(s), '#44536e', 0.85);
     }
-    put('強さ', X(0) - 0.38, Y(1.3), '#e8eefc', 0.8);
-    put('細長さ →', X(2.25) - 0.45, Y(0) - 0.5, '#e8eefc', 0.8);
+    put('強さ', X(0) - 0.38, Y(1.3), '#1f2a44', 0.8);
+    put('細長さ →', X(2.25) - 0.45, Y(0) - 0.5, '#1f2a44', 0.8);
 
-    this.cEuler = curveTube((l) => 1 / (l * l), 0.878, 2.25, 0.022, '#fbbf24');
-    this.cYield = curveTube(() => 1, 0, 2.25, 0.022, '#ff1f4b');
-    this.cIdeal = curveTube(idealCurve, 0.01, 2.25, 0.034, '#86efac');
+    this.cEuler = curveTube((l) => 1 / (l * l), 0.878, 2.25, 0.022, '#6d28d9');
+    this.cYield = curveTube(() => 1, 0, 2.25, 0.022, '#e11d48');
+    this.cIdeal = curveTube(idealCurve, 0.01, 2.25, 0.034, '#16a34a');
     this.scene.add(this.cEuler, this.cYield, this.cIdeal);
     for (const c of CURVES) {
       const t = curveTube(c.f, 0.01, 2.25, c.key === 'dohshi' ? 0.04 : 0.026, c.color);
@@ -147,11 +147,11 @@ export class Stage4Show extends ShowBase {
       this.scene.add(t);
     }
     for (let i = 0; i < N; i++) {
-      const a = dot(0.075, '#86efac');
+      const a = dot(0.075, '#16a34a');
       a.position.set(X(LAMS[i]), Y(this.ideal[i].Pu), ZG + 0.06);
-      const b = dot(0.075, '#ffffff');
+      const b = dot(0.075, '#1f2a44');
       b.position.set(X(LAMS[i]), Y(this.real[i].Pu), ZG + 0.1);
-      const d = line('#ff1f4b');
+      const d = line('#e11d48');
       setLine(d, X(LAMS[i]), Y(this.ideal[i].Pu), X(LAMS[i]), Y(this.real[i].Pu), ZG + 0.05);
       d.visible = false;
       this.scene.add(a, b, d);
@@ -163,7 +163,7 @@ export class Stage4Show extends ShowBase {
     for (const [resid, n] of VARIANTS) {
       for (const l of LAMS) {
         const pu = solveColumn({ lambda: l, resid, imp: 1 / n, eOverFy: E_OVER_FY, nStep: 200, nFlange: 31, nWeb: 9 }).Pu;
-        const c = dot(0.045, '#9fc4ff');
+        const c = dot(0.045, '#64748b');
         c.position.set(X(l), Y(pu), ZG + 0.08);
         this.scene.add(c);
         this.dotC.push(c);
@@ -171,20 +171,20 @@ export class Stage4Show extends ShowBase {
     }
     // λ̄ = 1 の目印
     this.mark1 = new THREE.Group();
-    const m = line('#e8eefc', true);
+    const m = line('#1f2a44', true);
     setLine(m, X(1), Y(0), X(1), Y(1.25), ZG + 0.02);
-    const ml = label('λ̄ = 1', '#e8eefc');
+    const ml = label('λ̄ = 1', '#1f2a44');
     ml.scale.multiplyScalar(0.8);
     ml.position.set(X(1), Y(1.33), ZG);
-    const la = label('降伏が先', '#ff9db0');
+    const la = label('降伏が先', '#e11d48');
     la.scale.multiplyScalar(0.75);
     la.position.set(X(0.5), Y(1.18), ZG);
-    const lb = label('座屈が先', '#fbbf24');
+    const lb = label('座屈が先', '#6d28d9');
     lb.scale.multiplyScalar(0.75);
     lb.position.set(X(1.6), Y(1.18), ZG);
     this.mark1.add(m, ml, la, lb);
     this.scene.add(this.mark1);
-    this.probe = line('#fbbf24');
+    this.probe = line('#6d28d9');
     this.scene.add(this.probe);
     this.setScene(0);
   }
@@ -222,7 +222,7 @@ export class Stage4Show extends ShowBase {
     const GRAPH: [number, number, number, number, number, number] = [0.05, Y(0.5), 4.2, 2.9, 5, 3];
 
     if (s === 0) {
-      this.caption = c < 4 ? '同じ H形鋼で、長さだけが違う柱を10本' : '短い柱と長い柱。折れ方は同じでしょうか';
+      this.caption = c < 4 ? '同じ H形鋼で、長さだけが違う柱を10本' : '短い柱と長い柱。耐えられなくなるしくみは同じでしょうか';
       this.look(0, 1.45, 4.0, 2.1, 14, 10);
     } else if (s === 1) {
       load[0] = hold(0) * ramp(c, 1, 5);
@@ -267,7 +267,7 @@ export class Stage4Show extends ShowBase {
           c < 5.8
             ? '長い柱から順に押して、強さを点で打つ'
             : c < 10
-              ? '点は1本の曲線に乗る。細長さが2倍なら、強さは 1/4'
+              ? '点は1本の曲線に乗る。長さが2倍なら、強さは 1/4'
               : 'でも短い柱では、線が天井知らずに伸びる。そんなはずはない';
       } else {
         for (let j = 4; j <= 8; j++) done(j);

@@ -136,3 +136,40 @@ test('板の局部座屈: 幅が半分で弾性座屈応力は4倍、強さは�
   assert.ok(Math.abs(p.plateStrength(1.4) - 0.5 / 1.96) < 1e-9);
   for (let r = 0.1; r < 3; r += 0.1) assert.ok(p.plateStrength(r) <= Math.min(1, p.plateTheory(r)) + 1e-9);
 });
+
+test('最大荷重のとき、押す力は「残っている踏ん張りで計算した座屈荷重」とほぼ一致する', () => {
+  for (const lam of [0.7, 0.9, 1.2]) {
+    const p = solveColumn({ lambda: lam, resid: 0.3, imp: 1 / 1000, eOverFy: E_FY });
+    const limit = Math.min(1, p.Pe * p.steps[p.peak].ieRatio);
+    assert.ok(Math.abs(limit - p.Pu) < 0.06, `λ=${lam} Pu=${p.Pu} limit=${limit}`);
+  }
+});
+
+test('各国の曲線の値(手計算との照合)', async () => {
+  const c = await import('./curves.ts');
+  assert.ok(Math.abs(c.dohshiOld(1) - 0.564) < 1e-3);
+  assert.ok(Math.abs(c.aisc(1) - 0.658) < 1e-9);
+  assert.ok(Math.abs(c.eurocode(1, 0.49) - 0.54) < 1e-3);
+  assert.ok(Math.abs(c.eurocode(1, 0.34) - 0.597) < 1e-3);
+  // 建築学会の式は、長い柱では安全率を除くとオイラーの式そのもの
+  assert.ok(Math.abs(c.aij(1.4) - 1 / 1.96) < 1e-9);
+});
+
+test('板: 有効幅を見込んだ強さは、理論値と降伏の間にあり、設計値より大きい。状態の判定に抜けがない', async () => {
+  const p = await import('./plate.ts');
+  assert.ok(Math.abs(p.plateWinter(1.4) - 0.602) < 1e-3);
+  assert.equal(p.plateWinter(0.5), 1);
+  for (let r = 0.75; r < 3; r += 0.05) {
+    assert.ok(p.plateWinter(r) > p.plateStrength(r), `R=${r}`);
+    assert.ok(p.plateWinter(r) <= 1);
+    // R が 1.22 より大きい薄い板では、波打った後の余力で理論値(弾性座屈)を上回る
+    if (r > 1.25) assert.ok(p.plateWinter(r) > p.plateTheory(r), `R=${r}`);
+  }
+  // R = 1.85(実験室の初期値): 設計 15%、理論 29%、有効幅 48%
+  assert.equal(p.plateState(0.1, 1.85), 'ok');
+  assert.equal(p.plateState(0.2, 1.85), 'overDesign');
+  assert.equal(p.plateState(0.35, 1.85), 'buckled');
+  assert.equal(p.plateState(0.6, 1.85), 'ultimate');
+  assert.equal(p.plateState(0.9, 0.5), 'ok');
+  assert.equal(p.plateState(1.0, 0.5), 'ultimate');
+});

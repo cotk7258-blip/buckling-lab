@@ -52,7 +52,7 @@ export function label(text: string, color: string, wide = 1): THREE.Sprite {
   g.fillText(text, cv.width / 2, 68);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, toneMapped: false }));
   sp.scale.set(1.5 * wide, 0.375, 1);
   return sp;
 }
@@ -111,11 +111,11 @@ export abstract class ShowBase {
     this.renderer = makeRenderer(canvas);
     this.scene.background = BG;
     addStudioEnvironment(this.renderer, this.scene, 0.5);
-    this.scene.add(new THREE.HemisphereLight('#a9c8ff', '#0a1020', 0.9));
+    this.scene.add(new THREE.HemisphereLight('#ffffff', '#c5cfdd', 0.9));
     const key = new THREE.DirectionalLight('#ffffff', 2.2);
     key.position.set(3, 7, 7);
     this.scene.add(key);
-    const rim = new THREE.DirectionalLight('#38bdf8', 1.0);
+    const rim = new THREE.DirectionalLight('#0284c7', 1.0);
     rim.position.set(-6, 4, -5);
     this.scene.add(rim);
     canvas.style.touchAction = 'pan-y';
@@ -136,12 +136,12 @@ export abstract class ShowBase {
   protected addFloor(y = 0) {
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(120, 120),
-      new THREE.MeshStandardMaterial({ color: '#070d1d', metalness: 0.2, roughness: 0.75 }),
+      new THREE.MeshStandardMaterial({ color: '#e4eaf2', metalness: 0.2, roughness: 0.75 }),
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = y;
     this.scene.add(floor);
-    const grid = new THREE.GridHelper(80, 80, '#22335a', '#111c36');
+    const grid = new THREE.GridHelper(80, 80, '#bfcada', '#d3dbe6');
     grid.position.y = y + 0.002;
     this.scene.add(grid);
     this.scene.fog = new THREE.Fog(BG, 18, 60);

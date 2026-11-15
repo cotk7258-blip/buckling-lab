@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { panelWidth, plateR, plateStrength, plateTheory } from '../physics/plate.ts';
+import { panelWidth, plateR, plateState, plateStrength, plateTheory, plateWinter } from '../physics/plate.ts';
 import { writeStressColor } from './common.ts';
 import { ShowBase, arrow, drawTube, label, line, placeArrow, ramp, setLine, tube } from './kit.ts';
 
 const STEEL = new THREE.Color('#7d8ba1');
-const DARK = () => new THREE.MeshStandardMaterial({ color: '#1c2740', metalness: 0.7, roughness: 0.45 });
+const DARK = () => new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
 const plateMat = () =>
   new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.35, roughness: 0.5, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
 
@@ -15,7 +15,7 @@ function tag(text: string, color: string, size = 0.7, wide = 1) {
 }
 
 /** 板の表面に引く格子の線。波の形に沿って動くので、ふくらみが立体に見える */
-class SurfGrid {
+export class SurfGrid {
   lines: THREE.LineSegments;
   private uv: number[] = [];
   constructor(private b: number, private a: number, nu: number, nv: number) {
@@ -24,15 +24,16 @@ class SurfGrid {
     for (let j = 0; j <= nv; j++) for (let i = 0; i < seg; i++) this.uv.push(i / seg, j / nv, (i + 1) / seg, j / nv);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((this.uv.length / 2) * 3), 3));
-    this.lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: '#0a1226', transparent: true, opacity: 0.6 }));
+    this.lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: '#33415c', transparent: true, opacity: 0.6 }));
     this.lines.frustumCulled = false;
   }
-  update(z: (u: number, v: number) => number) {
+  /** z: 面から出る向きのずれ。dx・dy: 面の中でのずれ(柱ごと曲がるときに使う) */
+  update(z: (u: number, v: number) => number, dx?: (u: number, v: number) => number, dy?: (u: number, v: number) => number) {
     const p = this.lines.geometry.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < this.uv.length / 2; i++) {
       const u = this.uv[i * 2];
       const v = this.uv[i * 2 + 1];
-      p.setXYZ(i, (u - 0.5) * this.b, (v - 0.5) * this.a, z(u, v));
+      p.setXYZ(i, (u - 0.5) * this.b + (dx ? dx(u, v) : 0), (v - 0.5) * this.a + (dy ? dy(u, v) : 0), z(u, v));
     }
     p.needsUpdate = true;
   }
@@ -73,7 +74,7 @@ class Panel {
     }
     for (let i = 0; i < maxRibs; i++) {
       const g = new THREE.BoxGeometry(0.05, a, 0.3, 1, 40, 1);
-      const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#fbbf24', metalness: 0.6, roughness: 0.35, emissive: '#fbbf24', emissiveIntensity: 0.25 }));
+      const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#6d28d9', metalness: 0.6, roughness: 0.35, emissive: '#6d28d9', emissiveIntensity: 0.25 }));
       m.position.y = a / 2;
       m.visible = false;
       m.frustumCulled = false;
@@ -81,7 +82,7 @@ class Panel {
       this.ribs.push(m);
       this.ribBase.push(new Float32Array(g.attributes.position.array as Float32Array));
     }
-    this.arrow = arrow('#ffffff');
+    this.arrow = arrow('#1f2a44');
     this.arrow.scale.set(1.8, 1, 1.8);
     this.group.add(this.arrow);
   }
@@ -89,9 +90,16 @@ class Panel {
   /**
    * A: 波の高さ。m: 縦の波の数。n: 横の波の数(リブの数+1)。load: 矢印の長さ。
    * ribs: リブの数、ribIn: リブの出具合 0〜1、ribDepth: リブのせい(細いと一緒にたわむ)、follow: リブが板と一緒にたわむ度合い。
-   * stress: 応力の色で見る度合い(真ん中が逃げ、縁が働く様子。模式的な分布)
+   * stress: 応力の色で見る度合い。level: 波打つ前の一様な応力、edge: 波打った後の縁の応力(どちらも降伏に対する割合)、
+   * pattern: 0 で一様、1 で「縁が働き真ん中が逃げる」分布(模式図)
    */
-  update(A: number, m: number, n: number, load: number, o: { ribs?: number; ribIn?: number; ribDepth?: number; follow?: number; stress?: number } = {}) {
+  update(
+    A: number,
+    m: number,
+    n: number,
+    load: number,
+    o: { ribs?: number; ribIn?: number; ribDepth?: number; follow?: number; stress?: number; level?: number; edge?: number; pattern?: number } = {},
+  ) {
     const { a, b } = this;
     const pos = this.mesh.geometry.attributes.position as THREE.BufferAttribute;
     const col = this.mesh.geometry.attributes.color as THREE.BufferAttribute;
@@ -108,9 +116,11 @@ class Panel {
       const tint = A > 0.001 ? w * 0.22 * Math.min(1, A / 0.08) : 0;
       this.c.copy(STEEL).offsetHSL(0, 0, tint);
       if (stress > 0) {
-        // 座屈後: 縁の近くほど大きな応力、ふくらんだ真ん中は小さい(模式図)
+        // 波打つ前は一様(level)。波打った後は、縁の近くほど大きく、ふくらんだ真ん中は小さい(模式的な分布)
         const e = Math.abs(Math.cos(n * Math.PI * u));
-        writeStressColor(tmp, 0, 0.05 + 0.95 * e ** 2.6, 1, STEEL);
+        const pat = o.pattern ?? 1;
+        const sv = (o.level ?? 0) * (1 - pat) + (0.05 + 0.95 * (o.edge ?? 1) * e ** 2.6) * pat;
+        writeStressColor(tmp, 0, sv, 1, STEEL);
         this.c.lerp(new THREE.Color(tmp[0], tmp[1], tmp[2]), stress);
       }
       ca[i * 3] = this.c.r;
@@ -176,7 +186,7 @@ class BoxCol {
     const bot = new THREE.Mesh(new THREE.BoxGeometry(b + 0.6, 0.18, b + 0.6), dark);
     bot.position.y = -0.09;
     this.top = new THREE.Mesh(new THREE.BoxGeometry(b + 0.6, 0.18, b + 0.6), dark);
-    this.arrow = arrow('#ffffff');
+    this.arrow = arrow('#1f2a44');
     this.arrow.scale.set(2, 1, 2);
     this.group.add(bot, this.top, this.arrow);
   }
@@ -241,6 +251,7 @@ export class Stage5Show extends ShowBase {
   private cTheory: THREE.Mesh;
   private cYield: THREE.Mesh;
   private cDesign: THREE.Mesh;
+  private cWinter: THREE.Mesh;
   private dots: THREE.Mesh[] = [];
   private dotTags: THREE.Sprite[] = [];
   private probe: THREE.Mesh;
@@ -263,20 +274,20 @@ export class Stage5Show extends ShowBase {
         new THREE.Vector3(0.75, 1.5, 0.25),
         new THREE.Vector3(-0.75, 1.5, 0.25),
       ]),
-      new THREE.LineBasicMaterial({ color: '#fbbf24' }),
+      new THREE.LineBasicMaterial({ color: '#6d28d9' }),
     );
     this.gPanel.add(this.square);
     for (const x of [-0.56, 0.56]) {
-      const l = line('#fbbf24');
+      const l = line('#6d28d9');
       setLine(l, x - 0.19, 3.3, x + 0.19, 3.3, 0.4);
-      const s = tag('有効幅', '#fbbf24', 0.7);
+      const s = tag('有効幅', '#6d28d9', 0.7);
       s.position.set(x * 2.6, 1.5, 0.4);
       this.gPanel.add(l, s);
       this.effLines.push(l);
       this.effTags.push(s);
     }
     for (const t of ['× 1', '× 4', '× 9']) {
-      const s = tag(t, '#fbbf24', 1.5);
+      const s = tag(t, '#6d28d9', 1.5);
       s.position.set(2.0, 1.6, 0.3);
       this.gPanel.add(s);
       this.gain.push(s);
@@ -287,7 +298,7 @@ export class Stage5Show extends ShowBase {
     this.narrow = new Panel(3.0, 0.75, 0);
     this.narrow.group.position.x = 1.55;
     this.gPair.add(this.wide.group, this.narrow.group);
-    for (const [t, x, y, c] of [['幅 1', -1.45, -0.55, '#e8eefc'], ['幅 1/2', 1.55, -0.55, '#e8eefc'], ['1倍で座屈', -1.45, 4.25, '#fbbf24'], ['4倍で座屈', 1.55, 4.25, '#fbbf24']] as const) {
+    for (const [t, x, y, c] of [['幅 1', -1.45, -0.55, '#1f2a44'], ['幅 1/2', 1.55, -0.55, '#1f2a44'], ['1倍で座屈', -1.45, 4.25, '#6d28d9'], ['4倍で座屈', 1.55, 4.25, '#6d28d9']] as const) {
       const s = tag(t, c, 0.75);
       s.position.set(x, y, 0.4);
       this.gPair.add(s);
@@ -295,18 +306,18 @@ export class Stage5Show extends ShowBase {
     }
 
     // グラフ
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 3.5), new THREE.MeshBasicMaterial({ color: '#0b1430', transparent: true, opacity: 0.85 }));
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 3.5), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, toneMapped: false, fog: false }));
     board.position.set(GX(1.05), GY(0.58), GZ - 0.1);
     this.gGraph.add(board);
-    const axis = (x0: number, y0: number, x1: number, y1: number, c = '#9fb0d0') => {
+    const axis = (x0: number, y0: number, x1: number, y1: number, c = '#64748b') => {
       const l = line(c);
       setLine(l, x0, y0, x1, y1, GZ - 0.02);
       this.gGraph.add(l);
     };
     axis(GX(0), GY(0), GX(2.15), GY(0));
     axis(GX(0), GY(0), GX(0), GY(1.3));
-    axis(GX(0), GY(1), GX(2.15), GY(1), '#1b2a4d');
-    const put = (t: string, x: number, y: number, c = '#d3def2', size = 0.6, wide = 1) => {
+    axis(GX(0), GY(1), GX(2.15), GY(1), '#d5dce8');
+    const put = (t: string, x: number, y: number, c = '#44536e', size = 0.6, wide = 1) => {
       const s = tag(t, c, size, wide);
       s.position.set(x, y, GZ);
       this.gGraph.add(s);
@@ -317,24 +328,26 @@ export class Stage5Show extends ShowBase {
       put(r.toFixed(1), GX(r), GY(0) - 0.2);
     }
     put('100%', GX(0) - 0.32, GY(1));
-    put('強さ', GX(0) - 0.3, GY(1.3), '#e8eefc');
-    put('R(薄くて広い →)', GX(1.5), GY(0) - 0.48, '#e8eefc', 0.6, 2);
-    this.cTheory = curve(plateTheory, 0.88, 2.15, 0.02, '#fbbf24');
-    this.cYield = curve(() => 1, 0, 2.15, 0.02, '#ff1f4b');
-    this.cDesign = curve(plateStrength, 0.01, 2.15, 0.036, '#5cd0ff');
+    put('強さ', GX(0) - 0.3, GY(1.3), '#1f2a44');
+    put('R(薄くて広い →)', GX(1.5), GY(0) - 0.48, '#1f2a44', 0.6, 2);
+    this.cTheory = curve(plateTheory, 0.88, 2.15, 0.02, '#6d28d9');
+    this.cYield = curve(() => 1, 0, 2.15, 0.02, '#e11d48');
+    this.cDesign = curve(plateStrength, 0.01, 2.15, 0.036, '#0284c7');
     this.cDesign.position.z = 0.03;
-    this.gGraph.add(this.cTheory, this.cYield, this.cDesign);
+    this.cWinter = curve(plateWinter, 0.01, 2.15, 0.026, '#16a34a');
+    this.cWinter.position.z = 0.015;
+    this.gGraph.add(this.cTheory, this.cYield, this.cDesign, this.cWinter);
     [0, 1, 2].forEach((n) => {
       const R = EX_R / (n + 1);
-      const d = new THREE.Mesh(new THREE.SphereGeometry(0.08, 20, 14), new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 0.8 }));
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.08, 20, 14), new THREE.MeshStandardMaterial({ color: '#1f2a44', emissive: '#1f2a44', emissiveIntensity: 0.8 }));
       d.position.set(GX(R), GY(plateStrength(R)), GZ + 0.1);
-      const s = tag(n === 0 ? 'リブなし' : `リブ${n}本`, '#ffffff', 0.55);
+      const s = tag(n === 0 ? 'リブなし' : `リブ${n}本`, '#1f2a44', 0.55);
       s.position.set(GX(R) + (n === 0 ? 0.1 : 0), GY(plateStrength(R)) + 0.24, GZ + 0.1);
       this.gGraph.add(d, s);
       this.dots.push(d);
       this.dotTags.push(s);
     });
-    this.probe = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 14), new THREE.MeshStandardMaterial({ color: '#fbbf24', emissive: '#fbbf24', emissiveIntensity: 0.9 }));
+    this.probe = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 14), new THREE.MeshStandardMaterial({ color: '#6d28d9', emissive: '#6d28d9', emissiveIntensity: 0.9 }));
     this.gGraph.add(this.probe);
     this.setScene(0);
   }
@@ -348,9 +361,10 @@ export class Stage5Show extends ShowBase {
     for (const t of this.effTags) t.visible = eff;
     this.gain.forEach((g, i) => (g.visible = i === gain));
   }
-  private graph(ft: number, fy: number, fd: number, dots: number[], probe: number | null) {
+  private graph(ft: number, fy: number, fw: number, fd: number, dots: number[], probe: number | null) {
     drawTube(this.cTheory, ft);
     drawTube(this.cYield, fy);
+    drawTube(this.cWinter, fw);
     drawTube(this.cDesign, fd);
     this.dots.forEach((d, i) => {
       d.visible = dots.includes(i);
@@ -404,11 +418,11 @@ export class Stage5Show extends ShowBase {
         t < 1.5
           ? '幅が半分の板と比べる(厚みは同じ)'
           : p < 1
-            ? `同じ強さで押していく(基準の ${p.toFixed(1)} 倍)`
+            ? `同じ強さ(面積あたりの力)で押していく(基準の ${p.toFixed(1)} 倍)`
             : p < 4
               ? `幅の広い板が座屈。狭い板はまだ平ら(基準の ${p.toFixed(1)} 倍)`
               : t < 17.5
-                ? '幅が半分なら、4倍まで耐える'
+                ? '幅が半分なら、4倍の応力まで耐える'
                 : '厚みを2倍にしても4倍。効くのは「幅 ÷ 厚み」の2乗';
       this.look(0, 1.8, 3.1, 3.2, 36, 16);
     } else if (s === 3) {
@@ -467,26 +481,28 @@ export class Stage5Show extends ShowBase {
       this.show(this.gPanel, this.gGraph);
       this.gPanel.position.set(-2.55, 0.35, 0);
       this.gPanel.scale.setScalar(0.78);
-      const t = Math.min(c, 40);
-      const ribs = t < 22 ? 0 : t < 30 ? 1 : 2;
-      const A = ribs === 0 ? 0.15 * ramp(t, 17, 18.5) : 0;
-      this.panel.update(A * (1 - ramp(t, 21, 22)), 2, 1, 0.6, { ribs, ribIn: 1 });
+      const t = Math.min(c, 50);
+      const ribs = t < 31 ? 0 : t < 40 ? 1 : 2;
+      const A = ribs === 0 ? 0.24 * ramp(t, 25, 26.5) : 0;
+      this.panel.update(A * (1 - ramp(t, 30, 31)), 2, 1, 0.6, { ribs, ribIn: 1 });
       this.panelExtras(false, false, -1);
-      this.graph(ramp(t, 4, 7), ramp(t, 8.5, 10.5), ramp(t, 12, 15.5), t < 17 ? [] : t < 22 ? [0] : t < 30 ? [0, 1] : [0, 1, 2], null);
+      this.graph(ramp(t, 4, 7), ramp(t, 8.5, 10.5), ramp(t, 12.5, 15.5), ramp(t, 19, 22), t < 25 ? [] : t < 31 ? [0] : t < 40 ? [0, 1] : [0, 1, 2], null);
       this.caption =
         t < 4
           ? '板の強さのグラフ。右へ行くほど、薄くて広い板'
           : t < 8.5
-            ? '金の線 = 座屈の理論値。幅が半分で4倍'
-            : t < 12
+            ? '紫の線 = 座屈の理論値(波打ち始める応力)。幅が半分で4倍'
+            : t < 12.5
               ? 'でも、材料の限界(降伏)は超えられない'
-              : t < 17
-                ? '設計の線(水色): 薄い板は理論値の半分。厚い板は降伏で頭打ち'
-                : t < 22
-                  ? 'この板(R = 1.4)の強さは、降伏の 26%'
-                  : t < 30
-                    ? 'リブ1本で R = 0.7。強さは 100% に。約4倍'
-                    : 'リブ2本でも 100% のまま。天井に届けば、それ以上は増えない';
+              : t < 19
+                ? '緑の線 = 実際の板の強さの目安。薄い板は、波打った後も縁で耐える'
+                : t < 25
+                  ? '青の線 = 設計で認める強さ(旧基準)。余力は当てにせず、理論値の半分'
+                  : t < 31
+                    ? 'この板(R = 1.4): 設計で認める強さは、降伏の 26%'
+                    : t < 40
+                      ? 'リブ1本で R = 0.7。設計で認める強さは 100% に。約4倍'
+                      : 'リブ2本でも 100% のまま。天井に届けば、それ以上は増えない';
       this.look(0.55, 1.75, 3.9, 2.75, 14, 8);
     } else if (s === 6) {
       this.show(this.gPanel);
@@ -516,17 +532,21 @@ export class Stage5Show extends ShowBase {
       this.gPanel.scale.setScalar(0.78);
       const { b, t, ribs, load } = this.lab;
       const R = plateR(panelWidth(b, ribs), t, SIGMA_Y);
-      const el = Math.min(plateTheory(R), 9);
-      const strength = plateStrength(R);
+      const el = plateTheory(R);
+      const ult = plateWinter(R);
+      const st = plateState(load, R);
       const n = ribs + 1;
       const m = Math.max(1, Math.round(2 * n));
-      // 弾性座屈を超えると波打ち始める(R が小さい板は、波打つ前に降伏する)
-      const over = load / Math.min(el, 1.05);
-      const goal = el < 1 && over > 1 ? Math.min(0.24, (0.24 / n) * Math.sqrt(Math.min(4, over - 1) + 0.15)) : 0;
+      // 厚い板(R ≦ 0.673)は波打たずに降伏する。薄い板は、理論値か終局の目安の低い方から波打つ
+      const onset = Math.min(el, ult);
+      const waving = R > 0.673 && load >= onset;
+      const goal = waving ? Math.min(0.24, (0.24 / n) * (0.35 + 0.65 * Math.min(1, (load - onset) / Math.max(0.02, ult - onset + 0.1)))) : 0;
       this.amp[0] += (goal - this.amp[0]) * (1 - Math.exp(-dt * 6));
-      this.panel.update(this.amp[0], m, n, load, { ribs, ribIn: 1, stress: load >= strength ? 1 : 0 });
+      this.amp[1] += ((waving ? 1 : 0) - this.amp[1]) * (1 - Math.exp(-dt * 6));
+      this.panel.update(this.amp[0], m, n, load, { ribs, ribIn: 1, stress: 1, level: Math.min(1, load), edge: Math.min(1, load / ult), pattern: this.amp[1] });
+      void st;
       this.panelExtras(false, false, -1);
-      this.graph(1, 1, 1, [], R);
+      this.graph(1, 1, 1, 1, [], R);
       this.caption = '';
       this.look(0.55, 1.75, 3.9, 2.75, 14, 8);
     }
