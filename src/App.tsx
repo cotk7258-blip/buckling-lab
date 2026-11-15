@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Stage1 from './stages/Stage1.tsx';
+import Stage2 from './stages/Stage2.tsx';
 import Stage3 from './stages/Stage3.tsx';
 import Stage4 from './stages/Stage4.tsx';
 
@@ -43,6 +44,8 @@ export default function App() {
       </header>
       {stage === 1 ? (
         <Stage1 />
+      ) : stage === 2 ? (
+        <Stage2 />
       ) : stage === 3 ? (
         <Stage3 />
       ) : stage === 4 ? (

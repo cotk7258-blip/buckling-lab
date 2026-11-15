@@ -203,3 +203,18 @@ export abstract class ShowBase {
     this.renderer.dispose();
   }
 }
+
+/** 矢印を (x, y) から (dx, dy) の向き・長さで置く(紙面内の好きな向き) */
+export function placeArrow(g: THREE.Group, x: number, y: number, z: number, dx: number, dy: number) {
+  const a = Math.hypot(dx, dy);
+  g.visible = a > 0.04;
+  if (!g.visible) return;
+  g.position.set(x, y, z);
+  g.rotation.z = Math.atan2(-dx, dy);
+  const shaft = g.getObjectByName('shaft')!;
+  const head = g.getObjectByName('head')!;
+  const sl = Math.max(0.01, a - 0.26);
+  shaft.scale.y = sl;
+  shaft.position.y = sl / 2;
+  head.position.y = sl + 0.13;
+}
