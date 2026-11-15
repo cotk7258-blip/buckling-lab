@@ -1,0 +1,83 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-studio-950: #060b18;
+  --color-studio-900: #0a1224;
+  --color-studio-800: #111c36;
+  --color-studio-700: #1b2a4d;
+  --color-studio-600: #2a3d68;
+  --color-ink: #e8eefc;
+  --color-ink-dim: #9fb0d0;
+  --color-comp: #38bdf8;
+  --color-tens: #fb923c;
+  --color-yield: #f43f5e;
+  --color-gold: #fbbf24;
+  --font-sans: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo', system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-studio-950);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background:
+    radial-gradient(1200px 600px at 70% -10%, rgba(56, 189, 248, 0.1), transparent 60%),
+    radial-gradient(900px 500px at 0% 110%, rgba(244, 63, 94, 0.07), transparent 60%),
+    var(--color-studio-950);
+  background-attachment: fixed;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  touch-action: pan-y;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-studio-600);
+}
+input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-studio-600);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: var(--thumb, var(--color-ink));
+  border: 3px solid var(--color-studio-900);
+  box-shadow: 0 0 0 1px var(--thumb, var(--color-ink));
+}
+input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--thumb, var(--color-ink));
+  border: 3px solid var(--color-studio-900);
+}
+
+@keyframes pulse-yield {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.flash-yield {
+  animation: pulse-yield 0.9s ease-in-out infinite;
+}
