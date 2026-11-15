@@ -149,10 +149,12 @@ export const strengthG = (lam: number) => dohshiOld(lam);
 export const strengthGL = (lam: number, R: number) => dohshiOld(lam) * plateStrength(R);
 /** 場面で使う例 */
 export const EX = { lam: 0.8, R: 1.0, n: 0.2, m: 0.3 };
+/** 軸力と曲げの場面の例: 増幅がよく見える、細長くて板の厚い柱 */
+export const EXB = { lam: 1.4, R: 0.6, n: 0.12, m: 0.25 };
 
-// 軸力と曲げのグラフ(横: 曲げ、縦: 軸力)。場所はグラフの壁と同じ
+// 軸力と曲げのグラフ(横: 曲げ ÷ 曲げだけの強さ、縦: 軸力 ÷ 軸力だけの強さ)。場所はグラフの壁と同じ
 const NX = (m: number) => GX(m * 1.9);
-const NY = (n: number) => GY(n * 1.4);
+const NY = (r: number) => GY(r);
 
 function dotMesh(color: string, r = 0.085) {
   return new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6 }));
@@ -182,7 +184,7 @@ export class Stage6Show extends ShowBase {
   private pt: THREE.Mesh;
   private hit: THREE.Mesh;
   private ray: THREE.Line;
-  lab: Lab6 = { lam: 0.8, R: 0.6, n: 0.25, m: 0.25 };
+  lab: Lab6 = { lam: 1.2, R: 0.6, n: 0.15, m: 0.25 };
 
   constructor(canvas: HTMLCanvasElement) {
     super(canvas);
@@ -200,7 +202,7 @@ export class Stage6Show extends ShowBase {
     // 横から押す力(曲げを生む)
     this.side = arrow('#ea580c');
     this.side.scale.set(2, 1, 2);
-    this.sideTag = tag('横からの力', '#ea580c', 0.9, 2);
+    this.sideTag = tag('横から', '#ea580c', 0.9);
     this.gOne.add(this.side, this.sideTag);
 
     this.thick = new Box6(4.4, 1.0, false);
@@ -251,7 +253,7 @@ export class Stage6Show extends ShowBase {
     this.loadTag = tag('かかる力', '#ea580c', 0.7);
     this.gGraph.add(this.loadLine, this.loadTag);
 
-    frame(this.gNM, '曲げ(横からの力)→', '軸力(上から押す力)', [[NX(0.5), '50%'], [NX(1), '100%']], [[NY(0.25), '25%'], [NY(0.5), '50%'], [NY(0.75), '75%']]);
+    frame(this.gNM, '曲げ(横からの力)→', '軸力(軸力だけの強さ = 100%)', [[NX(0.5), '50%'], [NX(1), '100%']], [[NY(0.5), '50%'], [NY(1), '100%']]);
     this.pt = dotMesh('#1f2a44');
     this.hit = dotMesh('#6d28d9', 0.07);
     this.ray = line('#1f2a44');
@@ -286,7 +288,7 @@ export class Stage6Show extends ShowBase {
       const out: THREE.Vector3[] = [];
       for (let i = 0; i <= 50; i++) {
         const n = (pu * i) / 50;
-        out.push(new THREE.Vector3(NX(f(n)), NY(n), GZ));
+        out.push(new THREE.Vector3(NX(f(n)), NY(n / pu), GZ));
       }
       return out;
     };
@@ -307,7 +309,7 @@ export class Stage6Show extends ShowBase {
   private sideArrow(len: number, Dg: number) {
     placeArrow(this.side, -0.75 - len + Dg, 2.2, 0.55, len, 0);
     this.sideTag.visible = len > 0.05;
-    this.sideTag.position.set(-1.9 + Dg, 2.75, 0.6);
+    this.sideTag.position.set(-1.25 + Dg, 2.85, 0.6);
   }
 
   protected tick() {
@@ -398,9 +400,9 @@ export class Stage6Show extends ShowBase {
       this.look(0.4, 2.2, 4.0, 3.5, 22, 9);
     } else {
       // ここから先は、柱の絵を左に小さく置き、右にグラフ
-      this.gOne.position.set(-2.5, 0.75, 0);
+      this.gOne.position.set(-2.3, 0.75, 0);
       this.gOne.scale.setScalar(0.62);
-      this.look(0.75, 2.2, 3.9, 3.0, 12, 7);
+      this.look(0.55, 2.2, 4.1, 3.0, 12, 7);
       const t12 = c % 12;
       if (s === 5 || s === 6) {
         this.show(this.gOne, 'lam');
@@ -448,10 +450,10 @@ export class Stage6Show extends ShowBase {
       } else {
         // 軸力と曲げを同時に受ける柱
         this.show(this.gOne, 'nm');
-        let lam = EX.lam;
-        let R = EX.R;
-        let n = EX.n;
-        let m = EX.m;
+        let lam = EXB.lam;
+        let R = EXB.R;
+        let n = EXB.n;
+        let m = EXB.m;
         let amp = 1;
         let showPt = true;
         let showRay = false;
@@ -459,8 +461,8 @@ export class Stage6Show extends ShowBase {
           // 曲げが加わると、余力を分け合う
           const t = c % 22;
           amp = 0;
-          n = EX.n * ramp(t, 2, 5);
-          m = EX.m * ramp(t, 7, 10);
+          n = EXB.n * ramp(t, 2, 5);
+          m = EXB.m * ramp(t, 7, 10);
           showPt = t > 2;
           this.caption =
             t < 2
@@ -474,9 +476,9 @@ export class Stage6Show extends ShowBase {
           // 軸力が曲げを増幅する
           const t = c % 24;
           amp = ramp(t, 14, 17);
-          m = EX.m;
-          n = 0.6 * (ramp(t, 3, 12) - ramp(t, 22.5, 24));
-          const pe0 = 1 / (EX.lam * EX.lam);
+          m = EXB.m;
+          n = 0.27 * (ramp(t, 3, 12) - ramp(t, 22.5, 24));
+          const pe0 = 1 / (EXB.lam * EXB.lam);
           const k = 1 / (1 - n / pe0);
           this.caption =
             t < 3
@@ -507,19 +509,16 @@ export class Stage6Show extends ShowBase {
         const k = n < pe ? 1 / (1 - (amp > 0 || s === 8 ? n / pe : 0)) : 20;
         const Dg = Math.min(1.0, 0.45 * m * k);
         this.box.update({ Dg, Al: 0, m: 8, mode: 'panel', load: n * 1.6 });
-        this.sideArrow(1.6 * m, Dg);
+        this.sideArrow(m > 0.005 ? 0.3 + 0.85 * m : 0, Dg);
         this.pt.visible = showPt;
-        this.pt.position.set(NX(m), NY(n), GZ + 0.14);
+        this.pt.position.set(NX(Math.min(m, 1.12)), NY(Math.min(n / pu, 1.2)), GZ + 0.14);
         const g = safetyFactor(n, m, pu, pe);
         const ok = showRay && Number.isFinite(g) && g > 0;
         this.ray.visible = ok;
         this.hit.visible = ok;
         if (ok) {
-          const gm = Math.min(g * m, 1.12);
-          const gn = Math.min(g * n, 0.9);
-          setLine(this.ray, NX(0), NY(0), NX(gm), NY(gn), GZ + 0.08);
-          this.hit.position.set(NX(g * m), NY(g * n), GZ + 0.12);
-          this.hit.visible = g * m <= 1.12 && g * n <= 0.9;
+          setLine(this.ray, NX(0), NY(0), NX(g * m), NY((g * n) / pu), GZ + 0.08);
+          this.hit.position.set(NX(g * m), NY((g * n) / pu), GZ + 0.12);
         }
       }
     }

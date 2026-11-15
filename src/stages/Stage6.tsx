@@ -50,7 +50,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '軸力と曲げ ①',
     head: '曲げが加わると、余力を分け合う',
-    body: '実際の柱は、上から押されるだけではありません。地震や風で横からも力を受け、曲げられます。軸力を受けている柱は、その分だけすでに力を使っているので、曲げに使える余力は減ります。グラフは、縦が軸力、横が曲げ。軸力だけなら縦軸の上の点、曲げだけなら横軸の右の点が限界で、その2点を結んだ線の内側なら耐えられる、というのが出発点です。',
+    body: '実際の柱は、上から押されるだけではありません。地震や風で横からも力を受け、曲げられます。軸力を受けている柱は、その分だけすでに力を使っているので、曲げに使える余力は減ります。グラフは、縦が軸力、横が曲げ(どちらも、それだけを受けるときの強さを 100% として表します)。軸力だけなら縦軸の 100%、曲げだけなら横軸の 100% が限界で、その2点を結んだ線の内側なら耐えられる、というのが出発点です。',
   },
   {
     kicker: '軸力と曲げ ②',
@@ -71,7 +71,7 @@ const SCENES: SceneText[] = [
 
 export default function Stage6() {
   const [scene, setScene] = useState(0);
-  const [lab, setLab] = useState<Lab6>({ lam: 0.8, R: 0.6, n: 0.25, m: 0.25 });
+  const [lab, setLab] = useState<Lab6>({ lam: 1.2, R: 0.6, n: 0.15, m: 0.25 });
   const { canvasRef, capRef, show } = useShow((c) => new Stage6Show(c));
   const go = (n: number) => {
     const next = Math.max(0, Math.min(SCENES.length - 1, n));
