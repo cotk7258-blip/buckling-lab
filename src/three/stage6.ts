@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { dohshiOld } from '../physics/curves.ts';
-import { plateStrength, plateTheory } from '../physics/plate.ts';
+import { plateStrength } from '../physics/plate.ts';
 import { SurfGrid } from './stage5.ts';
 import { ShowBase, arrow, drawTube, label, line, placeArrow, ramp, setLine, tube } from './kit.ts';
 
@@ -183,7 +183,7 @@ export class Stage6Show extends ShowBase {
     }
 
     // グラフ
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.8), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, toneMapped: false, fog: false }));
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.8), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }));
     board.position.set(GX(1.05), GY(0.55), GZ - 0.1);
     this.gGraph.add(board);
     const axis = (x0: number, y0: number, x1: number, y1: number, c = '#64748b') => {
@@ -357,5 +357,3 @@ export class Stage6Show extends ShowBase {
     drawTube(this.cG, 1);
   }
 }
-
-export { plateStrength, plateTheory };

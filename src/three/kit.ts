@@ -52,7 +52,7 @@ export function label(text: string, color: string, wide = 1): THREE.Sprite {
   g.fillText(text, cv.width / 2, 68);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, toneMapped: false }));
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, toneMapped: false, fog: false }));
   sp.scale.set(1.5 * wide, 0.375, 1);
   return sp;
 }

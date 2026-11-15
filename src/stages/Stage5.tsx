@@ -5,6 +5,7 @@ import type { Lab5 } from '../three/stage5.ts';
 import { Card, LabSlider, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
 import { Tex } from '../ui/Tex.tsx';
+import { Rich } from '../ui/glossary.tsx';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
@@ -163,7 +164,9 @@ function Chip({ color, text }: { color: string; text: string }) {
   return (
     <span className="flex items-center gap-1.5">
       <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
-      {text}
+      <span>
+        <Rich text={text} />
+      </span>
     </span>
   );
 }
@@ -171,7 +174,9 @@ function Chip({ color, text }: { color: string; text: string }) {
 function Row({ label, value, big }: { label: string; value: string; big?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt>{label}</dt>
+      <dt>
+        <Rich text={label} />
+      </dt>
       <dd className={`num font-bold ${big ? 'text-2xl text-gold' : 'text-lg'}`}>{value}</dd>
     </div>
   );

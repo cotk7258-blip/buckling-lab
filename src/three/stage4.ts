@@ -107,7 +107,7 @@ export class Stage4Show extends ShowBase {
     // グラフの壁
     const board = new THREE.Mesh(
       new THREE.PlaneGeometry(8.3, 4.4),
-      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, toneMapped: false, fog: false }),
+      new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }),
     );
     board.position.set(-0.05, Y(0.56), ZG - 0.12);
     this.scene.add(board);

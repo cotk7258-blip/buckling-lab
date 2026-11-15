@@ -365,7 +365,7 @@ export default function Stage3() {
               </p>
               <p className="text-sm font-bold">{focusReal ? '現実の柱' : '理想の柱'}の断面の応力</p>
             </div>
-            <p className="pointer-events-none absolute right-3 top-2 text-right text-xs font-bold text-gold">
+            <p className="pointer-events-none absolute right-3 top-2 text-right text-xs font-bold text-yield">
               <Term id="yield">赤い天井 = 降伏</Term>
             </p>
             {isLab && (

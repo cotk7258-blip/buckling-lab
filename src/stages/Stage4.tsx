@@ -6,6 +6,7 @@ import type { CurveKey } from '../three/stage4.ts';
 import { Card, LabSlider, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
 import { Tex } from '../ui/Tex.tsx';
+import { Rich } from '../ui/glossary.tsx';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
@@ -157,7 +158,9 @@ function Chip({ color, text }: { color: string; text: string }) {
   return (
     <span className="flex items-center gap-1.5">
       <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
-      {text}
+      <span>
+        <Rich text={text} />
+      </span>
     </span>
   );
 }
@@ -167,7 +170,7 @@ function Row({ label, value, color }: { label: string; value: number; color: str
     <div className="flex items-baseline justify-between gap-3">
       <dt className="flex items-center gap-2">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
-        {label}
+        <Rich text={label} />
       </dt>
       <dd className="num text-base font-bold">{pct(value)}</dd>
     </div>

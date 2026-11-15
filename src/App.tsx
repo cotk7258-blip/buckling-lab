@@ -20,9 +20,9 @@ export default function App() {
   return (
     <div className="mx-auto max-w-7xl px-3 pb-12 sm:px-4">
       <header className="pt-3 pb-2">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-bold tracking-wide">座屈ラボ</h1>
-          <p className="text-sm text-ink-dim">柱はなぜ曲がるのか。点線の言葉を押すと、説明が出ます</p>
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <h1 className="whitespace-nowrap text-xl font-bold tracking-wide">座屈ラボ</h1>
+          <p className="text-xs text-ink-dim sm:text-sm">柱はなぜ曲がるのか。点線の言葉を押すと、説明が出ます</p>
         </div>
         <nav className="mt-2 -mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1" aria-label="ステージ">
           {STAGES.map((s) => {

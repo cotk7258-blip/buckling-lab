@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { panelWidth, plateR, plateState, plateStrength, plateTheory, plateWinter } from '../physics/plate.ts';
+import { panelWidth, plateR, plateStrength, plateTheory, plateWinter } from '../physics/plate.ts';
 import { writeStressColor } from './common.ts';
 import { ShowBase, arrow, drawTube, label, line, placeArrow, ramp, setLine, tube } from './kit.ts';
 
@@ -306,7 +306,7 @@ export class Stage5Show extends ShowBase {
     }
 
     // グラフ
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 3.5), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, toneMapped: false, fog: false }));
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 3.5), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }));
     board.position.set(GX(1.05), GY(0.58), GZ - 0.1);
     this.gGraph.add(board);
     const axis = (x0: number, y0: number, x1: number, y1: number, c = '#64748b') => {
@@ -534,7 +534,6 @@ export class Stage5Show extends ShowBase {
       const R = plateR(panelWidth(b, ribs), t, SIGMA_Y);
       const el = plateTheory(R);
       const ult = plateWinter(R);
-      const st = plateState(load, R);
       const n = ribs + 1;
       const m = Math.max(1, Math.round(2 * n));
       // 厚い板(R ≦ 0.673)は波打たずに降伏する。薄い板は、理論値か終局の目安の低い方から波打つ
@@ -544,7 +543,6 @@ export class Stage5Show extends ShowBase {
       this.amp[0] += (goal - this.amp[0]) * (1 - Math.exp(-dt * 6));
       this.amp[1] += ((waving ? 1 : 0) - this.amp[1]) * (1 - Math.exp(-dt * 6));
       this.panel.update(this.amp[0], m, n, load, { ribs, ribIn: 1, stress: 1, level: Math.min(1, load), edge: Math.min(1, load / ult), pattern: this.amp[1] });
-      void st;
       this.panelExtras(false, false, -1);
       this.graph(1, 1, 1, 1, [], R);
       this.caption = '';
