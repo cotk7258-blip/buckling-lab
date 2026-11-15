@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { writeStressColor } from './common.ts';
+import { arrow, label, line, ramp, setArrow, setLine, tintArrow } from './kit.ts';
 
 /**
  * 説明用の場面(模式図)。鋼をバネの束に置きかえて見せる。
@@ -25,13 +26,6 @@ const SHRINK_MEAN = SHRINK.reduce((a, b) => a + b, 0) / N;
 const K_LOST = 17.5 / 28;
 const BAR_H = 3.2;
 
-const smooth = (t: number) => {
-  const x = Math.max(0, Math.min(1, t));
-  return x * x * (3 - 2 * x);
-};
-/** 時刻 t が a〜b の間で 0→1 */
-const ramp = (t: number, a: number, b: number) => smooth((t - a) / (b - a));
-
 function springGeometry(): THREE.BufferGeometry {
   const pts: THREE.Vector3[] = [];
   const turns = 9;
@@ -41,70 +35,6 @@ function springGeometry(): THREE.BufferGeometry {
     pts.push(new THREE.Vector3(Math.cos(a) * 0.17, u, Math.sin(a) * 0.17));
   }
   return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 320, 0.036, 8);
-}
-
-function arrow(color: string): THREE.Group {
-  const g = new THREE.Group();
-  const m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5, roughness: 0.4 });
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 16), m);
-  shaft.position.y = 0.5;
-  shaft.name = 'shaft';
-  const head = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.26, 20), m);
-  head.name = 'head';
-  g.add(shaft, head);
-  return g;
-}
-/** 矢印を根元 y0 から長さ len(負なら下向き)で置く */
-function setArrow(g: THREE.Group, x: number, y0: number, len: number, z = 0) {
-  const a = Math.abs(len);
-  g.visible = a > 0.04;
-  if (!g.visible) return;
-  g.position.set(x, y0, z);
-  g.rotation.z = len < 0 ? Math.PI : 0;
-  const shaft = g.getObjectByName('shaft')!;
-  const head = g.getObjectByName('head')!;
-  const sl = Math.max(0.01, a - 0.26);
-  shaft.scale.y = sl;
-  shaft.position.y = sl / 2;
-  head.position.y = sl + 0.13;
-}
-function tintArrow(g: THREE.Group, color: string) {
-  const m = (g.getObjectByName('head') as THREE.Mesh).material as THREE.MeshStandardMaterial;
-  m.color.set(color);
-  m.emissive.copy(m.color);
-}
-
-/** 文字の札(常にカメラを向く)。wide は長い文用 */
-function label(text: string, color: string, wide = 1): THREE.Sprite {
-  const cv = document.createElement('canvas');
-  cv.width = 512 * wide;
-  cv.height = 128;
-  const g = cv.getContext('2d')!;
-  g.font = 'bold 76px "Hiragino Sans","Noto Sans JP","Yu Gothic UI",sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillStyle = color;
-  g.fillText(text, cv.width / 2, 68);
-  const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-  sp.scale.set(1.5 * wide, 0.375, 1);
-  return sp;
-}
-
-function line(color: string, dashed = false): THREE.Line {
-  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)]);
-  const mat = dashed
-    ? new THREE.LineDashedMaterial({ color, dashSize: 0.09, gapSize: 0.06 })
-    : new THREE.LineBasicMaterial({ color });
-  return new THREE.Line(geo, mat);
-}
-function setLine(l: THREE.Line, x0: number, y0: number, x1: number, y1: number, z = 0.42) {
-  const p = l.geometry.attributes.position as THREE.BufferAttribute;
-  p.setXYZ(0, x0, y0, z);
-  p.setXYZ(1, x1, y1, z);
-  p.needsUpdate = true;
-  l.computeLineDistances();
 }
 
 export class ExplainScene {

@@ -283,6 +283,19 @@ export function viewAtLoad(path: ColumnPath, s: number, collapseSpan = 0.08): Co
   return { step: lerpStep(steps, lo + Math.min(1, Math.max(0, t))), collapsed: false, collapse: 0 };
 }
 
+/** 中央のたわみ(初期たわみ込み)/L が d になる状態。最大荷重までの範囲で探す */
+export function viewAtDeflection(path: ColumnPath, d: number): ColumnView {
+  const { steps, peak, v0, L } = path;
+  const target = d * L - v0;
+  if (target <= 0) return { step: steps[0], collapsed: false, collapse: 0 };
+  let i = 1;
+  while (i < peak && steps[i].v < target) i++;
+  const a = steps[i - 1];
+  const b = steps[i];
+  const t = b.v > a.v ? Math.min(1, (target - a.v) / (b.v - a.v)) : 0;
+  return { step: lerpStep(steps, i - 1 + t), collapsed: false, collapse: 0 };
+}
+
 function lerpArr(a: Float32Array, b: Float32Array, t: number): Float32Array {
   const o = new Float32Array(a.length);
   for (let k = 0; k < a.length; k++) o[k] = a[k] + (b[k] - a[k]) * t;
@@ -307,9 +320,4 @@ function lerpStep(steps: ColumnStep[], idx: number): ColumnStep {
   };
 }
 
-/** 道路橋示方書(平成24年版まで)の基準耐荷力曲線 σcr/σy */
-export function dohshiOld(lam: number): number {
-  if (lam <= 0.2) return 1;
-  if (lam <= 1) return 1.109 - 0.545 * lam;
-  return 1 / (0.773 + lam * lam);
-}
+export { dohshiOld } from './curves.ts';

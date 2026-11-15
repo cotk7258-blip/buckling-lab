@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import Stage3 from './stages/Stage3.tsx';
+import Stage4 from './stages/Stage4.tsx';
 
 const STAGES = [
   { no: 1, title: '曲げとテコ', sub: 'なぜ M = EI × 曲率 なのか' },
   { no: 2, title: 'オイラー座屈', sub: 'π² と支え方の実験室' },
-  { no: 3, title: '竹 vs 鋼', sub: '理論より早く折れる理由' },
+  { no: 3, title: '理想 vs 現実', sub: '理論より早く折れる理由' },
   { no: 4, title: '設計曲線', sub: 'あの形はどこから来たか' },
   { no: 5, title: '板の座屈', sub: '補剛材はなぜ効くのか' },
 ];
@@ -41,6 +42,8 @@ export default function App() {
       </header>
       {stage === 3 ? (
         <Stage3 />
+      ) : stage === 4 ? (
+        <Stage4 />
       ) : (
         <div className="mt-8 rounded-xl border border-studio-600 bg-studio-900 p-8 text-center">
           <p className="text-lg font-bold">

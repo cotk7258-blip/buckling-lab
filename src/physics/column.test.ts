@@ -110,3 +110,15 @@ test('道示の旧式は区間の境目でつながる', () => {
   assert.ok(Math.abs(dohshiOld(0.2) - 1) < 1e-9);
   assert.ok(Math.abs(dohshiOld(1) - 1 / 1.773) < 1e-3);
 });
+
+test('各国の曲線: 区間の境目でつながり、理想の線を超えない', async () => {
+  const c = await import('./curves.ts');
+  assert.ok(Math.abs(c.aisc(1.5) - 0.877 / 2.25) < 2e-3);
+  assert.ok(Math.abs(c.aij(Math.sqrt(1 / 0.6) - 1e-9) - c.aij(Math.sqrt(1 / 0.6) + 1e-9)) < 1e-6);
+  assert.ok(Math.abs(c.eurocode(0.2, 0.34) - 1) < 1e-9);
+  for (let l = 0.05; l <= 2.5; l += 0.05) {
+    for (const v of [c.dohshiOld(l), c.aisc(l), c.eurocode(l, 0.34), c.eurocode(l, 0.49), c.aij(l)]) {
+      assert.ok(v <= c.idealCurve(l) + 1e-9 && v > 0, `λ=${l} v=${v}`);
+    }
+  }
+});
