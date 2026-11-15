@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { dohshiOld } from '../physics/curves.ts';
+import { safetyFactor } from '../physics/beamcolumn.ts';
 import { plateStrength } from '../physics/plate.ts';
 import { SurfGrid } from './stage5.ts';
-import { ShowBase, arrow, drawTube, label, line, placeArrow, ramp, setLine, tube } from './kit.ts';
+import { ShowBase, arrow, label, line, placeArrow, ramp, setLine, tube } from './kit.ts';
 
 const DARK = () => new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
 
@@ -134,33 +135,59 @@ function curvePts(f: (l: number) => number) {
 }
 
 export interface Lab6 {
+  /** 柱の細長さ λ̄ */
   lam: number;
+  /** 板の幅厚比パラメータ */
   R: number;
+  /** 作用する軸力 ÷ 降伏荷重 */
+  n: number;
+  /** 作用する曲げ ÷ 曲げの強さ */
+  m: number;
 }
 /** 局部座屈を考慮しない強さ(全体座屈だけ)と、考慮した強さ(掛け算)。旧道示の考え方 */
 export const strengthG = (lam: number) => dohshiOld(lam);
 export const strengthGL = (lam: number, R: number) => dohshiOld(lam) * plateStrength(R);
+/** 場面で使う例 */
+export const EX = { lam: 0.8, R: 1.0, n: 0.2, m: 0.3 };
+
+// 軸力と曲げのグラフ(横: 曲げ、縦: 軸力)。場所はグラフの壁と同じ
+const NX = (m: number) => GX(m * 1.9);
+const NY = (n: number) => GY(n * 1.4);
+
+function dotMesh(color: string, r = 0.085) {
+  return new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6 }));
+}
 
 export class Stage6Show extends ShowBase {
   private gOne = new THREE.Group();
   private box: Box6;
   private weak: Box6;
   private tags: THREE.Sprite[] = [];
+  private side: THREE.Group;
+  private sideTag: THREE.Sprite;
   private gPair = new THREE.Group();
   private thick: Box6;
   private thin: Box6;
-  private pairTags: THREE.Sprite[] = [];
   private gGraph = new THREE.Group();
   private cG: THREE.Mesh;
   private cGL: THREE.Mesh | null = null;
   private lastR = -1;
   private probe: THREE.Mesh[] = [];
-  lab: Lab6 = { lam: 0.8, R: 1.0 };
+  private loadLine: THREE.Line;
+  private loadTag: THREE.Sprite;
+  private gNM = new THREE.Group();
+  private cLin: THREE.Mesh | null = null;
+  private cAmp: THREE.Mesh | null = null;
+  private nmKey = '';
+  private pt: THREE.Mesh;
+  private hit: THREE.Mesh;
+  private ray: THREE.Line;
+  lab: Lab6 = { lam: 0.8, R: 0.6, n: 0.25, m: 0.25 };
 
   constructor(canvas: HTMLCanvasElement) {
     super(canvas);
     this.addFloor(-0.2);
-    this.scene.add(this.gOne, this.gPair, this.gGraph);
+    this.scene.add(this.gOne, this.gPair, this.gGraph, this.gNM);
     this.box = new Box6(4.4, 1.0, true);
     this.weak = new Box6(4.4, 1.0, true, 0.045);
     this.gOne.add(this.box.group, this.weak.group);
@@ -170,6 +197,12 @@ export class Stage6Show extends ShowBase {
       this.gOne.add(s);
       this.tags.push(s);
     }
+    // 横から押す力(曲げを生む)
+    this.side = arrow('#ea580c');
+    this.side.scale.set(2, 1, 2);
+    this.sideTag = tag('横からの力', '#ea580c', 0.9, 2);
+    this.gOne.add(this.side, this.sideTag);
+
     this.thick = new Box6(4.4, 1.0, false);
     this.thick.group.position.x = -1.7;
     this.thin = new Box6(4.4, 1.0, false);
@@ -179,39 +212,50 @@ export class Stage6Show extends ShowBase {
       const s = tag(t, '#1f2a44', 0.8);
       s.position.set(x, -0.6, 0.8);
       this.gPair.add(s);
-      this.pairTags.push(s);
     }
 
-    // グラフ
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.8), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }));
-    board.position.set(GX(1.05), GY(0.55), GZ - 0.1);
-    this.gGraph.add(board);
-    const axis = (x0: number, y0: number, x1: number, y1: number, c = '#64748b') => {
-      const l = line(c);
-      setLine(l, x0, y0, x1, y1, GZ - 0.02);
-      this.gGraph.add(l);
+    // 2つのグラフの下地と軸
+    const frame = (g: THREE.Group, xl: string, yl: string, xt: [number, string][], yt: [number, string][]) => {
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.8), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }));
+      board.position.set(GX(1.05), GY(0.55), GZ - 0.1);
+      g.add(board);
+      const axis = (x0: number, y0: number, x1: number, y1: number, c = '#64748b') => {
+        const l = line(c);
+        setLine(l, x0, y0, x1, y1, GZ - 0.02);
+        g.add(l);
+      };
+      axis(GX(0), GY(0), GX(2.15), GY(0));
+      axis(GX(0), GY(0), GX(0), GY(1.25));
+      const put = (t: string, x: number, y: number, c = '#44536e', size = 0.7, wide = 1) => {
+        const s = tag(t, c, size, wide);
+        s.position.set(x, y, GZ);
+        g.add(s);
+      };
+      for (const [x, t] of xt) put(t, x, GY(0) - 0.22);
+      for (const [y, t] of yt) {
+        put(t, GX(0) - 0.36, y);
+        axis(GX(0), y, GX(2.15), y, '#d5dce8');
+      }
+      put(yl, GX(0) + 0.35, GY(1.33), '#1f2a44', 0.75, 2);
+      put(xl, GX(1.55), GY(0) - 0.5, '#1f2a44', 0.75, 2);
     };
-    axis(GX(0), GY(0), GX(2.15), GY(0));
-    axis(GX(0), GY(0), GX(0), GY(1.25));
-    axis(GX(0), GY(1), GX(2.15), GY(1), '#d5dce8');
-    axis(GX(0), GY(0.5), GX(2.15), GY(0.5), '#d5dce8');
-    const put = (t: string, x: number, y: number, c = '#44536e', size = 0.7, wide = 1) => {
-      const s = tag(t, c, size, wide);
-      s.position.set(x, y, GZ);
-      this.gGraph.add(s);
-    };
-    for (const l of [0.5, 1, 1.5, 2]) put(l.toFixed(1), GX(l), GY(0) - 0.22);
-    put('100%', GX(0) - 0.36, GY(1));
-    put('50%', GX(0) - 0.33, GY(0.5));
-    put('強さ', GX(0) - 0.3, GY(1.27), '#1f2a44', 0.8);
-    put('柱の細長さ →', GX(1.6), GY(0) - 0.5, '#1f2a44', 0.75, 2);
+    frame(this.gGraph, '柱の細長さ →', '強さ', [0.5, 1, 1.5, 2].map((l) => [GX(l), l.toFixed(1)]), [[GY(1), '100%'], [GY(0.5), '50%']]);
     this.cG = tube(curvePts(strengthG), 0.036, '#0284c7');
     this.gGraph.add(this.cG);
     for (const c of ['#0284c7', '#6d28d9']) {
-      const d = new THREE.Mesh(new THREE.SphereGeometry(0.085, 20, 14), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.6 }));
+      const d = dotMesh(c);
       this.gGraph.add(d);
       this.probe.push(d);
     }
+    this.loadLine = line('#ea580c');
+    this.loadTag = tag('かかる力', '#ea580c', 0.7);
+    this.gGraph.add(this.loadLine, this.loadTag);
+
+    frame(this.gNM, '曲げ(横からの力)→', '軸力(上から押す力)', [[NX(0.5), '50%'], [NX(1), '100%']], [[NY(0.25), '25%'], [NY(0.5), '50%'], [NY(0.75), '75%']]);
+    this.pt = dotMesh('#1f2a44');
+    this.hit = dotMesh('#6d28d9', 0.07);
+    this.ray = line('#1f2a44');
+    this.gNM.add(this.pt, this.hit, this.ray);
     this.setScene(0);
   }
 
@@ -227,10 +271,43 @@ export class Stage6Show extends ShowBase {
     this.gGraph.add(this.cGL);
   }
 
-  private show(g: THREE.Group, graph = false) {
+  /** 軸力と曲げの相関の線を描く。amp: 0 で直線(増幅なし)、1 で増幅あり */
+  private setNM(pu: number, pe: number, amp: number) {
+    const key = `${pu.toFixed(3)}|${pe.toFixed(3)}|${amp.toFixed(2)}`;
+    if (key === this.nmKey) return;
+    this.nmKey = key;
+    for (const c of [this.cLin, this.cAmp]) {
+      if (c) {
+        this.gNM.remove(c);
+        c.geometry.dispose();
+      }
+    }
+    const pts = (f: (n: number) => number) => {
+      const out: THREE.Vector3[] = [];
+      for (let i = 0; i <= 50; i++) {
+        const n = (pu * i) / 50;
+        out.push(new THREE.Vector3(NX(f(n)), NY(n), GZ));
+      }
+      return out;
+    };
+    this.cLin = tube(pts((n) => 1 - n / pu), 0.018, '#94a3b8', 0.3);
+    this.cAmp = tube(pts((n) => (1 - n / pu) * (1 - amp + amp * (1 - n / pe))), 0.034, '#6d28d9');
+    this.cAmp.position.z = 0.03;
+    this.gNM.add(this.cLin, this.cAmp);
+  }
+
+  private show(g: THREE.Group | null, graph: 'none' | 'lam' | 'nm' = 'none') {
     this.gOne.visible = g === this.gOne;
     this.gPair.visible = g === this.gPair;
-    this.gGraph.visible = graph;
+    this.gGraph.visible = graph === 'lam';
+    this.gNM.visible = graph === 'nm';
+  }
+
+  /** 横からの力の矢印。柱の左から、中ほどの高さを押す */
+  private sideArrow(len: number, Dg: number) {
+    placeArrow(this.side, -0.75 - len + Dg, 2.2, 0.55, len, 0);
+    this.sideTag.visible = len > 0.05;
+    this.sideTag.position.set(-1.9 + Dg, 2.75, 0.6);
   }
 
   protected tick() {
@@ -242,6 +319,9 @@ export class Stage6Show extends ShowBase {
     this.weak.group.visible = s === 3;
     this.box.highlightPanel(false);
     for (const t of this.tags) t.visible = false;
+    this.sideArrow(0, 0);
+    this.loadLine.visible = false;
+    this.loadTag.visible = false;
     const still: BoxState = { Dg: 0, Al: 0, m: 8, mode: 'panel', load: 0 };
     if (s === 0) {
       this.show(this.gOne);
@@ -258,7 +338,7 @@ export class Stage6Show extends ShowBase {
             ? '板の真ん中に付いた縦の板が、リブ(補剛材)'
             : t < 18
               ? 'リブと角で区切られた1区画を、パネルと呼ぶ'
-              : '柱・板・パネル。大きさの違う3つの座屈がある';
+              : '柱が曲がる座屈と、板が波打つ座屈。順に整理する';
       this.look(0, 2.3, 2.6, 3.4, 28 + Math.sin(c * 0.3) * 10, 12);
     } else if (s === 1) {
       this.show(this.gOne);
@@ -266,7 +346,7 @@ export class Stage6Show extends ShowBase {
       const p = ramp(t, 1, 5) * (1 - ramp(t, 13, 14));
       const D = 0.95 * ramp(t, 4.6, 6) * (1 - ramp(t, 13, 14));
       this.box.update({ ...still, Dg: D, load: p });
-      this.caption = t < 4.6 ? '柱を押していく' : t < 9.5 ? '全体座屈: 柱が、柱ごと弓なりに曲がる' : '断面の形は変わらない。決め手は、柱の細長さ';
+      this.caption = t < 4.6 ? '柱を上から押していく(軸力だけ)' : t < 9.5 ? '全体座屈: 柱が、柱ごと弓なりに曲がる' : '断面の形は変わらない。決め手は、柱の細長さ';
       this.look(0.4, 2.3, 2.9, 3.4, 20, 8);
     } else if (s === 2) {
       this.show(this.gOne);
@@ -277,7 +357,7 @@ export class Stage6Show extends ShowBase {
       this.box.highlightPanel(t > 10.5 && t < 15);
       this.caption =
         t < 4.6
-          ? '同じ柱でも、板が薄いと…'
+          ? '同じように押しても、板が薄いと…'
           : t < 10.5
             ? '局部座屈: 柱はまっすぐのまま、板だけが波打つ'
             : 'リブと角は動かない。その間のパネルが波打つ = パネル座屈';
@@ -293,7 +373,7 @@ export class Stage6Show extends ShowBase {
           ? 'リブが細くて弱いと…'
           : t < 10.5
             ? 'リブごと、板全体が大きく波打つ = 補剛板の全体座屈'
-            : 'パネル座屈より大きな波。リブに十分な硬さがあれば起きない';
+            : 'パネル座屈より大きな波。リブに十分な硬さがあれば防げる';
       this.look(0, 2.3, 2.4, 3.2, 34, 12);
     } else if (s === 4) {
       this.show(this.gPair);
@@ -313,47 +393,135 @@ export class Stage6Show extends ShowBase {
             : p < 0.52
               ? '右の柱: 先に板が波打った(局部座屈)'
               : p < 0.93
-                ? '波打った板は縁しか働かない。踏ん張りが落ち、柱ごと座屈した'
-                : '左の柱は、ずっと大きな力まで耐えてから全体座屈。右は連成座屈';
+                ? '波打った板は働きが落ちる。柱の踏ん張りも落ち、柱ごと座屈した'
+                : '左の柱は、もっと大きな力まで耐えた。右は、局部座屈と全体座屈の連成';
       this.look(0.4, 2.2, 4.0, 3.5, 22, 9);
     } else {
-      // 設計での扱い(場面5)と実験室(場面6)
-      this.show(this.gOne, true);
+      // ここから先は、柱の絵を左に小さく置き、右にグラフ
       this.gOne.position.set(-2.5, 0.75, 0);
       this.gOne.scale.setScalar(0.62);
-      let R: number;
-      let lam: number | null = null;
-      if (s === 5) {
-        const t = Math.min(c, 40);
-        R = t < 12 ? 0.6 : t < 22 ? 0.6 + 0.4 * ramp(t, 12, 14) : 1.0 + 0.4 * ramp(t, 22, 24);
-        this.caption =
-          t < 5
-            ? '青の線 = 板は波打たないとしたときの、柱の強さ(STAGE 4 の設計曲線)'
-            : t < 12
-              ? '板が厚ければ(R ≦ 0.7)、局部座屈を考慮しても同じ。2本の線は重なる'
-              : t < 22
-                ? '板が薄い(R = 1.0)と、強さは × 0.5。線が丸ごと下がる'
-                : 'もっと薄い(R = 1.4)と × 0.26。これが「局部座屈を考慮した強さ」';
-      } else {
-        R = this.lab.R;
-        lam = this.lab.lam;
-        this.caption = '';
-      }
-      this.setR(R);
-      // 柱の絵: 板が薄ければ波打ち、限界で柱ごと曲がる(くり返し)
-      const t = c % 12;
-      const p = ramp(t, 1, 7) * (1 - ramp(t, 11, 12));
-      const thin = Math.max(0, Math.min(1, (R - 0.7) / 0.7));
-      const Al = 0.1 * thin * ramp(p, 0.35, 0.5) * (1 - ramp(t, 11, 12));
-      const Dg = 0.85 * ramp(p, 0.85, 1) * (1 - ramp(t, 11, 12));
-      this.box.update({ Dg, Al, m: 8, mode: 'panel', load: p * (1 - 0.6 * thin) });
-      for (const d of this.probe) d.visible = lam !== null;
-      if (lam !== null) {
-        this.probe[0].position.set(GX(lam), GY(strengthG(lam)), GZ + 0.1);
-        this.probe[1].position.set(GX(lam), GY(strengthGL(lam, R)), GZ + 0.14);
-      }
       this.look(0.75, 2.2, 3.9, 3.0, 12, 7);
+      const t12 = c % 12;
+      if (s === 5 || s === 6) {
+        this.show(this.gOne, 'lam');
+        let R: number;
+        if (s === 5) {
+          const t = Math.min(c, 40);
+          R = t < 12 ? 0.6 : t < 22 ? 0.6 + 0.4 * ramp(t, 12, 14) : 1.0 + 0.4 * ramp(t, 22, 24);
+          this.caption =
+            t < 5
+              ? '青の線 = 全体座屈だけで決めた柱の強さ(STAGE 4 の設計曲線)'
+              : t < 12
+                ? '板が厚い(R ≦ 0.7)と、局部座屈による低減はなし。2本の線は重なる'
+                : t < 22
+                  ? '板が薄い(R = 1.0)と、この設計式では × 0.5。線が丸ごと下がる'
+                  : 'もっと薄い(R = 1.4)と × 0.26。これが「局部座屈を考慮した強さ」';
+          for (const d of this.probe) d.visible = false;
+        } else {
+          // 軸力だけの照査と安全率: 例の柱(λ̄ = 0.8、R = 1.0)
+          R = EX.R;
+          const t = Math.min(c, 30);
+          const str = strengthGL(EX.lam, R);
+          this.probe[0].visible = false;
+          this.probe[1].visible = true;
+          this.probe[1].position.set(GX(EX.lam), GY(str), GZ + 0.14);
+          const on = t > 6;
+          this.loadLine.visible = on;
+          this.loadTag.visible = on;
+          setLine(this.loadLine, GX(0), GY(EX.n), GX(2.15), GY(EX.n), GZ + 0.05);
+          this.loadTag.position.set(GX(1.75), GY(EX.n) - 0.2, GZ + 0.05);
+          this.caption =
+            t < 6
+              ? `この柱の強さは、降伏の ${Math.round(str * 100)}%(紫の点)`
+              : t < 13
+                ? `実際にかかる力は、もっと小さくしておく(オレンジの線、${Math.round(EX.n * 100)}%)`
+                : t < 21
+                  ? `安全率 = 強さ ÷ かかる力 = ${Math.round(str * 100)} ÷ ${Math.round(EX.n * 100)} = ${(str / EX.n).toFixed(1)}`
+                  : 'いまの力を、あと何倍にできるか。それが安全率';
+        }
+        this.setR(R);
+        const p = ramp(t12, 1, 7) * (1 - ramp(t12, 11, 12));
+        const thin = Math.max(0, Math.min(1, (R - 0.7) / 0.7));
+        const Al = 0.1 * thin * ramp(p, 0.35, 0.5) * (1 - ramp(t12, 11, 12));
+        const Dg = s === 5 ? 0.85 * ramp(p, 0.85, 1) * (1 - ramp(t12, 11, 12)) : 0;
+        this.box.update({ Dg, Al: s === 5 ? Al : 0, m: 8, mode: 'panel', load: s === 5 ? p * (1 - 0.6 * thin) : 0.45 });
+      } else {
+        // 軸力と曲げを同時に受ける柱
+        this.show(this.gOne, 'nm');
+        let lam = EX.lam;
+        let R = EX.R;
+        let n = EX.n;
+        let m = EX.m;
+        let amp = 1;
+        let showPt = true;
+        let showRay = false;
+        if (s === 7) {
+          // 曲げが加わると、余力を分け合う
+          const t = c % 22;
+          amp = 0;
+          n = EX.n * ramp(t, 2, 5);
+          m = EX.m * ramp(t, 7, 10);
+          showPt = t > 2;
+          this.caption =
+            t < 2
+              ? '柱は、上から押されるだけではない'
+              : t < 7
+                ? '上から押す力(軸力)'
+                : t < 13
+                  ? 'そこへ、横からの力(地震や風)。柱を曲げようとする'
+                  : '軸力と曲げで、柱の余力を分け合う。灰色の線の内側なら耐えられる';
+        } else if (s === 8) {
+          // 軸力が曲げを増幅する
+          const t = c % 24;
+          amp = ramp(t, 14, 17);
+          m = EX.m;
+          n = 0.6 * (ramp(t, 3, 12) - ramp(t, 22.5, 24));
+          const pe0 = 1 / (EX.lam * EX.lam);
+          const k = 1 / (1 - n / pe0);
+          this.caption =
+            t < 3
+              ? '横から押されて、少し曲がった柱'
+              : t < 14
+                ? `上から押すと、曲がりが大きくなる(いま ${k.toFixed(1)} 倍)`
+                : t < 19
+                  ? '軸力は、曲げを増幅する。だから耐えられる範囲は、直線より内側(紫の線)'
+                  : '増幅の倍率 = 1 ÷ (1 − 軸力 ÷ オイラーの座屈荷重)';
+        } else if (s === 9) {
+          const t = c % 22;
+          showRay = t > 5;
+          this.caption =
+            t < 5
+              ? '黒い点 = いま柱にかかっている軸力と曲げ'
+              : t < 12
+                ? '軸力と曲げを同じ割合で増やしていくと、紫の線にぶつかる'
+                : 'ぶつかるまでの倍率が安全率。あと何倍まで耐えられるか';
+        } else {
+          ({ lam, R, n, m } = this.lab);
+          showRay = true;
+          this.caption = '';
+        }
+        const pu = strengthGL(lam, R);
+        const pe = 1 / (lam * lam);
+        this.setNM(pu, pe, amp);
+        // 柱の絵: 横からの力でたわみ、軸力で増幅される(見やすく誇張)
+        const k = n < pe ? 1 / (1 - (amp > 0 || s === 8 ? n / pe : 0)) : 20;
+        const Dg = Math.min(1.0, 0.45 * m * k);
+        this.box.update({ Dg, Al: 0, m: 8, mode: 'panel', load: n * 1.6 });
+        this.sideArrow(1.6 * m, Dg);
+        this.pt.visible = showPt;
+        this.pt.position.set(NX(m), NY(n), GZ + 0.14);
+        const g = safetyFactor(n, m, pu, pe);
+        const ok = showRay && Number.isFinite(g) && g > 0;
+        this.ray.visible = ok;
+        this.hit.visible = ok;
+        if (ok) {
+          const gm = Math.min(g * m, 1.12);
+          const gn = Math.min(g * n, 0.9);
+          setLine(this.ray, NX(0), NY(0), NX(gm), NY(gn), GZ + 0.08);
+          this.hit.position.set(NX(g * m), NY(g * n), GZ + 0.12);
+          this.hit.visible = g * m <= 1.12 && g * n <= 0.9;
+        }
+      }
     }
-    drawTube(this.cG, 1);
   }
 }

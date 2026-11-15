@@ -67,6 +67,7 @@ export function StoryShell(props: {
 }) {
   const { scene, total, text } = props;
   const isLab = scene === total - 1;
+  const labRef = useRef<HTMLDivElement>(null);
   return (
     <div className="mt-1">
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-3">
@@ -96,6 +97,14 @@ export function StoryShell(props: {
           <p key={`b${scene}`} className="telop rounded-xl bg-studio-800/70 px-3 py-2 text-[14px] leading-relaxed text-ink sm:px-4 sm:py-3 sm:text-base">
             <Rich text={text.body} />
           </p>
+          {isLab && props.lab && (
+            <button
+              onClick={() => labRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="h-12 rounded-xl bg-gold px-4 text-base font-bold text-white"
+            >
+              ▼ 下のスライダーで実験する
+            </button>
+          )}
           {props.side}
           {props.hint && (
             <p className="px-1 text-[11px] text-ink-dim">
@@ -127,7 +136,11 @@ export function StoryShell(props: {
           </div>
         </div>
       </div>
-      {isLab && props.lab && <div className="mt-3">{props.lab}</div>}
+      {isLab && props.lab && (
+        <div ref={labRef} className="mt-3 scroll-mt-3">
+          {props.lab}
+        </div>
+      )}
       {props.note && (
         <details className="mt-4 px-1 text-xs leading-relaxed text-ink-dim">
           <summary className="cursor-pointer py-1 text-sm font-bold">計算の前提を見る</summary>

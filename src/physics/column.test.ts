@@ -173,3 +173,24 @@ test('板: 有効幅を見込んだ強さは、理論値と降伏の間にあり
   assert.equal(p.plateState(0.9, 0.5), 'ok');
   assert.equal(p.plateState(1.0, 0.5), 'ultimate');
 });
+
+test('軸力と曲げを受ける柱: 安全率を掛けると、ちょうど限界になる', async () => {
+  const b = await import('./beamcolumn.ts');
+  for (const [n, m, pu, pe] of [
+    [0.25, 0.25, 0.673, 1.5625],
+    [0.1, 0.6, 0.4, 0.5],
+    [0.3, 0.05, 0.336, 1.5625],
+    [0.02, 0.3, 0.9, 6],
+  ]) {
+    const g = b.safetyFactor(n, m, pu, pe);
+    assert.ok(Math.abs(b.interaction(g * n, g * m, pu, pe) - 1) < 1e-9, `γ=${g}`);
+    assert.ok(g * n < pe && g * n <= pu + 1e-12);
+  }
+  // 軸力だけなら 強さ ÷ 軸力、曲げだけなら 強さ ÷ 曲げ
+  assert.ok(Math.abs(b.safetyFactor(0.2, 0, 0.336, 1.5625) - 0.336 / 0.2) < 1e-9);
+  assert.ok(Math.abs(b.safetyFactor(0, 0.4, 0.5, 1) - 2.5) < 1e-9);
+  // 軸力がオイラー荷重の半分なら、曲げは2倍に増幅される
+  assert.ok(Math.abs(b.amplification(0.5, 1) - 2) < 1e-12);
+  // 増幅を入れた相関曲線は、直線より内側
+  for (let n = 0.05; n < 0.6; n += 0.05) assert.ok(b.momentCapacity(n, 0.6, 1.2) < 1 - n / 0.6);
+});

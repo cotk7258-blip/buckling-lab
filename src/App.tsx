@@ -12,7 +12,7 @@ const STAGES = [
   { no: 3, title: '理想と現実', sub: '理論より早い理由' },
   { no: 4, title: '設計曲線', sub: 'あの形の理由' },
   { no: 5, title: '板の座屈', sub: 'リブが効く理由' },
-  { no: 6, title: '座屈の種類', sub: '全体・局部・連成' },
+  { no: 6, title: '座屈の照査', sub: '軸力・曲げ・安全率' },
 ];
 
 export default function App() {
