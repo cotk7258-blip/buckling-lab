@@ -25,6 +25,7 @@ body {
 
 body {
   margin: 0;
+  overflow-x: clip;
   min-height: 100dvh;
   background:
     radial-gradient(1200px 600px at 70% -10%, rgba(56, 189, 248, 0.1), transparent 60%),
@@ -80,4 +81,12 @@ input[type='range']::-moz-range-thumb {
 }
 .flash-yield {
   animation: pulse-yield 0.9s ease-in-out infinite;
+}
+
+@keyframes telop-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.telop {
+  animation: telop-in 0.5s ease-out;
 }

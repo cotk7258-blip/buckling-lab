@@ -1,16 +1,567 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { solveColumn, viewAtLoad, dohshiOld } from '../physics/column.ts';
-import type { ColumnPath, ColumnView } from '../physics/column.ts';
-import { C, stressColor } from '../ui/colors.ts';
+import type { ColumnPath } from '../physics/column.ts';
+import { Stage3D, DEFL_AMP } from '../three/stage.ts';
+import type { CameraPose } from '../three/stage.ts';
+import { Section3D } from '../three/section.ts';
 import { Tex } from '../ui/Tex.tsx';
 
 const E_OVER_FY = 200000 / 355; // E = 2.0×10^5 N/mm²、σy = 355 N/mm²(SM490Y 相当)
 const IMP_CHOICES = [0, 5000, 2000, 1000, 500, 250]; // 初期たわみ L/n(0 は無し)
-const AMP = 12; // たわみを絵の上で何倍に見せるか
+const DEFAULTS = { lambda: 0.9, resid: 0.3, impIdx: 3 };
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
-/** 幅の狭い画面(スマホ)かどうか。図の中の字が小さくなりすぎないよう、図の作りを変える */
+interface Ctx {
+  ideal: ColumnPath;
+  real: ColumnPath;
+  loadMax: number;
+}
+
+interface SceneDef {
+  kicker: string;
+  head: (c: Ctx) => string;
+  body: (c: Ctx) => string;
+  /** 応力の色で見るか */
+  stress: boolean;
+  /** この場面で押す力(P/Py)の行き先 */
+  target: (c: Ctx) => number;
+  /** 押す速さ(P/Py 毎秒) */
+  speed: number;
+  pose: CameraPose;
+  /** 断面の表示を出すか */
+  section: boolean;
+}
+
+const SCENES: SceneDef[] = [
+  {
+    kicker: '実験',
+    head: () => '同じ2本の柱を、同じ力で押す',
+    body: () =>
+      '長さも太さも同じ H形鋼。左は傷ひとつない「理想の柱」。右は工場で溶接して作った「現実の柱」。先に折れるのは、どちらでしょう。',
+    stress: false,
+    target: () => 0,
+    speed: 0.2,
+    pose: { az: 24, el: 9, focus: 'both' },
+    section: false,
+  },
+  {
+    kicker: '透視',
+    head: () => '現実の柱には、押す前から力が潜んでいる',
+    body: () =>
+      '応力が見える目に切り替えました。青は圧縮、オレンジは引張。溶接の熱が冷えて縮むとき、柱の中に力が閉じ込められます。これが「残留応力」。フランジの先端は、最初から押されています。',
+    stress: true,
+    target: () => 0,
+    speed: 0.2,
+    pose: { az: 32, el: 10, focus: 'real' },
+    section: true,
+  },
+  {
+    kicker: '載荷',
+    head: (c) => `降伏の ${pct(c.real.Pfy * 0.85)} まで押す`,
+    body: () =>
+      '理想の柱は、どこも同じ青。断面全体で均等に受けています。現実の柱は不公平。先端だけ、潜んでいた力の分が上乗せされて、もう金色の天井(降伏)のすぐ下です。',
+    stress: true,
+    target: (c) => c.real.Pfy * 0.85,
+    speed: 0.12,
+    pose: { az: 20, el: 8, focus: 'both' },
+    section: true,
+  },
+  {
+    kicker: '異変',
+    head: (c) => `まだ ${pct(c.real.Pfy)}。なのに、先端が降伏した`,
+    body: () =>
+      '柱を輪切りにして中をのぞきます。平均ではまだ余裕があるのに、H形の先端(曲がりの内側)が天井に届いて赤くなりました。赤い部分は、これ以上力を受け持てません。柱の「踏ん張り」が減り始めます。',
+    stress: true,
+    target: (c) => c.real.Pfy + 0.012,
+    speed: 0.05,
+    pose: { az: 40, el: 38, focus: 'realMid' },
+    section: true,
+  },
+  {
+    kicker: '連鎖',
+    head: () => '赤が広がる。踏ん張りが落ちる。さらに曲がる',
+    body: (c) =>
+      `踏ん張り(曲げへの抵抗)は、先端ほどよく効きます。その先端から失うので、落ち方が急です。曲がると内側がさらに押され、赤が広がる。ドミノ倒しです。限界は降伏の ${pct(c.real.Pu)}。`,
+    stress: true,
+    target: (c) => c.real.Pu - 0.002,
+    speed: 0.018,
+    pose: { az: 30, el: 7, focus: 'real' },
+    section: true,
+  },
+  {
+    kicker: '座屈',
+    head: (c) => `現実の柱が折れた。理論値の ${pct(c.real.Pu / c.ideal.Pu)}`,
+    body: () => '押す力に踏ん張りが追い越され、一気に曲がりました。理想の柱は、まだまっすぐ立っています。',
+    stress: true,
+    target: (c) => c.real.Pu + 0.08,
+    speed: 0.03,
+    pose: { az: 16, el: 9, focus: 'both' },
+    section: true,
+  },
+  {
+    kicker: '理論値',
+    head: (c) => `理想の柱は ${pct(c.ideal.Pu)} まで耐えた`,
+    body: (c) =>
+      `傷のない柱は、理論どおりの力まで耐えてから座屈します。現実の柱はその ${pct(
+        c.real.Pu / c.ideal.Pu,
+      )}。設計で使う曲線が理論の線より下に引かれているのは、この差のためです。`,
+    stress: true,
+    target: (c) => c.loadMax,
+    speed: 0.06,
+    pose: { az: 24, el: 9, focus: 'both' },
+    section: true,
+  },
+];
+const LAB = SCENES.length; // 最後は実験室
+
+export default function Stage3() {
+  const [scene, setScene] = useState(0);
+  const [params, setParams] = useState(DEFAULTS);
+  const [stressOn, setStressOn] = useState(true);
+  const [playing, setPlaying] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [focusReal, setFocusReal] = useState(true);
+  const [hud, setHud] = useState({ s: 0, ie: 1, limit: 1, yf: 0, pR: 0, pI: 0, cR: false, cI: false });
+
+  const isLab = scene === LAB;
+  const ideal = useMemo(
+    () => solveColumn({ lambda: params.lambda, resid: 0, imp: 0, eOverFy: E_OVER_FY }),
+    [params.lambda],
+  );
+  const real = useMemo(() => {
+    const n = IMP_CHOICES[params.impIdx];
+    return solveColumn({ lambda: params.lambda, resid: params.resid, imp: n ? 1 / n : 0, eOverFy: E_OVER_FY });
+  }, [params]);
+  const loadMax = Math.ceil((ideal.Pu + 0.1) * 100) / 100;
+  const ctx: Ctx = useMemo(() => ({ ideal, real, loadMax }), [ideal, real, loadMax]);
+
+  const mainRef = useRef<HTMLCanvasElement>(null);
+  const secRef = useRef<HTMLCanvasElement>(null);
+  const labelRefs = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
+  const stageRef = useRef<Stage3D | null>(null);
+  // 毎フレーム読む値(React の再描画を待たずに使う)
+  const live = useRef({ load: 0, target: 0, speed: 0.1, mix: 0, mixTarget: 0, ctx, auto: true, playing, slow, focusReal });
+  live.current.ctx = ctx;
+  live.current.playing = playing;
+  live.current.slow = slow;
+  live.current.focusReal = focusReal;
+
+  // 場面が変わったら、行き先・カメラ・見え方を切り替える
+  useEffect(() => {
+    const L = live.current;
+    if (isLab) {
+      L.auto = false;
+      L.mixTarget = stressOn ? 1 : 0;
+      stageRef.current?.setPose({ az: 24, el: 9, focus: 'both' });
+    } else {
+      const sc = SCENES[scene];
+      L.auto = true;
+      L.target = sc.target(ctx);
+      L.speed = sc.speed;
+      L.mixTarget = sc.stress ? 1 : 0;
+      stageRef.current?.setPose(sc.pose);
+    }
+  }, [scene, isLab, ctx, stressOn]);
+
+  useEffect(() => {
+    stageRef.current?.setPaths([ideal, real]);
+  }, [ideal, real]);
+
+  // 3D の用意と、毎フレームの更新
+  useEffect(() => {
+    const stage = new Stage3D(mainRef.current!);
+    const section = new Section3D(secRef.current!);
+    stageRef.current = stage;
+    stage.setPaths([live.current.ctx.ideal, live.current.ctx.real]);
+    stage.setPose(SCENES[0].pose);
+    let raf = 0;
+    let last = performance.now();
+    let t = 0;
+    let lastHud = '';
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      t += dt;
+      const L = live.current;
+      const c = L.ctx;
+      if (L.auto) {
+        const d = L.target - L.load;
+        const stepMax = dt * (d < 0 ? 0.6 : L.speed);
+        L.load += Math.max(-stepMax, Math.min(stepMax, d));
+      } else if (L.playing) {
+        L.load = Math.min(c.loadMax, L.load + dt * (L.slow ? 0.012 : 0.08));
+      }
+      L.load = Math.max(0, Math.min(c.loadMax, L.load));
+      L.mix += (L.mixTarget - L.mix) * (1 - Math.exp(-dt * 3));
+      const vI = viewAtLoad(c.ideal, L.load);
+      const vR = viewAtLoad(c.real, L.load);
+      stage.update([c.ideal, c.real], [vI, vR], L.mix, t, dt);
+      const fp = L.focusReal ? c.real : c.ideal;
+      const fv = L.focusReal ? vR : vI;
+      section.update(fp, fv.step, t);
+      labelRefs.forEach((r, i) => {
+        const p = stage.labelPos(i);
+        const el = r.current;
+        if (!el) return;
+        el.style.opacity = p ? '1' : '0';
+        if (p) el.style.transform = `translate(-50%, 0) translate(${p.x}px, ${p.y}px)`;
+      });
+      const h = {
+        s: L.load,
+        ie: fv.step.ieRatio,
+        limit: Math.min(1, fp.Pe * fv.step.ieRatio),
+        yf: fv.step.yieldFrac,
+        pR: vR.step.P,
+        pI: vI.step.P,
+        cR: vR.collapsed,
+        cI: vI.collapsed,
+      };
+      const key = `${h.s.toFixed(3)}|${h.ie.toFixed(3)}|${h.pR.toFixed(3)}|${h.pI.toFixed(3)}|${h.cR}|${h.cI}|${L.focusReal}`;
+      if (key !== lastHud) {
+        lastHud = key;
+        setHud(h);
+      }
+      if (!L.auto && L.playing && L.load >= c.loadMax) setPlaying(false);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      stage.dispose();
+      section.dispose();
+      stageRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const go = (n: number) => {
+    const next = Math.max(0, Math.min(LAB, n));
+    if (next < LAB && params !== DEFAULTS) setParams(DEFAULTS);
+    if (next === 0) live.current.load = 0;
+    setPlaying(false);
+    setFocusReal(true);
+    setScene(next);
+  };
+  const setLoad = (v: number) => {
+    setPlaying(false);
+    live.current.load = v;
+  };
+  const changeParam = (p: Partial<typeof DEFAULTS>) => {
+    setParams((old) => ({ ...old, ...p }));
+    setLoad(0);
+  };
+
+  const sc = isLab ? null : SCENES[scene];
+  const showSection = isLab || sc!.section;
+
+  const head = sc ? sc.head(ctx) : '条件を変えて、自分で押してみる';
+  const body = sc
+    ? sc.body(ctx)
+    : '柱の細長さ、残留応力、初期たわみを変えると、折れ方と限界が変わります。細長い柱ほど、理想と現実の差は小さくなります。';
+  const kicker = sc ? sc.kicker : '実験室';
+
+  return (
+    <div className="mt-1">
+      <div className="grid gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-3">
+        {/* 3D の舞台。見出しのテロップは映像に重ねる */}
+        <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
+          <canvas ref={mainRef} className="block h-[37dvh] min-h-[280px] w-full lg:h-[72dvh]" />
+          <ColumnLabel refEl={labelRefs[0]} name="理想の柱" load={hud.pI} buckled={hud.cI} color="#86efac" />
+          <ColumnLabel refEl={labelRefs[1]} name="現実の柱" load={hud.pR} buckled={hud.cR} color="#e2e8f0" />
+          <div
+            key={scene}
+            className="telop pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-studio-950 via-studio-950/85 to-transparent px-3 pb-2.5 pt-10 sm:px-5 sm:pb-4"
+            aria-live="polite"
+          >
+            <p className="text-[11px] font-bold tracking-[0.25em] text-comp sm:text-xs">
+              {String(scene + 1).padStart(2, '0')} — {kicker}
+            </p>
+            <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] sm:text-3xl">
+              {head}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-2 lg:gap-3">
+          {/* 語り */}
+          <p key={`b${scene}`} className="telop rounded-xl bg-studio-800/70 px-3 py-2 text-[14px] leading-relaxed text-ink sm:px-4 sm:py-3 sm:text-base lg:order-2">
+            {body}
+          </p>
+
+          {/* 断面 */}
+          <div
+            className={`relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950 transition-opacity duration-700 lg:order-1 ${
+              showSection ? 'opacity-100' : 'opacity-30'
+            }`}
+          >
+            <canvas ref={secRef} className="block h-[21dvh] min-h-[170px] w-full lg:h-[36dvh]" />
+            <div className="pointer-events-none absolute left-3 top-2">
+              <p className="text-[11px] font-bold tracking-wider text-ink-dim">柱の中央を輪切り</p>
+              <p className="text-sm font-bold">{focusReal ? '現実の柱' : '理想の柱'}の断面の応力</p>
+            </div>
+            <p className="pointer-events-none absolute right-3 top-2 text-right text-xs font-bold text-gold">
+              金色の天井 = 降伏
+            </p>
+            {isLab && (
+              <button
+                onClick={() => setFocusReal((v) => !v)}
+                className="absolute right-2 top-8 rounded-lg border border-studio-600 bg-studio-900/90 px-3 py-1.5 text-xs font-bold"
+              >
+                {focusReal ? '理想の柱を見る' : '現実の柱を見る'}
+              </button>
+            )}
+            <div className="grid grid-cols-2 gap-3 border-t border-studio-700 bg-studio-900/60 px-3 py-2">
+              <Meter label="押す力" value={focusReal ? hud.pR : hud.pI} color="#38bdf8" marker={hud.limit} />
+              <Meter label="踏ん張り Ie/I" value={hud.ie} color={hud.ie < 0.999 ? '#ff1f4b' : '#86efac'} />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-ink-dim lg:order-3">
+            <Legend />
+            <span>たわみは {DEFL_AMP} 倍に誇張・横になぞると回り込めます</span>
+          </div>
+
+          {/* 進行(スマホでは画面の下に固定) */}
+          <div className="sticky bottom-0 z-10 -mx-3 flex items-center gap-2 bg-studio-950/90 px-3 py-2 backdrop-blur lg:static lg:order-4 lg:mx-0 lg:bg-transparent lg:p-0">
+            <button
+              onClick={() => go(scene - 1)}
+              disabled={scene === 0}
+              className="h-12 whitespace-nowrap rounded-xl border border-studio-600 px-4 text-sm font-bold text-ink-dim disabled:opacity-30"
+            >
+              ◀ 戻る
+            </button>
+            <div className="flex flex-1 items-center justify-center gap-1.5" aria-hidden>
+              {Array.from({ length: LAB + 1 }, (_, i) => (
+                <span
+                  key={i}
+                  className={`h-1.5 rounded-full transition-all ${i === scene ? 'w-6 bg-comp' : 'w-1.5 bg-studio-600'}`}
+                />
+              ))}
+            </div>
+            {isLab ? (
+              <button onClick={() => go(0)} className="h-12 whitespace-nowrap rounded-xl border border-studio-600 px-4 text-sm font-bold">
+                最初から見る
+              </button>
+            ) : (
+              <button
+                onClick={() => go(scene + 1)}
+                className="h-12 whitespace-nowrap rounded-xl bg-comp px-6 text-base font-bold text-studio-950"
+              >
+                {scene === LAB - 1 ? '実験室へ ▶' : '次へ ▶'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {isLab && (
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-studio-600 bg-studio-900 p-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (hud.s >= loadMax - 1e-6) live.current.load = 0;
+                    setPlaying((p) => !p);
+                  }}
+                  className="h-11 min-w-20 whitespace-nowrap rounded-lg bg-comp px-3 text-base font-bold text-studio-950"
+                >
+                  {playing ? '一時停止' : hud.s >= loadMax - 1e-6 ? 'もう一度' : '押す ▶'}
+                </button>
+                <ToggleBtn on={slow} onClick={() => setSlow((v) => !v)} label="スロー" />
+                <button onClick={() => setLoad(Math.max(0, live.current.load - 0.005))} className="h-11 w-11 rounded-lg border border-studio-600 text-lg" aria-label="1コマ戻す">
+                  ◀
+                </button>
+                <button onClick={() => setLoad(Math.min(loadMax, live.current.load + 0.005))} className="h-11 w-11 rounded-lg border border-studio-600 text-lg" aria-label="1コマ進める">
+                  ▶
+                </button>
+                <span className="ml-auto" />
+                <ToggleBtn on={stressOn} onClick={() => setStressOn((v) => !v)} label="応力の色" />
+              </div>
+              <label className="mt-2 block">
+                <span className="flex items-baseline justify-between text-sm text-ink-dim">
+                  <span>押す力(降伏荷重に対する割合)</span>
+                  <span className="num text-xl font-bold text-ink">{pct(hud.s)}</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={loadMax}
+                  step={0.001}
+                  value={Math.min(hud.s, loadMax)}
+                  onChange={(e) => setLoad(Number(e.target.value))}
+                  style={{ ['--thumb' as string]: '#38bdf8' }}
+                  aria-label="押す力"
+                />
+              </label>
+            </div>
+            <LoadGraph ideal={ideal} real={real} s={hud.s} />
+          </div>
+
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-studio-600 bg-studio-900 p-4">
+              <h3 className="text-base font-bold">条件を変える</h3>
+              <Slider
+                label="細長比パラメータ"
+                symbol="\bar{\lambda}"
+                hint="「降伏」と「座屈」の勝負指標。1 より大きいと座屈が先。大きいほど細長い柱"
+                value={params.lambda}
+                min={0.2}
+                max={2}
+                step={0.05}
+                show={params.lambda.toFixed(2)}
+                color="#fbbf24"
+                onChange={(v) => changeParam({ lambda: v })}
+              />
+              <Slider
+                label="残留応力"
+                symbol="\sigma_{rc}"
+                hint="溶接で閉じ込められた力。押す前から先端にかかっている圧縮"
+                value={params.resid}
+                min={0}
+                max={0.4}
+                step={0.05}
+                show={`${pct(params.resid)} σy`}
+                color="#ff1f4b"
+                onChange={(v) => changeParam({ resid: v })}
+              />
+              <Slider
+                label="初期たわみ"
+                symbol="v_0"
+                hint="作ったときからある、わずかな曲がり"
+                value={params.impIdx}
+                min={0}
+                max={IMP_CHOICES.length - 1}
+                step={1}
+                show={IMP_CHOICES[params.impIdx] ? `L/${IMP_CHOICES[params.impIdx]}` : 'なし'}
+                color="#fb923c"
+                onChange={(v) => changeParam({ impIdx: v })}
+              />
+              <p className="mt-2 text-xs text-ink-dim">
+                柱の長さ <span className="num text-ink">{(real.Lmm / 1000).toFixed(1)} m</span>(断面 H-300×300×10×16)
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-studio-600 bg-studio-900 p-4">
+              <h3 className="text-base font-bold">この条件での限界</h3>
+              <dl className="mt-2 space-y-2">
+                <ResultRow label="理想の柱(理論値)" value={ideal.Pu} color="#86efac" />
+                <ResultRow label="現実の柱" value={real.Pu} color="#e2e8f0" />
+              </dl>
+              <p className="mt-3 text-base">
+                現実の柱は理論値の <strong className="num text-2xl text-gold">{pct(real.Pu / ideal.Pu)}</strong>
+              </p>
+              <p className="mt-2 text-sm text-ink-dim">
+                参考: 道路橋示方書(平成24年版まで)の設計曲線は{' '}
+                <span className="num text-ink">{pct(dohshiOld(params.lambda))}</span>
+                。設計曲線は、多くの実験・解析の下側に引いた線です。
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-studio-600 bg-studio-900 p-4">
+              <h3 className="text-base font-bold">ドミノ倒しの式</h3>
+              <div className="mt-2 overflow-x-auto text-lg">
+                <Tex block>{String.raw`P_{cr} \approx \dfrac{\pi^2 E\, I_e}{L^2}`}</Tex>
+              </div>
+              <p className="text-sm text-ink-dim">
+                降伏した(赤い)部分はもう踏ん張れない。残った健全な部分の <Tex>{'I_e'}</Tex>
+                (断面の踏ん張りやすさ)だけで支えるので、赤が広がるほど限界が下がる。
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="mt-4 px-1 text-xs leading-relaxed text-ink-dim">
+        計算の前提: 両端ピンの溶接 H形鋼(H-300×300×10×16)が弱軸まわりに座屈する場合。断面を繊維に分け(フランジ 41 本、ウェブ 15 本)、
+        完全弾塑性、E = 2.0×10⁵ N/mm²、σy = 355 N/mm²。残留応力は板ごとに直線分布(フランジ先端とウェブ中央が圧縮、溶接部が引張)。
+        たわみは正弦波の形とし、柱の中央の断面で力のつり合いを解く。柱の色は、各断面でその位置の軸力と曲げにつり合う応力を解いた値。
+        理想の柱は、残留応力なし・初期たわみ L/1,000,000。
+      </p>
+    </div>
+  );
+}
+
+/* ---------- 3D の上に重ねる表示 ---------- */
+
+function ColumnLabel(props: {
+  refEl: React.RefObject<HTMLDivElement | null>;
+  name: string;
+  load: number;
+  buckled: boolean;
+  color: string;
+}) {
+  return (
+    <div
+      ref={props.refEl}
+      className="pointer-events-none absolute left-0 top-0 whitespace-nowrap text-center transition-opacity duration-300"
+      style={{ opacity: 0 }}
+    >
+      <p className="text-sm font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] sm:text-base" style={{ color: props.color }}>
+        {props.name}
+      </p>
+      <p className="num text-xl font-bold leading-tight drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] sm:text-2xl">
+        {pct(props.load)}
+      </p>
+      {props.buckled && (
+        <span className="flash-yield mt-0.5 inline-block rounded bg-yield px-2 py-0.5 text-xs font-bold text-white">座屈</span>
+      )}
+    </div>
+  );
+}
+
+function Legend() {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-tens">引張</span>
+      <span
+        className="h-2 w-24 rounded-full"
+        style={{ background: 'linear-gradient(90deg,#ffa24a,#b4530a 25%,#2a3a60 50%,#1d4ed8 75%,#5cd0ff 96%)' }}
+      />
+      <span className="text-comp">圧縮</span>
+      <span className="ml-1 font-bold text-yield">■ 降伏</span>
+    </span>
+  );
+}
+
+function Meter(props: { label: string; value: number; color: string; marker?: number }) {
+  const w = Math.max(0, Math.min(1, props.value)) * 100;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-[11px] text-ink-dim">
+        <span>
+          {props.label}
+          {props.marker !== undefined && <span className="ml-1 text-gold">┃いまの限界</span>}
+        </span>
+        <span className="num text-sm font-bold text-ink">{pct(props.value)}</span>
+      </div>
+      <div className="relative h-2 rounded-full bg-studio-700">
+        <div className="h-2 rounded-full" style={{ width: `${w}%`, background: props.color }} />
+        {props.marker !== undefined && (
+          <div className="absolute -top-1 h-4 w-0.5 bg-gold" style={{ left: `${Math.max(0, Math.min(1, props.marker)) * 100}%` }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ToggleBtn(props: { on: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={props.onClick}
+      aria-pressed={props.on}
+      className={`h-11 whitespace-nowrap rounded-lg border px-3 text-sm font-bold ${
+        props.on ? 'border-gold bg-gold/15 text-gold' : 'border-studio-600 text-ink-dim'
+      }`}
+    >
+      {props.label}
+    </button>
+  );
+}
+
+/* ---------- 実験室の部品 ---------- */
+
 function useNarrow(): boolean {
   const q = '(max-width: 640px)';
   const [narrow, setNarrow] = useState(() => window.matchMedia(q).matches);
@@ -23,511 +574,11 @@ function useNarrow(): boolean {
   return narrow;
 }
 
-export default function Stage3() {
-  const [lambda, setLambda] = useState(0.9);
-  const [resid, setResid] = useState(0.3);
-  const [impIdx, setImpIdx] = useState(3);
-  const [load, setLoad] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [slow, setSlow] = useState(false);
-
-  const ideal = useMemo(
-    () => solveColumn({ lambda, resid: 0, imp: 0, eOverFy: E_OVER_FY }),
-    [lambda],
-  );
-  const real = useMemo(() => {
-    const n = IMP_CHOICES[impIdx];
-    return solveColumn({ lambda, resid, imp: n ? 1 / n : 0, eOverFy: E_OVER_FY });
-  }, [lambda, resid, impIdx]);
-
-  const loadMax = Math.ceil((ideal.Pu + 0.1) * 100) / 100;
-  const s = Math.min(load, loadMax);
-  const vIdeal = viewAtLoad(ideal, s);
-  const vReal = viewAtLoad(real, s);
-
-  // 再生
-  const raf = useRef(0);
-  useEffect(() => {
-    if (!playing) return;
-    let last = performance.now();
-    const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      setLoad((p) => {
-        const next = p + dt * (slow ? 0.015 : 0.09);
-        if (next >= loadMax) {
-          setPlaying(false);
-          return loadMax;
-        }
-        return next;
-      });
-      raf.current = requestAnimationFrame(tick);
-    };
-    raf.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf.current);
-  }, [playing, slow, loadMax]);
-
-  const reset = () => {
-    setPlaying(false);
-    setLoad(0);
-  };
-  const changeParam = (fn: () => void) => {
-    fn();
-    reset();
-  };
-
-  const yieldedFrac = fracYielded(vReal);
-  const idealLimit = Math.min(1, ideal.Pe);
-
-  return (
-    <div className="mt-2 grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <section className="min-w-0 space-y-4">
-        <Narration
-          s={s}
-          real={real}
-          vReal={vReal}
-          vIdeal={vIdeal}
-          yieldedFrac={yieldedFrac}
-          idealLimit={idealLimit}
-        />
-
-        <div className="grid grid-cols-2 gap-3">
-          <ColumnCard
-            title="竹"
-            sub="理想の弾性体(不整なし)"
-            accent={C.ideal}
-            path={ideal}
-            view={vIdeal}
-          />
-          <ColumnCard
-            title="現実の鋼"
-            sub="溶接の残留応力+初期たわみ"
-            accent={C.real}
-            path={real}
-            view={vReal}
-          />
-        </div>
-
-        <div className="rounded-xl border border-studio-600 bg-studio-900 p-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                if (s >= loadMax) setLoad(0);
-                setPlaying((p) => !p);
-              }}
-              className="h-11 min-w-20 whitespace-nowrap rounded-lg bg-comp px-3 text-base font-bold text-studio-950"
-            >
-              {playing ? '一時停止' : s >= loadMax ? 'もう一度' : '押す ▶'}
-            </button>
-            <button
-              onClick={() => setSlow((v) => !v)}
-              aria-pressed={slow}
-              className={`h-11 whitespace-nowrap rounded-lg border px-3 text-sm font-bold ${
-                slow ? 'border-gold bg-gold/15 text-gold' : 'border-studio-600 text-ink-dim'
-              }`}
-            >
-              スロー
-            </button>
-            <button
-              onClick={() => {
-                setPlaying(false);
-                setLoad((p) => Math.max(0, p - 0.005));
-              }}
-              className="h-11 w-11 rounded-lg border border-studio-600 text-lg"
-              aria-label="1コマ戻す"
-            >
-              ◀
-            </button>
-            <button
-              onClick={() => {
-                setPlaying(false);
-                setLoad((p) => Math.min(loadMax, p + 0.005));
-              }}
-              className="h-11 w-11 rounded-lg border border-studio-600 text-lg"
-              aria-label="1コマ進める"
-            >
-              ▶
-            </button>
-            <button onClick={reset} className="ml-auto h-11 whitespace-nowrap rounded-lg border border-studio-600 px-3 text-sm text-ink-dim" aria-label="最初から">
-              ↺ 0%
-            </button>
-          </div>
-          <label className="mt-2 block">
-            <span className="flex items-baseline justify-between text-sm text-ink-dim">
-              <span>押す力(降伏荷重に対する割合)</span>
-              <span className="num text-xl font-bold text-ink">{pct(s)}</span>
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={loadMax}
-              step={0.001}
-              value={s}
-              onChange={(e) => {
-                setPlaying(false);
-                setLoad(Number(e.target.value));
-              }}
-              style={{ ['--thumb' as string]: C.comp }}
-              aria-label="押す力"
-            />
-          </label>
-        </div>
-
-        <LoadGraph ideal={ideal} real={real} vIdeal={vIdeal} vReal={vReal} />
-      </section>
-
-      <aside className="space-y-4">
-        <div className="rounded-xl border border-studio-600 bg-studio-900 p-4">
-          <h3 className="text-base font-bold">条件を変える</h3>
-          <Slider
-            label="細長比パラメータ"
-            symbol="\bar{\lambda}"
-            hint="「降伏」と「座屈」の勝負指標。1 より大きいと座屈が先"
-            value={lambda}
-            min={0.2}
-            max={2}
-            step={0.05}
-            show={lambda.toFixed(2)}
-            color={C.gold}
-            onChange={(v) => changeParam(() => setLambda(v))}
-          />
-          <Slider
-            label="残留応力"
-            symbol="\sigma_{rc}"
-            hint="溶接で閉じ込められた力。押す前から履いている下駄"
-            value={resid}
-            min={0}
-            max={0.4}
-            step={0.05}
-            show={`${pct(resid)} σy`}
-            color={C.yield}
-            onChange={(v) => changeParam(() => setResid(v))}
-          />
-          <Slider
-            label="初期たわみ"
-            symbol="v_0"
-            hint="作ったときからある、わずかな曲がり"
-            value={impIdx}
-            min={0}
-            max={IMP_CHOICES.length - 1}
-            step={1}
-            show={IMP_CHOICES[impIdx] ? `L/${IMP_CHOICES[impIdx]}` : 'なし'}
-            color={C.tens}
-            onChange={(v) => changeParam(() => setImpIdx(v))}
-          />
-        </div>
-
-        <div className="rounded-xl border border-studio-600 bg-studio-900 p-4">
-          <h3 className="text-base font-bold">この条件での結果</h3>
-          <dl className="mt-2 space-y-2">
-            <ResultRow label="竹(理論値)" value={ideal.Pu} color={C.ideal} />
-            <ResultRow label="現実の鋼" value={real.Pu} color={C.real} />
-          </dl>
-          <p className="mt-3 text-base">
-            現実の鋼は理論値の{' '}
-            <strong className="num text-2xl text-gold">{pct(real.Pu / ideal.Pu)}</strong>{' '}
-            で限界。
-          </p>
-          <p className="mt-2 text-sm text-ink-dim">
-            参考: 道路橋示方書(平成24年版まで)の設計曲線は{' '}
-            <span className="num text-ink">{pct(dohshiOld(lambda))}</span>
-            。設計曲線は、多くの実験・解析の下側に引いた線です。
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-studio-600 bg-studio-900 p-4">
-          <h3 className="text-base font-bold">ドミノ倒しの式</h3>
-          <div className="mt-2 overflow-x-auto text-lg">
-            <Tex block>{String.raw`P_{cr} \approx \dfrac{\pi^2 E\, I_e}{L^2}`}</Tex>
-          </div>
-          <p className="text-sm text-ink-dim">
-            降伏した(赤い)部分はもう踏ん張れない。残った健全な部分の{' '}
-            <Tex>{'I_e'}</Tex>(断面の踏ん張りやすさ)だけで支えるので、赤が広がるほど限界が下がる。
-            下がった限界に押す力が追いつくと、一気に曲がる。
-          </p>
-        </div>
-
-        <p className="px-1 text-xs leading-relaxed text-ink-dim">
-          計算の前提: 両端ピン。断面は溶接 H 形鋼を弱軸まわりに曲げたときのフランジ(幅方向に 61 本の繊維)。
-          完全弾塑性、E = 2.0×10⁵ N/mm²、σy = 355 N/mm²。残留応力は先端が圧縮・溶接部が引張の直線分布。
-          たわみは正弦波の形とし、柱の中央の断面で力のつり合いを解く。柱の色は中央の断面の状態から求めた表示用の近似。たわみは {AMP} 倍に誇張。
-        </p>
-      </aside>
-    </div>
-  );
-}
-
-function fracYielded(v: ColumnView): number {
-  let n = 0;
-  for (const y of v.step.yl) if (y) n++;
-  return n / v.step.yl.length;
-}
-
-/* ---------- ナレーション ---------- */
-
-function Narration(props: {
-  s: number;
-  real: ColumnPath;
-  vReal: ColumnView;
-  vIdeal: ColumnView;
-  yieldedFrac: number;
-  idealLimit: number;
-}) {
-  const { s, real, vReal, vIdeal, yieldedFrac, idealLimit } = props;
-  let head: string;
-  let body: string;
-  let tone = C.comp;
-  if (s <= 0.001) {
-    head = '同じ太さ・同じ長さの2本を、同じ力で押します';
-    body =
-      '左は不整のない理想の柱「竹」。右は現実の鋼の柱。鋼は押す前から、断面の先端に圧縮の力(残留応力)が閉じ込められ、ほんの少し曲がっています。下の断面図の点線がその「下駄」です。';
-  } else if (vIdeal.collapsed) {
-    head = '竹も限界。理論値どおりの座屈です';
-    body = `理想の柱は理論値(降伏荷重の ${pct(idealLimit)})まで耐えました。現実の鋼はその ${pct(
-      real.Pu / idealLimit,
-    )} で先に限界。この差が、設計曲線が理論の線より下に引かれる理由です。`;
-    tone = C.gold;
-  } else if (vReal.collapsed) {
-    head = `鋼が先に座屈しました(降伏荷重の ${pct(real.Pu)})`;
-    body =
-      '赤い部分が広がって踏ん張りが落ち、曲がりが曲がりを呼ぶドミノ倒しになりました。竹はまだまっすぐ耐えています。';
-    tone = C.yield;
-  } else if (yieldedFrac > 0) {
-    head = `平均の応力はまだ降伏の ${pct(s)}。なのに、先端が赤く降伏`;
-    body = `下駄(残留応力)と曲げの分が足され、断面の ${pct(
-      yieldedFrac,
-    )} が先に降伏しました。赤い部分はもう踏ん張れません。踏ん張りやすさは元の ${pct(
-      vReal.step.ieRatio,
-    )} に。スローやコマ送りで赤の広がりを追ってください。`;
-    tone = C.yield;
-  } else {
-    head = 'まだ2本とも弾性。ただし鋼の断面は不公平';
-    body =
-      '竹は断面のどこも同じ応力。鋼は先端だけ、下駄の分と曲げの分が上乗せされて、降伏の線(金色)に早く近づいています。';
-  }
-  return (
-    <div
-      className="rounded-xl border-l-4 bg-studio-800/80 px-4 py-3"
-      style={{ borderColor: tone }}
-      aria-live="polite"
-    >
-      <p className="text-xs font-bold tracking-widest text-ink-dim">STAGE 3 — いま起きていること</p>
-      <p className="mt-1 text-lg font-bold leading-snug sm:text-xl">{head}</p>
-      <p className="mt-1 text-sm leading-relaxed text-ink-dim sm:text-base">{body}</p>
-    </div>
-  );
-}
-
-/* ---------- 柱と断面 ---------- */
-
-function ColumnCard(props: {
-  title: string;
-  sub: string;
-  accent: string;
-  path: ColumnPath;
-  view: ColumnView;
-}) {
-  const { title, sub, accent, path, view } = props;
-  const st = view.step;
-  const total = (path.v0 + st.v) / path.L;
-  const limit = Math.min(1, path.Pe * st.ieRatio);
-  const buckled = view.collapsed;
-  return (
-    <div
-      className={`min-w-0 rounded-xl border bg-studio-900 p-2 sm:p-3 ${
-        buckled ? 'border-yield' : 'border-studio-600'
-      }`}
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-lg font-bold" style={{ color: accent }}>
-          {title}
-        </h3>
-        {buckled && <span className="flash-yield rounded bg-yield px-2 py-0.5 text-xs font-bold text-white">座屈</span>}
-      </div>
-      <p className="text-xs text-ink-dim">{sub}</p>
-      <ColumnFigure path={path} view={view} />
-      <p className="mt-1 text-xs text-ink-dim">断面の応力(中央で輪切り。上=圧縮)</p>
-      <SectionChart path={path} view={view} />
-      <div className="mt-2 space-y-2">
-        <Gauge
-          label="いまの荷重"
-          value={st.P}
-          color={C.comp}
-          marker={limit}
-          markerLabel="いまの踏ん張りでの座屈限界"
-        />
-        <Gauge label="踏ん張り Ie/I" value={st.ieRatio} color={st.ieRatio < 0.999 ? C.yield : C.ideal} />
-        <p className="num text-xs text-ink-dim">
-          中央のたわみ {total < 1e-5 ? 'ほぼ 0' : `L/${Math.round(1 / total).toLocaleString()}`}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function ColumnFigure({ path, view }: { path: ColumnPath; view: ColumnView }) {
-  const W = 160;
-  const top = 46;
-  const H = 230;
-  const cx = W / 2;
-  const NX = 26;
-  const NZ = 9;
-  const st = view.step;
-  const thick = Math.max(6, Math.min(64, H / path.L));
-  const total = (path.v0 + st.v) / path.L;
-  const dMax = Math.min(0.3 * H, AMP * total * H);
-  const xAt = (xi: number) => cx + dMax * Math.sin(Math.PI * xi);
-  const n = path.z.length;
-  const cells = [];
-  for (let j = 0; j < NX; j++) {
-    const x0 = j / NX;
-    const x1 = (j + 1) / NX;
-    const sn = Math.sin(Math.PI * (j + 0.5) / NX);
-    for (let k = 0; k < NZ; k++) {
-      const z = (k + 0.5) / NZ - 0.5;
-      const fi = Math.min(n - 1, Math.floor((z + 0.5) * n));
-      // 中央から離れた断面: 軸力 P と曲げ P·(v0+v)·sin から弾性で見積もり、±σy で頭打ち
-      const est = Math.max(-1, Math.min(1, st.P * (1 + 12 * (path.v0 + st.v) * sn * z) + path.sigR[fi]));
-      // 中央の近くは解いた値(塑性の履歴を含む)へなめらかに寄せる
-      const t = Math.max(0, Math.min(1, (sn - 0.8) / 0.19));
-      const wt = t * t * (3 - 2 * t);
-      const sg = est + (st.sig[fi] - est) * wt;
-      // z>0 が曲がりの内側(左)
-      const a = -(k / NZ - 0.5) * thick;
-      const b = -((k + 1) / NZ - 0.5) * thick;
-      const y0 = top + x0 * H;
-      const y1 = top + x1 * H;
-      cells.push(
-        <polygon
-          key={`${j}-${k}`}
-          points={`${xAt(x0) + a},${y0} ${xAt(x0) + b},${y0} ${xAt(x1) + b},${y1 + 0.4} ${xAt(x1) + a},${y1 + 0.4}`}
-          fill={stressColor(sg)}
-        />,
-      );
-    }
-  }
-  const arrow = 10 + 26 * Math.min(1.1, st.P);
-  return (
-    <svg viewBox={`0 0 ${W} 300`} className="mx-auto block w-full max-w-[220px]" role="img" aria-label="柱の変形と応力">
-      {/* 荷重の矢印 */}
-      <line x1={cx} y1={top - 8 - arrow} x2={cx} y2={top - 10} stroke={C.ink} strokeWidth={3} />
-      <polygon points={`${cx - 6},${top - 12} ${cx + 6},${top - 12} ${cx},${top - 3}`} fill={C.ink} />
-      <text x={cx + 10} y={top - 16} fill={C.ink} fontSize={13} className="num">
-        P = {pct(st.P)}
-      </text>
-      {/* まっすぐの位置 */}
-      <line x1={cx} y1={top} x2={cx} y2={top + H} stroke={C.dim} strokeWidth={0.6} strokeDasharray="3 4" />
-      {cells}
-      {/* 輪切りの位置 */}
-      <line
-        x1={xAt(0.5) - thick / 2 - 8}
-        y1={top + H / 2}
-        x2={xAt(0.5) + thick / 2 + 8}
-        y2={top + H / 2}
-        stroke={C.gold}
-        strokeWidth={1.2}
-        strokeDasharray="2 2"
-      />
-      {/* 支点(下: ピン、上: ピン+ローラー) */}
-      <circle cx={cx} cy={top} r={3.5} fill="#0a1224" stroke={C.ink} strokeWidth={1.2} />
-      <polygon points={`${cx},${top + H} ${cx - 12},${top + H + 16} ${cx + 12},${top + H + 16}`} fill="none" stroke={C.ink} strokeWidth={1.4} />
-      <circle cx={cx} cy={top + H} r={3.5} fill="#0a1224" stroke={C.ink} strokeWidth={1.2} />
-      <line x1={cx - 22} y1={top + H + 17} x2={cx + 22} y2={top + H + 17} stroke={C.ink} strokeWidth={1.4} />
-    </svg>
-  );
-}
-
-function SectionChart({ path, view }: { path: ColumnPath; view: ColumnView }) {
-  const narrow = useNarrow();
-  const W = narrow ? 170 : 300;
-  const Hh = narrow ? 148 : 174;
-  const x0 = narrow ? 4 : 12;
-  const x1 = W - x0;
-  const y0 = narrow ? 76 : 92; // 応力 0
-  const sc = narrow ? 52 : 62; // σy あたりの高さ
-  const n = path.z.length;
-  const bw = (x1 - x0) / n;
-  const st = view.step;
-  const X = (z: number) => (x0 + x1) / 2 - z * (x1 - x0); // z>0(内側)を左に
-  const bars = [];
-  for (let i = 0; i < n; i++) {
-    const sg = st.sig[i];
-    const h = Math.abs(sg) * sc;
-    bars.push(
-      <rect
-        key={i}
-        x={X(path.z[i]) - bw / 2}
-        y={sg >= 0 ? y0 - h : y0}
-        width={bw + 0.3}
-        height={Math.max(0.5, h)}
-        fill={stressColor(sg)}
-        className={st.yl[i] ? 'flash-yield' : undefined}
-      />,
-    );
-  }
-  const resid = Array.from(path.z, (z, i) => `${X(z)},${y0 - path.sigR[i] * sc}`).join(' ');
-  const hasResid = path.params.resid > 0;
-  return (
-    <svg viewBox={`0 0 ${W} ${Hh}`} className="block w-full" role="img" aria-label="断面の応力分布">
-      <line x1={x0} y1={y0 - sc} x2={x1} y2={y0 - sc} stroke={C.gold} strokeWidth={1.2} strokeDasharray="5 3" />
-      <text x={x0} y={y0 - sc - 5} fill={C.gold} fontSize={12}>
-        {narrow ? '降伏 σy' : '降伏 σy(ここで頭打ち)'}
-      </text>
-      {bars}
-      <line x1={x0} y1={y0} x2={x1} y2={y0} stroke={C.dim} strokeWidth={0.8} />
-      {hasResid && (
-        <polyline points={resid} fill="none" stroke={C.ink} strokeWidth={1.2} strokeDasharray="3 3" opacity={0.85} />
-      )}
-      {/* 平均応力 */}
-      <line x1={x0} y1={y0 - st.P * sc} x2={x1} y2={y0 - st.P * sc} stroke={C.ink} strokeWidth={0.8} opacity={0.6} />
-      <text x={x0} y={Hh - 4} fill={C.dim} fontSize={11}>
-        先端
-      </text>
-      <text x={(x0 + x1) / 2} y={Hh - 4} fill={C.dim} fontSize={11} textAnchor="middle">
-        {hasResid ? (narrow ? '溶接部' : '溶接部(点線=残留応力)') : '中央'}
-      </text>
-      <text x={x1} y={Hh - 4} fill={C.dim} fontSize={11} textAnchor="end">
-        先端
-      </text>
-    </svg>
-  );
-}
-
-function Gauge(props: { label: string; value: number; color: string; marker?: number; markerLabel?: string }) {
-  const { label, value, color, marker, markerLabel } = props;
-  const w = Math.max(0, Math.min(1, value)) * 100;
-  return (
-    <div>
-      <div className="flex items-baseline justify-between text-xs text-ink-dim">
-        <span>{label}</span>
-        <span className="num text-sm font-bold text-ink">{pct(value)}</span>
-      </div>
-      <div className="relative mt-1 h-3 rounded-full bg-studio-700">
-        <div className="h-3 rounded-full" style={{ width: `${w}%`, background: color }} />
-        {marker !== undefined && (
-          <div
-            className="absolute -top-1 h-5 w-0.5 bg-gold"
-            style={{ left: `${Math.max(0, Math.min(1, marker)) * 100}%` }}
-            title={markerLabel}
-          />
-        )}
-      </div>
-      {markerLabel && (
-        <p className="mt-0.5 text-[11px] text-gold">
-          ┃ {markerLabel} <span className="num">{pct(marker ?? 0)}</span>
-        </p>
-      )}
-    </div>
-  );
-}
-
-/* ---------- 荷重とたわみのグラフ ---------- */
-
-function LoadGraph(props: { ideal: ColumnPath; real: ColumnPath; vIdeal: ColumnView; vReal: ColumnView }) {
-  const { ideal, real, vIdeal, vReal } = props;
+function LoadGraph(props: { ideal: ColumnPath; real: ColumnPath; s: number }) {
+  const { ideal, real, s } = props;
   const narrow = useNarrow();
   const W = narrow ? 360 : 640;
-  const Hh = narrow ? 250 : 260;
+  const Hh = narrow ? 240 : 250;
   const m = { l: 42, r: 8, t: 16, b: 36 };
   const xMax = 1 / 40;
   const yMax = Math.max(1.1, Math.min(1.3, ideal.Pu + 0.15));
@@ -535,65 +586,60 @@ function LoadGraph(props: { ideal: ColumnPath; real: ColumnPath; vIdeal: ColumnV
   const Y = (p: number) => Hh - m.b - (p / yMax) * (Hh - m.t - m.b);
   const line = (path: ColumnPath) => {
     const pts: string[] = [];
-    for (const s of path.steps) {
-      const d = (path.v0 + s.v) / path.L;
+    for (const st of path.steps) {
+      const d = (path.v0 + st.v) / path.L;
       if (d > xMax) break;
-      pts.push(`${X(d).toFixed(1)},${Y(s.P).toFixed(1)}`);
+      pts.push(`${X(d).toFixed(1)},${Y(st.P).toFixed(1)}`);
     }
     return pts.join(' ');
   };
-  const dot = (path: ColumnPath, v: ColumnView, color: string) => {
-    const d = (path.v0 + v.step.v) / path.L;
-    return (
-      <circle cx={X(d)} cy={Y(v.step.P)} r={6} fill={color} stroke="#0a1224" strokeWidth={2} />
-    );
+  const dot = (path: ColumnPath, color: string) => {
+    const st = viewAtLoad(path, s).step;
+    return <circle cx={X((path.v0 + st.v) / path.L)} cy={Y(st.P)} r={6} fill={color} stroke="#0a1224" strokeWidth={2} />;
   };
-  const yTicks = [0, 0.25, 0.5, 0.75, 1];
   return (
-    <div className="rounded-xl border border-studio-600 bg-studio-900 p-3">
+    <div className="rounded-2xl border border-studio-600 bg-studio-900 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4">
         <h3 className="text-base font-bold">押す力と、たわみ</h3>
         <p className="text-sm">
-          <span style={{ color: C.ideal }}>● 竹</span>
-          <span className="ml-3" style={{ color: C.real }}>
-            ● 現実の鋼
+          <span style={{ color: '#86efac' }}>● 理想の柱</span>
+          <span className="ml-3" style={{ color: '#e2e8f0' }}>
+            ● 現実の柱
           </span>
         </p>
       </div>
       <svg viewBox={`0 0 ${W} ${Hh}`} className="mt-1 block w-full" role="img" aria-label="荷重とたわみの関係">
-        {yTicks.map((t) => (
+        {[0, 0.25, 0.5, 0.75, 1].map((t) => (
           <g key={t}>
             <line x1={m.l} y1={Y(t)} x2={W - m.r} y2={Y(t)} stroke="#1b2a4d" strokeWidth={1} />
-            <text x={m.l - 6} y={Y(t) + 4} fill={C.dim} fontSize={12} textAnchor="end" className="num">
+            <text x={m.l - 6} y={Y(t) + 4} fill="#9fb0d0" fontSize={12} textAnchor="end" className="num">
               {Math.round(t * 100)}%
             </text>
           </g>
         ))}
-        <line x1={m.l} y1={Y(1)} x2={W - m.r} y2={Y(1)} stroke={C.yield} strokeWidth={1.2} strokeDasharray="6 4" />
-        <text x={W - m.r - 4} y={Y(1) - 5} fill={C.yield} fontSize={12} textAnchor="end">
+        <line x1={m.l} y1={Y(1)} x2={W - m.r} y2={Y(1)} stroke="#ff1f4b" strokeWidth={1.2} strokeDasharray="6 4" />
+        <text x={W - m.r - 4} y={Y(1) - 5} fill="#ff1f4b" fontSize={12} textAnchor="end">
           {narrow ? '降伏荷重 Py' : '降伏荷重 Py(全断面が降伏)'}
         </text>
         {ideal.Pe < yMax && Math.abs(ideal.Pe - 1) > 0.06 && (
           <>
-            <line x1={m.l} y1={Y(ideal.Pe)} x2={W - m.r} y2={Y(ideal.Pe)} stroke={C.gold} strokeWidth={1.2} strokeDasharray="6 4" />
-            <text x={W - m.r - 4} y={Y(ideal.Pe) - 5} fill={C.gold} fontSize={12} textAnchor="end">
+            <line x1={m.l} y1={Y(ideal.Pe)} x2={W - m.r} y2={Y(ideal.Pe)} stroke="#fbbf24" strokeWidth={1.2} strokeDasharray="6 4" />
+            <text x={W - m.r - 4} y={Y(ideal.Pe) - 5} fill="#fbbf24" fontSize={12} textAnchor="end">
               {narrow ? 'オイラー荷重 Pe' : 'オイラー荷重 Pe(弾性の理論値)'}
             </text>
           </>
         )}
-        <polyline points={line(ideal)} fill="none" stroke={C.ideal} strokeWidth={2.2} opacity={0.9} />
-        <polyline points={line(real)} fill="none" stroke={C.real} strokeWidth={2.2} />
-        {dot(ideal, vIdeal, C.ideal)}
-        {dot(real, vReal, C.real)}
-        <text x={(W + m.l) / 2} y={Hh - 8} fill={C.dim} fontSize={12} textAnchor="middle">
+        <polyline points={line(ideal)} fill="none" stroke="#86efac" strokeWidth={2.2} opacity={0.9} />
+        <polyline points={line(real)} fill="none" stroke="#e2e8f0" strokeWidth={2.2} />
+        {dot(ideal, '#86efac')}
+        {dot(real, '#e2e8f0')}
+        <text x={(W + m.l) / 2} y={Hh - 8} fill="#9fb0d0" fontSize={12} textAnchor="middle">
           {narrow ? '中央のたわみ → 右端で L/40' : '中央のたわみ(柱の長さ L に対する割合)→ 右端で L/40'}
         </text>
       </svg>
     </div>
   );
 }
-
-/* ---------- 操作部品 ---------- */
 
 function Slider(props: {
   label: string;

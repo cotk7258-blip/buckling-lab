@@ -12,13 +12,13 @@ const STAGES = [
 export default function App() {
   const [stage, setStage] = useState(3);
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-16">
-      <header className="pt-5 pb-3">
+    <div className="mx-auto max-w-7xl px-3 pb-12 sm:px-4">
+      <header className="pt-3 pb-2">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-2xl font-bold tracking-wide">座屈ラボ</h1>
+          <h1 className="text-xl font-bold tracking-wide">座屈ラボ</h1>
           <p className="text-sm text-ink-dim">柱はなぜ、理論より早く折れるのか</p>
         </div>
-        <nav className="mt-3 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1" aria-label="ステージ">
+        <nav className="mt-2 -mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1" aria-label="ステージ">
           {STAGES.map((s) => {
             const on = s.no === stage;
             return (
@@ -26,14 +26,14 @@ export default function App() {
                 key={s.no}
                 onClick={() => setStage(s.no)}
                 aria-current={on ? 'page' : undefined}
-                className={`shrink-0 rounded-lg border px-3 py-2 text-left transition-colors ${
+                className={`shrink-0 rounded-lg border px-2.5 py-1 text-left transition-colors ${
                   on
                     ? 'border-comp bg-studio-700 text-ink'
                     : 'border-studio-600 bg-studio-900 text-ink-dim hover:border-ink-dim'
                 }`}
               >
-                <span className="block text-xs opacity-70">STAGE {s.no}</span>
-                <span className="block text-base font-bold">{s.title}</span>
+                <span className="text-[10px] opacity-70">{s.no} </span>
+                <span className="text-sm font-bold">{s.title}</span>
               </button>
             );
           })}

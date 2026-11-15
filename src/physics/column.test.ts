@@ -6,12 +6,14 @@ const E_FY = 200000 / 355;
 
 test('弾性のうちは P = Pe·v/(v0+v) に一致する', () => {
   const p = solveColumn({ lambda: 1.5, resid: 0, imp: 1 / 1000, eOverFy: E_FY });
+  let checked = 0;
   for (const s of p.steps.slice(1)) {
-    if (s.yl.some((y) => y !== 0)) break;
+    if (s.yieldFrac > 0) break;
     const exact = (p.Pe * s.v) / (p.v0 + s.v);
-    // 繊維61本の離散化で I が (1-1/n²) 倍になる分の差を許す
-    assert.ok(Math.abs(s.P - exact) < 5e-4 * exact + 1e-9, `v=${s.v} P=${s.P} exact=${exact}`);
+    assert.ok(Math.abs(s.P - exact) < 1e-9 + 1e-7 * exact, `v=${s.v} P=${s.P} exact=${exact}`);
+    checked++;
   }
+  assert.ok(checked > 100);
 });
 
 test('理想の柱(不整なし)は min(Py, Pe) に届く', () => {
@@ -26,32 +28,43 @@ test('理想の柱(不整なし)は min(Py, Pe) に届く', () => {
 test('初期たわみだけの柱は、縁が降伏する荷重(ペリー・ロバートソン)より強く、理想より弱い', () => {
   for (const lam of [0.5, 0.9, 1.3, 1.8]) {
     const p = solveColumn({ lambda: lam, resid: 0, imp: 1 / 1000, eOverFy: E_FY });
-    const eta = (6 * p.v0); // v0·c/r² = 6·v0/b
+    const eta = (p.v0 * 0.5) / p.r2; // v0·c/r²
     const pe = p.Pe;
     const a = (1 + (1 + eta) * pe) / 2;
     const firstYield = a - Math.sqrt(a * a - pe);
     assert.ok(p.Pu >= firstYield - 1e-4, `λ=${lam} Pu=${p.Pu} PR=${firstYield}`);
+    assert.ok(Math.abs(p.Pfy - firstYield) < 0.02, `λ=${lam} Pfy=${p.Pfy} PR=${firstYield}`);
     assert.ok(p.Pu < Math.min(1, pe), `λ=${lam}`);
   }
 });
 
-test('残留応力だけの柱は接線係数荷重に近い', () => {
-  // 先端から降伏が進み、弾性の芯の幅の割合 u のとき
-  // 平均応力 = 1 - σrc·u²、接線係数荷重 = Pe·u³
+test('残留応力だけの柱は接線係数荷重か、それより少し上で最大になる', () => {
   const resid = 0.3;
   for (const lam of [0.7, 0.9, 1.1]) {
-    const pe = 1 / (lam * lam);
+    const p = solveColumn({ lambda: lam, resid, imp: 0, eOverFy: E_FY, nFlange: 201, nWeb: 61 });
+    // まっすぐ押したとき、平均応力 P(e) と弾性の芯の Ie(e) を求め、P = Pe·Ie/I になる荷重を探す
+    const n = p.z.length;
+    const at = (e: number) => {
+      let P = 0;
+      let ie = 0;
+      for (let i = 0; i < n; i++) {
+        const s = Math.min(1, e + p.sigR[i]);
+        P += s * p.w[i];
+        if (s < 1) ie += p.w[i] * p.z[i] * p.z[i];
+      }
+      return { P, limit: (p.Pe * ie) / p.r2 };
+    };
     let lo = 0;
-    let hi = 1;
+    let hi = 2;
     for (let i = 0; i < 80; i++) {
-      const u = (lo + hi) / 2;
-      if (1 - resid * u * u > pe * u * u * u) lo = u;
-      else hi = u;
+      const m = (lo + hi) / 2;
+      const r = at(m);
+      if (r.P < r.limit) lo = m;
+      else hi = m;
     }
-    const u = (lo + hi) / 2;
-    const pt = Math.min(pe * u * u * u, pe, 1);
-    const p = solveColumn({ lambda: lam, resid, imp: 0, eOverFy: E_FY, nFib: 201 });
-    assert.ok(Math.abs(p.Pu - pt) < 0.03, `λ=${lam} Pu=${p.Pu} Pt=${pt}`);
+    const pt = at(lo).P;
+    // シャンリーの理論: 曲がり始めは接線係数荷重、そこから少し上がって最大になる
+    assert.ok(p.Pu > pt - 0.01 && p.Pu < pt + 0.06, `λ=${lam} Pu=${p.Pu} Pt=${pt}`);
   }
 });
 
@@ -61,6 +74,28 @@ test('不整を大きくすると強度は下がる', () => {
   const b = solveColumn({ ...base, resid: 0.3, imp: 1 / 1000 }).Pu;
   const c = solveColumn({ ...base, resid: 0.3, imp: 1 / 500 }).Pu;
   assert.ok(a > b && b > c, `${a} ${b} ${c}`);
+});
+
+test('どの断面でも、応力の合力は軸力 P と曲げ P·(v0+v)·sin につり合う', () => {
+  for (const lam of [0.4, 0.9, 1.6]) {
+    const p = solveColumn({ lambda: lam, resid: 0.3, imp: 1 / 1000, eOverFy: E_FY });
+    const n = p.z.length;
+    const last = Math.min(p.steps.length - 1, p.peak + 40);
+    for (let k = 1; k <= last; k += 7) {
+      const s = p.steps[k];
+      for (let j = 0; j < p.ns; j++) {
+        let N = 0;
+        let M = 0;
+        for (let i = 0; i < n; i++) {
+          N += s.sigS[j * n + i] * p.w[i];
+          M += s.sigS[j * n + i] * p.w[i] * p.z[i];
+        }
+        const sn = Math.sin((Math.PI * j) / (2 * (p.ns - 1)));
+        assert.ok(Math.abs(N - s.P) < 2e-4, `λ=${lam} k=${k} j=${j} N=${N} P=${s.P}`);
+        assert.ok(Math.abs(M - s.P * (p.v0 + s.v) * sn) < 2e-4, `λ=${lam} k=${k} j=${j} M=${M}`);
+      }
+    }
+  }
 });
 
 test('荷重から状態を引ける', () => {
