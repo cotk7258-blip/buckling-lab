@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Formulas from './stages/Formulas.tsx';
 import Stage1 from './stages/Stage1.tsx';
 import Stage2 from './stages/Stage2.tsx';
 import Stage3 from './stages/Stage3.tsx';
@@ -7,6 +8,7 @@ import Stage5 from './stages/Stage5.tsx';
 import Stage6 from './stages/Stage6.tsx';
 
 const STAGES = [
+  { no: 0, title: '式と Q&A', sub: '導出・質問と回答' },
   { no: 1, title: '曲げとテコ', sub: 'なぜ H形なのか' },
   { no: 2, title: 'オイラー座屈', sub: '突然曲がる理由' },
   { no: 3, title: '理想と現実', sub: '理論より早い理由' },
@@ -16,13 +18,17 @@ const STAGES = [
 ];
 
 export default function App() {
-  const [stage, setStage] = useState(1);
+  const [stage, setStage] = useState(0);
+  const open = (n: number) => {
+    setStage(n);
+    window.scrollTo({ top: 0 });
+  };
   return (
     <div className="mx-auto max-w-7xl px-3 pb-12 sm:px-4">
       <header className="pt-3 pb-2">
         <div className="flex flex-wrap items-baseline gap-x-3">
           <h1 className="whitespace-nowrap text-xl font-bold tracking-wide">座屈ラボ</h1>
-          <p className="text-xs text-ink-dim sm:text-sm">柱はなぜ曲がるのか。点線の言葉を押すと、説明が出ます</p>
+          <p className="text-xs text-ink-dim sm:text-sm">座屈の式の導出と質疑回答。映像でしくみも確かめられます</p>
         </div>
         <nav className="mt-2 -mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1" aria-label="ステージ">
           {STAGES.map((s) => {
@@ -39,7 +45,7 @@ export default function App() {
                 }`}
               >
                 <span className="block text-[15px] font-bold leading-tight">
-                  <span className="mr-1 text-xs opacity-60">{s.no}</span>
+                  <span className="mr-1 text-xs opacity-60">{s.no === 0 ? '' : `映像${s.no}`}</span>
                   {s.title}
                 </span>
                 <span className="block text-[11px] leading-tight opacity-70">{s.sub}</span>
@@ -48,7 +54,9 @@ export default function App() {
           })}
         </nav>
       </header>
-      {stage === 1 ? (
+      {stage === 0 ? (
+        <Formulas onStage={open} />
+      ) : stage === 1 ? (
         <Stage1 />
       ) : stage === 2 ? (
         <Stage2 />

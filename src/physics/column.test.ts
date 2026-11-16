@@ -194,3 +194,38 @@ test('軸力と曲げを受ける柱: 安全率を掛けると、ちょうど限
   // 増幅を入れた相関曲線は、直線より内側
   for (let n = 0.05; n < 0.6; n += 0.05) assert.ok(b.momentCapacity(n, 0.6, 1.2) < 1 - n / 0.6);
 });
+
+test('許容応力度の形の照査: 式どうしのつながりと、手計算との照合', async () => {
+  const c = await import('./check.ts');
+  // R の式の係数: k = 0.43、ν = 0.3、E = 2.06×10⁵、σy = 205 で √{12(1−ν²)σy/(kπ²E)} ≒ 0.0506
+  assert.ok(Math.abs(c.paramR(1, 1, 0.43, 206000, 205) - 0.0506) < 1e-4);
+  // R = 1 になる幅厚比: 自由突出板 約 19.8、両縁支持板 約 60
+  assert.ok(Math.abs(1 / c.paramR(1, 1, 0.43, 206000, 205) - 19.8) < 0.1);
+  assert.ok(Math.abs(1 / c.paramR(1, 1, 4, 206000, 205) - 60.3) < 0.2);
+  // λ の式の係数: √(σy/E)/π ≒ 0.01004
+  assert.ok(Math.abs(c.paramLambda(1, 206000, 205) - 0.01004) < 1e-5);
+  // R > 0.7 では σcl = 0.5·σel(σy が打ち消し合う)
+  const R = 1.5;
+  assert.ok(Math.abs(205 * c.localRatio(R) - 0.5 * (205 / (R * R))) < 1e-9);
+  assert.ok(Math.abs(c.localRatio(1.5) - 0.2222) < 1e-4);
+  // 区分式の境目
+  assert.ok(Math.abs(c.globalRatio(0.2) - 1) < 1e-9);
+  assert.ok(Math.abs(c.globalRatio(1) - 1 / 1.773) < 1e-3);
+  assert.ok(Math.abs(c.globalRatio(0.889) - 0.6245) < 1e-3);
+  // 説明用の仮定値: σy 250、σcg 200、σcl 150 → σcz = 200 × 150/250 = 120
+  const sy = 250;
+  const E = 200000;
+  const slender = (((1.109 - 0.8) / 0.545) * Math.PI) / Math.sqrt(sy / E); // σcg/σy = 0.8 になる細長比
+  const t = 10;
+  const b = t / c.paramR(1, 1, 0.43, E, sy) * Math.sqrt(0.5 / 0.6); // σcl/σy = 0.6 になる幅
+  const r = c.check({ sy, E, nu: 0.3, b, t, k: 0.43, slenderY: 20, slenderZ: slender, sc: 60, sbcy: 30, sbcz: 20, sbgy: 200 });
+  assert.ok(Math.abs(r.scg - 200) < 1e-6 && Math.abs(r.scl - 150) < 1e-6 && Math.abs(r.scz - 120) < 1e-6);
+  assert.ok(Math.abs(r.sfGlobal - 2) < 1e-9);
+  // 使用割合: 各項の和、α = 1 − σc/(0.8σe)、安全率 = 1/U
+  assert.ok(Math.abs(r.alphaZ - (1 - 60 / (0.8 * r.sez))) < 1e-12);
+  assert.ok(Math.abs(r.U - (60 / 120 + 30 / (200 * r.alphaY) + 20 / (250 * r.alphaZ))) < 1e-12);
+  assert.ok(Math.abs(r.sfCombined * r.U - 1) < 1e-12);
+  // σc が 0.8σe 以上なら適用範囲外
+  const bad = c.check({ sy, E, nu: 0.3, b, t, k: 0.43, slenderY: 20, slenderZ: 200, sc: 60, sbcy: 30, sbcz: 20, sbgy: 200 });
+  assert.equal(bad.valid, false);
+});
