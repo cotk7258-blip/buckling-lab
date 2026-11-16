@@ -174,25 +174,34 @@ test('板: 有効幅を見込んだ強さは、理論値と降伏の間にあり
   assert.equal(p.plateState(1.0, 0.5), 'ultimate');
 });
 
-test('軸力と曲げを受ける柱: 安全率を掛けると、ちょうど限界になる', async () => {
+test('複合座屈(映像用の無次元の形): check.ts と同じ式で、限界の線・安全率がつじつまが合う', async () => {
   const b = await import('./beamcolumn.ts');
+  const c = await import('./check.ts');
+  // α = 1 − σc/(0.8σe): 軸力が 0.8σe の半分なら 0.5
+  assert.ok(Math.abs(b.alpha(0.4, 1) - 0.5) < 1e-12);
+  // 限界の線の上では U = 1
+  for (const n of [0.05, 0.2, 0.35]) assert.ok(Math.abs(b.usage(n, b.momentLimit(n, 0.5, 1.2), 0.5, 1.2) - 1) < 1e-9);
+  // 荷重を同じ割合で増やす倍率を掛けると U = 1
   for (const [n, m, pu, pe] of [
     [0.25, 0.25, 0.673, 1.5625],
     [0.1, 0.6, 0.4, 0.5],
-    [0.3, 0.05, 0.336, 1.5625],
     [0.02, 0.3, 0.9, 6],
   ]) {
-    const g = b.safetyFactor(n, m, pu, pe);
-    assert.ok(Math.abs(b.interaction(g * n, g * m, pu, pe) - 1) < 1e-9, `γ=${g}`);
-    assert.ok(g * n < pe && g * n <= pu + 1e-12);
+    const g = b.loadFactor(n, m, pu, pe);
+    assert.ok(Math.abs(b.usage(g * n, g * m, pu, pe) - 1) < 1e-9, `γ=${g}`);
+    // U < 1 のとき(余裕がある)は 1/U より小さく、U > 1 のときは 1/U より大きい(どちらも 1 に近い側)
+    const sf = b.safety(n, m, pu, pe);
+    assert.ok(sf >= 1 ? g <= sf + 1e-9 && g >= 1 : g >= sf - 1e-9 && g <= 1, `g=${g} 1/U=${sf}`);
   }
-  // 軸力だけなら 強さ ÷ 軸力、曲げだけなら 強さ ÷ 曲げ
-  assert.ok(Math.abs(b.safetyFactor(0.2, 0, 0.336, 1.5625) - 0.336 / 0.2) < 1e-9);
-  assert.ok(Math.abs(b.safetyFactor(0, 0.4, 0.5, 1) - 2.5) < 1e-9);
-  // 軸力がオイラー荷重の半分なら、曲げは2倍に増幅される
-  assert.ok(Math.abs(b.amplification(0.5, 1) - 2) < 1e-12);
-  // 増幅を入れた相関曲線は、直線より内側
-  for (let n = 0.05; n < 0.6; n += 0.05) assert.ok(b.momentCapacity(n, 0.6, 1.2) < 1 - n / 0.6);
+  // 曲げがなければ、安全率 = 許容値 ÷ 発生応力
+  assert.ok(Math.abs(b.safety(0.2, 0, 0.336, 1.5625) - 0.336 / 0.2) < 1e-9);
+  // check.ts の式(1方向の曲げ)と同じ値になる
+  const sy = 235;
+  const E = 200000;
+  const i = { sy, E, nu: 0.3, b: 100, t: 12, k: 0.43, slenderY: 10, slenderZ: 70, sc: 40, sbcy: 0, sbcz: 30, sbgy: sy };
+  const r = c.check(i);
+  const U = b.usage(i.sc / sy, i.sbcz / sy, r.scz / sy, r.sez / sy);
+  assert.ok(Math.abs(U - r.U) < 1e-9, `${U} ${r.U}`);
 });
 
 test('許容応力度の形の照査: 式どうしのつながりと、手計算との照合', async () => {

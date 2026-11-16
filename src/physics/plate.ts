@@ -6,8 +6,8 @@ export const NU = 0.3;
 export const K_PLATE = 4;
 
 /** 弾性座屈応力 σel (N/mm²)。b: 板幅、t: 板厚 */
-export function sigmaEl(b: number, t: number, k = K_PLATE): number {
-  return ((k * Math.PI ** 2 * E) / (12 * (1 - NU ** 2))) * (t / b) ** 2;
+export function sigmaEl(b: number, t: number, k = K_PLATE, e = E, nu = NU): number {
+  return ((k * Math.PI ** 2 * e) / (12 * (1 - nu ** 2))) * (t / b) ** 2;
 }
 
 /** 幅厚比パラメータ R = √(σy/σel) */

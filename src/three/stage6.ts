@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { dohshiOld } from '../physics/curves.ts';
-import { safetyFactor } from '../physics/beamcolumn.ts';
+import { alpha, loadFactor, momentLimit } from '../physics/beamcolumn.ts';
 import { plateStrength } from '../physics/plate.ts';
 import { SurfGrid } from './stage5.ts';
 import { ShowBase, arrow, label, line, placeArrow, ramp, setLine, tube } from './kit.ts';
@@ -250,10 +250,10 @@ export class Stage6Show extends ShowBase {
       this.probe.push(d);
     }
     this.loadLine = line('#ea580c');
-    this.loadTag = tag('かかる力', '#ea580c', 0.7);
+    this.loadTag = tag('発生応力', '#ea580c', 0.7);
     this.gGraph.add(this.loadLine, this.loadTag);
 
-    frame(this.gNM, '曲げ(横からの力)→', '軸力(軸力だけの強さ = 100%)', [[NX(0.5), '50%'], [NX(1), '100%']], [[NY(0.5), '50%'], [NY(1), '100%']]);
+    frame(this.gNM, '曲げ(横からの力)→', '軸力(許容値 σcz = 100%)', [[NX(0.5), '50%'], [NX(1), '100%']], [[NY(0.5), '50%'], [NY(1), '100%']]);
     this.pt = dotMesh('#1f2a44');
     this.hit = dotMesh('#6d28d9', 0.07);
     this.ray = line('#1f2a44');
@@ -293,7 +293,7 @@ export class Stage6Show extends ShowBase {
       return out;
     };
     this.cLin = tube(pts((n) => 1 - n / pu), 0.018, '#94a3b8', 0.3);
-    this.cAmp = tube(pts((n) => (1 - n / pu) * (1 - amp + amp * (1 - n / pe))), 0.034, '#6d28d9');
+    this.cAmp = tube(pts((n) => (1 - n / pu) * (1 - amp) + amp * momentLimit(n, pu, pe)), 0.034, '#6d28d9');
     this.cAmp.position.z = 0.03;
     this.gNM.add(this.cLin, this.cAmp);
   }
@@ -412,12 +412,12 @@ export class Stage6Show extends ShowBase {
           R = t < 12 ? 0.6 : t < 22 ? 0.6 + 0.4 * ramp(t, 12, 14) : 1.0 + 0.4 * ramp(t, 22, 24);
           this.caption =
             t < 5
-              ? '青の線 = 全体座屈だけで決めた柱の強さ(STAGE 4 の設計曲線)'
+              ? '青の線 = 局部座屈を考慮しない全体座屈応力 σcg(映像4 の設計曲線)'
               : t < 12
                 ? '板が厚い(R ≦ 0.7)と、局部座屈による低減はなし。2本の線は重なる'
                 : t < 22
-                  ? '板が薄い(R = 1.0)と、この設計式では × 0.5。線が丸ごと下がる'
-                  : 'もっと薄い(R = 1.4)と × 0.26。これが「局部座屈を考慮した強さ」';
+                  ? '板が薄い(R = 1.0)と、σcl/σy = 0.5 を掛ける。線が丸ごと下がる'
+                  : 'もっと薄い(R = 1.4)と × 0.26。これが全体座屈の許容値 σcz';
           for (const d of this.probe) d.visible = false;
         } else {
           // 軸力だけの照査と安全率: 例の柱(λ̄ = 0.8、R = 1.0)
@@ -434,12 +434,12 @@ export class Stage6Show extends ShowBase {
           this.loadTag.position.set(GX(1.75), GY(EX.n) - 0.2, GZ + 0.05);
           this.caption =
             t < 6
-              ? `この柱の強さは、降伏の ${Math.round(str * 100)}%(紫の点)`
+              ? `この柱の全体座屈の許容値 σcz は、降伏の ${Math.round(str * 100)}%(紫の点)`
               : t < 13
-                ? `実際にかかる力は、もっと小さくしておく(オレンジの線、${Math.round(EX.n * 100)}%)`
+                ? `発生する応力 σc は、それより小さくしておく(オレンジの線、${Math.round(EX.n * 100)}%)`
                 : t < 21
-                  ? `安全率 = 強さ ÷ かかる力 = ${Math.round(str * 100)} ÷ ${Math.round(EX.n * 100)} = ${(str / EX.n).toFixed(1)}`
-                  : 'いまの力を、あと何倍にできるか。それが安全率';
+                  ? `安全率 = 許容値 σcz ÷ 発生応力 σc = ${Math.round(str * 100)} ÷ ${Math.round(EX.n * 100)} = ${(str / EX.n).toFixed(1)}`
+                  : '安全率が 1.0 以上なら OK。いまの力を、あと何倍にできるか';
         }
         this.setR(R);
         const p = ramp(t12, 1, 7) * (1 - ramp(t12, 11, 12));
@@ -479,7 +479,7 @@ export class Stage6Show extends ShowBase {
           m = EXB.m;
           n = 0.27 * (ramp(t, 3, 12) - ramp(t, 22.5, 24));
           const pe0 = 1 / (EXB.lam * EXB.lam);
-          const k = 1 / (1 - n / pe0);
+          const k = 1 / alpha(n, pe0);
           this.caption =
             t < 3
               ? '横から押されて、少し曲がった柱'
@@ -487,7 +487,7 @@ export class Stage6Show extends ShowBase {
                 ? `上から押すと、曲がりが大きくなる(いま ${k.toFixed(1)} 倍)`
                 : t < 19
                   ? '軸力は、曲げを増幅する。だから耐えられる範囲は、直線より内側(紫の線)'
-                  : '増幅の倍率 = 1 ÷ (1 − 軸力 ÷ オイラーの座屈荷重)';
+                  : '式では α = 1 − σc ÷ (0.8σe) で割る。α が小さいほど、曲げは大きく効く';
         } else if (s === 9) {
           const t = c % 22;
           showRay = t > 5;
@@ -496,7 +496,7 @@ export class Stage6Show extends ShowBase {
               ? '黒い点 = いま柱にかかっている軸力と曲げ'
               : t < 12
                 ? '軸力と曲げを同じ割合で増やしていくと、紫の線にぶつかる'
-                : 'ぶつかるまでの倍率が安全率。あと何倍まで耐えられるか';
+                : '線までの余裕が安全率。設計では、使用割合の合計 U の逆数 1/U で表す';
         } else {
           ({ lam, R, n, m } = this.lab);
           showRay = true;
@@ -506,13 +506,14 @@ export class Stage6Show extends ShowBase {
         const pe = 1 / (lam * lam);
         this.setNM(pu, pe, amp);
         // 柱の絵: 横からの力でたわみ、軸力で増幅される(見やすく誇張)
-        const k = n < pe ? 1 / (1 - (amp > 0 || s === 8 ? n / pe : 0)) : 20;
+        const al = amp > 0 || s === 8 ? alpha(n, pe) : 1;
+        const k = al > 0.05 ? 1 / al : 20;
         const Dg = Math.min(1.0, 0.45 * m * k);
         this.box.update({ Dg, Al: 0, m: 8, mode: 'panel', load: n * 1.6 });
         this.sideArrow(m > 0.005 ? 0.3 + 0.85 * m : 0, Dg);
         this.pt.visible = showPt;
         this.pt.position.set(NX(Math.min(m, 1.12)), NY(Math.min(n / pu, 1.2)), GZ + 0.14);
-        const g = safetyFactor(n, m, pu, pe);
+        const g = loadFactor(n, m, pu, pe);
         const ok = showRay && Number.isFinite(g) && g > 0;
         this.ray.visible = ok;
         this.hit.visible = ok;

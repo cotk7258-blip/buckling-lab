@@ -3,6 +3,11 @@ import type { ReactNode, RefObject } from 'react';
 import type { ShowBase } from '../three/kit.ts';
 import { Rich, Term } from './glossary.tsx';
 
+/** 「式と Q&A」のページを、指定のタブで開く(App が受け取る) */
+export function openFormulas(tab: string) {
+  window.dispatchEvent(new CustomEvent('open-formulas', { detail: tab }));
+}
+
 export interface SceneText {
   kicker: string;
   head: string;
@@ -64,6 +69,8 @@ export function StoryShell(props: {
   lab?: ReactNode;
   hint?: string;
   note?: string;
+  /** 最後の場面へ進むボタンの文(既定は「実験室へ ▶」) */
+  labLabel?: string;
 }) {
   const { scene, total, text } = props;
   const isLab = scene === total - 1;
@@ -102,13 +109,20 @@ export function StoryShell(props: {
               onClick={() => labRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
               className="h-12 rounded-xl bg-gold px-4 text-base font-bold text-white"
             >
-              ▼ 下のスライダーで実験する
+              {props.labLabel ? '▼ 下のボタンから、式と計算へ' : '▼ 下のスライダーで実験する'}
             </button>
           )}
           {props.side}
           {props.hint && (
             <p className="px-1 text-[11px] text-ink-dim">
               {props.hint}(<Term id="amp">誇張について</Term>)
+            </p>
+          )}
+          {!isLab && (
+            <p className="px-1 text-xs">
+              <button onClick={() => openFormulas('式の導出')} className="font-bold text-comp underline">
+                式の導出・質問と回答を読む
+              </button>
             </p>
           )}
           <div className="sticky bottom-0 z-10 -mx-3 flex items-center gap-2 bg-studio-950/90 px-3 py-2 backdrop-blur lg:static lg:mx-0 lg:bg-transparent lg:p-0">
@@ -130,7 +144,7 @@ export function StoryShell(props: {
               </button>
             ) : (
               <button onClick={() => props.onScene(scene + 1)} className="h-12 whitespace-nowrap rounded-xl bg-comp px-6 text-base font-bold text-studio-950">
-                {scene === total - 2 ? '実験室へ ▶' : '次へ ▶'}
+                {scene === total - 2 ? (props.labLabel ?? '実験室へ ▶') : '次へ ▶'}
               </button>
             )}
           </div>

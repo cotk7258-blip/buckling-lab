@@ -7,8 +7,8 @@ import { Tex } from '../ui/Tex.tsx';
 const TABS = ['3つの照査', '式の導出', '質問と回答', '計算してみる', '記号'] as const;
 type Tab = (typeof TABS)[number];
 
-export default function Formulas({ onStage }: { onStage: (n: number) => void }) {
-  const [tab, setTab] = useState<Tab>('3つの照査');
+export default function Formulas({ onStage, initial }: { onStage: (n: number) => void; initial?: string }) {
+  const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(initial ?? '') ? (initial as Tab) : '3つの照査');
   return (
     <div className="mx-auto mt-2 max-w-4xl">
       <div className="sticky top-0 z-10 -mx-3 flex gap-1.5 overflow-x-auto bg-studio-950/95 px-3 py-2 backdrop-blur">
@@ -726,9 +726,9 @@ function QandA({ go, onStage }: { go: (t: Tab) => void; onStage: (n: number) => 
         </button>
       </QA>
 
-      <QA q="Q11 安全率 = 1/U は、「いまの荷重を何倍にできるか」と同じか" a="軸力だけの照査では同じ。軸力と曲げの組合せでは、同じにならない(1/U より小さい)。">
+      <QA q="Q11 安全率 = 1/U は、「いまの荷重を何倍にできるか」と同じか" a="軸力だけの照査では同じ。軸力と曲げの組合せでは、同じにならない(余裕があるときは 1/U より小さい)。">
         <P>
-          軸力だけなら、安全率 = σcz ÷ σc で、荷重をその倍率にすればちょうど許容値に達します。組合せの式では、荷重を増やすと σc が増え、α が小さくなって、曲げの項が比例より速く増えます。そのため、荷重を 1/U 倍にすると U は 1 を超えます。1/U は「使用割合の合計の逆数」という指標であり、荷重を増やせる倍率そのものではありません。α が 1 に近いうちは、2つはほぼ一致します。
+          軸力だけなら、安全率 = σcz ÷ σc で、荷重をその倍率にすればちょうど許容値に達します。組合せの式では、荷重を増やすと σc が増え、α が小さくなって、曲げの項が比例より速く増えます。そのため、余裕がある(U が 1 より小さい)とき、荷重を 1/U 倍にすると U は 1 を超えます。1/U は「使用割合の合計の逆数」という指標であり、荷重を増やせる倍率そのものではありません。α が 1 に近いうちは、2つはほぼ一致します。
         </P>
         <button onClick={() => go('計算してみる')} className="mt-3 rounded-lg border border-comp px-3 py-2 text-sm font-bold text-comp">
           2つの値を並べて確かめる
@@ -856,7 +856,7 @@ function Calculator() {
                 <Out label={<>使用割合の合計 {T('U')}(1 以下で OK)</>} value={f(r.U, 3)} big bad={r.U > 1} />
                 <Out label={<>安全率 {T('1/U')}</>} value={f(r.sfCombined, 2)} bad={r.U > 1} />
                 <Out label="参考: 荷重を同じ割合で増やせる倍率" value={f(lf, 2)} />
-                <p className="mt-1 text-xs text-ink-dim">軸力が増えると α が小さくなるので、「増やせる倍率」は 1/U より小さくなります(質問と回答 Q11)。</p>
+                <p className="mt-1 text-xs text-ink-dim">軸力が増えると α が小さくなるので、余裕があるとき「増やせる倍率」は 1/U より小さくなります(質問と回答 Q11)。</p>
               </>
             ) : (
               <p className="mt-1 text-sm font-bold text-yield">α が 0 以下です(σc が 0.8σe 以上)。この照査式の適用範囲外で、安全率は解釈しません(質問と回答 Q10)。</p>
@@ -877,6 +877,7 @@ function Symbols() {
   return (
     <div>
       <H>記号一覧</H>
+      <P>ここは式に出てくる記号の一覧です。言葉の意味(降伏、残留応力、有効幅など)は、映像のページで点線の付いた言葉を押すと説明が出ます。</P>
       <P>応力は N/mm²、長さは mm。R・λ・低減率・α・U は無次元です。添え字 c = 圧縮、t = 引張。y・z は曲げ・座屈を評価する軸(y = 強軸、z = 弱軸)。</P>
       <Sub>共通・局部座屈</Sub>
       <Table

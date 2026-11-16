@@ -1,25 +1,21 @@
 // 許容応力度の形で書いた3つの座屈照査(局部座屈 → 全体座屈 → 軸力と曲げの組合せ)。
 // 式の形は、道路橋示方書(平成24年版まで)の流儀: 降伏応力 × 低減率。応力は N/mm²、長さは mm。
 
-/** 弾性局部座屈応力 σel = kπ²E / {12(1−ν²)} × (t/b)² */
-export function sigmaEl(b: number, t: number, k: number, E: number, nu = 0.3): number {
-  return ((k * Math.PI ** 2 * E) / (12 * (1 - nu * nu))) * (t / b) ** 2;
-}
+import { dohshiOld } from './curves.ts';
+import { plateStrength, sigmaEl } from './plate.ts';
+
+export { sigmaEl };
 /** 幅厚比パラメータ R = √(σy/σel) = (b/t)·√{12(1−ν²)σy / (kπ²E)} */
 export const paramR = (b: number, t: number, k: number, E: number, sy: number, nu = 0.3) => Math.sqrt(sy / sigmaEl(b, t, k, E, nu));
-/** 局部座屈の低減率: R ≦ 0.7 で 1.0、R > 0.7 で 0.5/R² */
-export const localRatio = (R: number) => (R <= 0.7 ? 1 : 0.5 / (R * R));
+/** 局部座屈の低減率: R ≦ 0.7 で 1.0、R > 0.7 で 0.5/R²(式どおりだと R = 0.7 のすぐ上で 1.02 になるので 1.0 で頭打ち) */
+export const localRatio = plateStrength;
 
 /** オイラー座屈応力 σe = π²E / (l/r)² */
 export const sigmaE = (slender: number, E: number) => (Math.PI ** 2 * E) / (slender * slender);
 /** 細長比パラメータ λ = (1/π)·√(σy/E)·(l/r) = √(σy/σe) */
 export const paramLambda = (slender: number, E: number, sy: number) => (Math.sqrt(sy / E) * slender) / Math.PI;
 /** 全体座屈の低減率: λ ≦ 0.2 で 1.0、0.2 < λ ≦ 1.0 で 1.109 − 0.545λ、1.0 < λ で 1/(0.773 + λ²) */
-export function globalRatio(lam: number): number {
-  if (lam <= 0.2) return 1;
-  if (lam <= 1) return 1.109 - 0.545 * lam;
-  return 1 / (0.773 + lam * lam);
-}
+export const globalRatio = dohshiOld;
 
 export interface CheckInput {
   sy: number;

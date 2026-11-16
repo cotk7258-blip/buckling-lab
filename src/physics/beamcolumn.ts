@@ -1,41 +1,38 @@
-// 軸力と曲げを同時に受ける柱の照査(設計で使う相関式の形)と、安全率。
+// 複合座屈(軸力と曲げの組合せ)の照査を、映像用に無次元で書いたもの。式の形は check.ts と同じ。
 //
-// 記号(どれも無次元)
-//  n  = 作用する軸力 ÷ 降伏荷重
-//  m  = 作用する曲げ(軸力がないときの曲げモーメント)÷ 曲げの強さ
-//  pu = 軸力だけのときの柱の強さ ÷ 降伏荷重(全体座屈の強さ × 局部座屈の強さの割合)
-//  pe = オイラーの座屈荷重 ÷ 降伏荷重 = 1/λ̄²
+//  n  = σc/σy(発生する軸方向圧縮応力)
+//  m  = 曲げの使用割合の素(発生する曲げ応力 ÷ 曲げの許容値。α で割る前)
+//  pu = σcz/σy(全体座屈の許容値。局部座屈を考慮した値)
+//  pe = σe/σy = 1/λ²(オイラー座屈応力)
 //
-// 仮定: 曲げは一方向で、座屈する向きと同じ向き。曲げの強さは一定(横ねじれ座屈などは考えない)。
-// 軸力による曲げの増幅は 1/(1 − 軸力/オイラー荷重) で表す(たわみがサインカーブに近いときの近似)。
+// ここでは曲げは1方向だけ(座屈する向きと同じ軸)。2方向の式は check.ts。
 
-/** 軸力が曲げ(たわみ)を何倍に増やすか */
-export function amplification(n: number, pe: number): number {
-  const r = n / pe;
-  return r >= 1 ? Infinity : 1 / (1 - r);
+/** α = 1 − σc/(0.8σe)。軸力による付加曲げの影響を表す係数 */
+export const alpha = (n: number, pe: number) => 1 - n / (0.8 * pe);
+
+/** 使用割合の合計 U = σc/σcz + (曲げ)/α。α ≦ 0 は適用範囲外で Infinity */
+export function usage(n: number, m: number, pu: number, pe: number): number {
+  const a = alpha(n, pe);
+  if (a <= 0) return Infinity;
+  return n / pu + m / a;
 }
 
-/** 照査式の左辺。1 以下なら耐えられる: n/pu + m × 増幅 ≦ 1 */
-export function interaction(n: number, m: number, pu: number, pe: number): number {
-  return n / pu + m * amplification(n, pe);
-}
+/** 安全率 = 1/U */
+export const safety = (n: number, m: number, pu: number, pe: number) => 1 / usage(n, m, pu, pe);
 
-/** 増幅を考えないときの左辺(直線の相関): n/pu + m */
-export const interactionLinear = (n: number, m: number, pu: number) => n / pu + m;
-
-/** 軸力 n のとき、耐えられる曲げ m の上限(相関曲線) */
-export function momentCapacity(n: number, pu: number, pe: number): number {
+/** 軸力 n のとき、U = 1 になる曲げ m(耐えられる限界の線) */
+export function momentLimit(n: number, pu: number, pe: number): number {
   if (n >= pu) return 0;
-  return (1 - n / pu) * (1 - n / pe);
+  return Math.max(0, (1 - n / pu) * alpha(n, pe));
 }
 
 /**
- * 安全率: 軸力と曲げを同じ割合で増やしていったとき、何倍で限界(左辺 = 1)に達するか。
- * γ·a + γ·m/(1 − γ·c) = 1(a = n/pu、c = n/pe)を解く。a·c·γ² − (a + m + c)·γ + 1 = 0 の小さい方の根。
+ * 軸力と曲げを同じ割合で増やしたとき、U = 1 に達する倍率(限界の線にぶつかる所)。
+ * γ·a + γ·m/(1 − γ·c) = 1(a = n/pu、c = n/(0.8pe))の小さい方の根。α が変わるので 1/U より小さい。
  */
-export function safetyFactor(n: number, m: number, pu: number, pe: number): number {
+export function loadFactor(n: number, m: number, pu: number, pe: number): number {
   const a = n / pu;
-  const c = n / pe;
+  const c = n / (0.8 * pe);
   const s = a + m + c;
   if (s <= 0) return Infinity;
   if (a * c < 1e-12) return 1 / (a + m);
