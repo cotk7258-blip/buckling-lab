@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { ShowBase } from '../three/kit.ts';
 import { Rich, Term } from './glossary.tsx';
+import { Tex } from './Tex.tsx';
 
 /** 「式と Q&A」のページを、指定のタブで開く(App が受け取る) */
 export function openFormulas(tab: string) {
@@ -206,6 +207,26 @@ export function Card(props: { title?: string; children: ReactNode }) {
     <div className="rounded-2xl border border-studio-600 bg-studio-900 p-4">
       {props.title && <h3 className="mb-2 text-base font-bold">{props.title}</h3>}
       {props.children}
+    </div>
+  );
+}
+
+/** 映像の横に出す、式の積み上げ(導出の段) */
+export function Steps(props: { title: string; steps: [string, string][]; note?: string }) {
+  return (
+    <div className="rounded-xl border border-studio-700 bg-studio-900 px-3 py-2">
+      <p className="text-xs font-bold text-ink-dim">{props.title}</p>
+      <ol className="mt-1 space-y-1">
+        {props.steps.map(([lab, tex], i) => (
+          <li key={i} className="flex items-center gap-2">
+            {lab && <span className="w-20 shrink-0 text-[11px] font-bold leading-tight text-comp">{lab}</span>}
+            <span className="min-w-0 flex-1 overflow-x-auto text-[15px]">
+              <Tex>{tex}</Tex>
+            </span>
+          </li>
+        ))}
+      </ol>
+      {props.note && <p className="mt-1 text-[11px] leading-relaxed text-ink-dim">{props.note}</p>}
     </div>
   );
 }

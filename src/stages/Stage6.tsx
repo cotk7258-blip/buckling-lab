@@ -12,7 +12,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '地図',
     head: '座屈の照査は、3段でつながっている',
-    body: '設計では、柱が座屈しないことを計算で確かめます。これを照査と呼びます。①局部座屈(板が波打たないか。軸力のみ)。②全体座屈(柱ごと曲がらないか。軸力のみ)。③複合座屈(軸力と曲げを同時に受けても耐えられるか)。①の結果が②に、②の結果が③に入っていきます。まずは部品の名前から。柱は板でできていて、板にはリブ(補剛材)が付き、リブと角で区切られた1区画をパネルと呼びます。',
+    body: '設計では、柱が座屈しないことを計算で確かめます。これを照査と呼びます。①局部座屈(板が波打たないか。軸力のみ)。②全体座屈(柱ごと曲がらないか。軸力のみ)。③複合座屈(軸力と曲げを同時に受けても耐えられるか)。①の結果が②に、②の結果が③に入っていきます。柱は薄い板でできているので、柱ごと曲がる座屈(全体座屈)と、板が波打つ座屈(局部座屈)の両方を確かめます。',
   },
   {
     kicker: '② 全体座屈',
@@ -22,12 +22,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '① 局部座屈',
     head: '局部座屈。板だけが波打つ',
-    body: '同じく軸力だけを受ける柱で、柱はまっすぐ立ったまま、断面を作っている板が波打ちます。リブがしっかりしていれば、リブの線と角は動かず、その間のパネルだけが波打ちます(パネル座屈)。起きやすさを決めるのは、幅厚比パラメータ R。R から低減率を選び、局部座屈の許容値 σcl = σy × 低減率 を出します(映像5)。',
-  },
-  {
-    kicker: '① の補足',
-    head: 'リブごと波打つ。補剛板の全体座屈',
-    body: 'リブが細くて弱いと、リブの線も一緒にたわんでしまい、板全体が大きな波になります。リブ付きの板(補剛板)が、板として丸ごと座屈するので、補剛板の全体座屈と呼びます。「全体」と付きますが、柱ごと曲がる全体座屈とは別物で、板の中の話です。リブに必要な硬さ(必要剛比)を持たせて防ぎます。',
+    body: '同じく軸力だけを受ける柱で、柱はまっすぐ立ったまま、断面を作っている板が波打ちます。角は動かず、その間の板が波打ちます。起きやすさを決めるのは、幅厚比パラメータ R。R から低減率を選び、局部座屈の許容値 σcl = σy × 低減率 を出します(映像5)。',
   },
   {
     kicker: '① と ②',
@@ -72,7 +67,8 @@ export default function Stage6() {
   const go = (n: number) => {
     const next = Math.max(0, Math.min(SCENES.length - 1, n));
     setScene(next);
-    show.current?.setScene(next);
+    // 3D の場面3(補剛板の全体座屈)は使わないので、3 以降は1つ先の番号を渡す
+    show.current?.setScene(next >= 3 ? next + 1 : next);
   };
 
   return (
@@ -86,7 +82,7 @@ export default function Stage6() {
       labLabel="計算へ ▶"
       hint="柱の絵は、しくみを示す模式図です(曲がりと波は見やすく誇張)・横になぞると回り込めます"
       side={
-        scene >= 7 ? (
+        scene >= 6 ? (
           <div className="rounded-xl border border-studio-700 bg-studio-900 px-3 py-2 text-sm">
             <p className="text-xs font-bold text-ink-dim">
               <Term id="beamcol">複合座屈</Term>の<Term id="check">照査</Term>式(曲げが1方向の場合)
@@ -127,14 +123,8 @@ export default function Stage6() {
               <li>
                 <Term id="local" /> … 板が波打つ
               </li>
-              <li>
-                <Term id="panel" /> … リブの間
-              </li>
-              <li>
-                <Term id="plateglobal" /> … リブごと
-              </li>
             </ul>
-            {scene >= 5 && (
+            {scene >= 4 && (
               <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-studio-700 pt-2 text-xs">
                 <span className="flex items-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full bg-comp" />

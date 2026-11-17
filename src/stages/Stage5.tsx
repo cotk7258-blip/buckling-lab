@@ -1,60 +1,138 @@
 import { useState } from 'react';
-import { panelWidth, plateR, plateState, plateStrength, plateTheory, plateWinter, sigmaEl } from '../physics/plate.ts';
-import { SIGMA_Y, Stage5Show } from '../three/stage5.ts';
+import { plateState, plateStrength, plateTheory, plateWinter, sigmaEl } from '../physics/plate.ts';
+import { BT1, SIGMA_Y, Stage5Show, labR } from '../three/stage5.ts';
 import type { Lab5 } from '../three/stage5.ts';
-import { Card, LabSlider, StoryShell, useShow } from '../ui/Story.tsx';
+import { Card, LabSlider, Steps, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
 import { Tex } from '../ui/Tex.tsx';
-import { Rich } from '../ui/glossary.tsx';
 
-const pct = (x: number) => `${Math.round(x * 100)}%`;
+const BT = Math.round(BT1);
 
 const SCENES: SceneText[] = [
   {
-    kicker: '落とし穴',
-    head: '薄く広げすぎると、板が波打つ',
-    body: 'STAGE 1 で、鉄は真ん中から遠くに置くほど効くと言いました。それなら、板をどこまでも薄く広げればいいはずです。ところが薄い板でできた箱形の柱を押すと、柱はまっすぐなのに、板がベコベコと波打ちます。柱全体ではなく、板1枚1枚が座屈する。これを「局部座屈」と呼びます。',
+    kicker: '現象',
+    head: '柱はまっすぐなのに、板が波打つ',
+    body: '薄い板を溶接して作った箱形の柱を押すと、柱全体はまっすぐなのに、板が手前と奥へ交互に波打ちます。柱全体ではなく、断面を作っている板1枚1枚が座屈する。これが局部座屈です。この映像では、映像2〜4で柱の座屈を見たのと同じ順番で、板の座屈を見ていきます。',
   },
   {
-    kicker: '板の座屈',
-    head: '板は、正方形の波を作って逃げる',
-    body: '箱の壁を1枚取り出して押してみます。両側の縁は隣の板に支えられているので、柱のように全体が弓なりになることはできません。代わりに、手前と奥へ交互にふくらむ波になります。波の1つは、ほぼ正方形。板の幅が、波の大きさを決めています。',
+    kicker: '突然',
+    head: '板も、ある応力で突然波打つ',
+    body: '箱の壁を1枚取り出します。両側の縁は、隣の板に支えられています(緑)。上から押し(外力)、下で受けます(反力)。板はしばらく平らなまま耐え、ある応力に達した瞬間、突然波打ちます。その応力を弾性局部座屈応力 σel と呼びます。柱の座屈荷重にあたるものです。',
+  },
+  {
+    kicker: '綱引き',
+    head: '押し出す力と、戻す力の綱引き',
+    body: '波打った板には、2つの力が働きます。ひとつは、上下から押す力が、ふくらんだ波をさらに押し出そうとする力(オレンジ)。もうひとつは、曲げられた板がまっすぐに戻ろうとする力(青)で、板の曲げ剛性と、両側の縁の支えから生まれます。柱と同じく、どちらも波の高さに比例します。だから勝ち負けは押す応力の大きさだけで決まり、ちょうど互角になる応力が σel です。',
   },
   {
     kicker: '幅と厚み',
     head: '幅が半分なら、4倍の応力まで耐える',
-    body: '波の大きさは板の幅で決まるので、幅の狭い板ほど波が小さく、きつく曲がらないと波打てません。だから座屈しにくい。幅が半分なら、4倍の応力(面積あたりの力)まで耐えます。厚みが2倍でも4倍です(板が受け持てる力でいえば8倍)。効くのは「幅 ÷ 厚み」(幅厚比)の2乗。柱の「細長さ」にあたるものが、板では「幅厚比」です。これを材料の強さも含めた物差しにしたものが、幅厚比パラメータ R。R が 1 のとき、波打ち始める応力がちょうど降伏と同じになります。',
+    body: '波の大きさは板の幅 b で決まり、幅の狭い板ほど波が小さく、きつく曲がらないと波打てません。だから戻す力が強い。幅が半分なら σel は4倍、厚みが2倍でも4倍です。σel は (t/b)² に比例します。柱の「長さが半分なら4倍(1/l² に比例)」と同じ形です。',
   },
   {
-    kicker: '有効幅',
-    head: '波打った板は、縁の近くが主に働く',
-    body: '座屈した板を応力の色で見ると、ふくらんだ真ん中は色が暗いままで、受けている力は小さくなっています。応力は、支えられてまっすぐなままの縁の近くに偏り、そこは赤(降伏)に達しています。そこで、板の幅のうち「実際に効いている分」に置きかえて、板が受け持てる力を評価します。これを「有効幅」と呼びます。板の働きが落ちれば柱全体の踏ん張りも減り、柱全体の座屈を早めることがあります。(色の分布は模式図です)',
+    kicker: 'σel の導出',
+    head: '板は「細い柱の束」。オイラーの式に2つの補正',
+    body: '板を、押す向きの細い帯に分けて考えます。帯1本は、長さ b・厚さ t の柱です。その柱のオイラー座屈応力は、断面二次半径 r = t/√12 を入れて π²E/12 × (t/b)²。ただし帯は隣とつながっていて横に縮めないので、少し硬くなり 1/(1−ν²) 倍。さらに両側の縁の支えが波打ちを抑えるので、係数 k を掛けます。これで σel の式になります。',
   },
   {
-    kicker: '補剛材',
-    head: 'リブを1本足すだけで、4倍',
-    body: '板を厚くせずに強くする方法があります。板の真ん中に、縦に細長い板(リブ、補剛材)を溶接する。するとリブの線では板が動けなくなり、1枚の広い板が「幅が半分の板2枚」に変わります。幅が半分なので、波打ち始める力は4倍。リブ2本なら幅は3分の1で9倍。わずかな鉄で、大きな効果です。',
+    kicker: '支え方',
+    head: '支え方の効果は、係数 k に入る',
+    body: '片側の縁が自由な板(フランジの突き出した部分など)は、支えが片側にしかないので、ずっと低い応力で波打ちます。両縁支持の k = 4 に対して、自由突出板は k = 0.43、約 1/9 です。柱で支え方の違いを有効座屈長に置きかえたように、板では支え方の違いを k に置きかえます。',
   },
   {
-    kicker: '頭打ち',
-    head: '4倍になるのは理論値。強さには天井がある',
-    body: '4倍、9倍と増えるのは、板が波打ち始める応力(座屈の理論値)です。強さには、材料の限界(降伏)という天井があります。一方、薄い板は波打ってもすぐには限界にならず、縁で耐え続けます(緑の線。前の場面の有効幅)。ただし、ここで示す旧い設計基準の線(青)は、その余力を当てにしません。残留応力と初期のゆがみも見込んで、理論値の半分までしか認めない、安全側の決め方です。この例の板は、リブ1本で設計の線が天井に届き、2本目は増やしません。',
+    kicker: 'R の導出',
+    head: '物差し R = √(σy/σel)',
+    body: `同じ幅で厚みだけが違う板を10枚並べました。奥の壁のグラフの横軸が、幅厚比パラメータ R = √(σy/σel) です。柱の λ = √(σy/σe) と同じ作り方で、R = 1 は σel がちょうど σy になる板。σel の式を代入すると R = b/t × √{12(1−ν²)σy/(kπ²E)}。両縁支持・σy = 355 N/mm² なら、R = 1 は幅厚比 b/t ≒ ${BT} です(軸の下の数字)。`,
   },
   {
-    kicker: '条件',
-    head: 'リブ自身が、十分に硬いこと',
-    body: 'リブが効くのは、リブの線で板が動けなくなるからです。リブが細すぎると、リブごと板と一緒にたわんでしまい、幅を分けられません。リブには、板をまっすぐに保てるだけの硬さが要ります。設計では、必要な硬さ(必要剛比)を満たすことを確かめます。',
+    kicker: '理想の板',
+    head: '理想の板の強さは、2本の線の低い方',
+    body: '厚い板(R < 1)は、波打つ前に全体が降伏します。強さは天井の 1.0。薄い板(R > 1)は σel で波打ちます。σel/σy = 1/R² なので、その点は紫の線に乗ります。理想の板の強さは min(1, 1/R²)。柱の min(1, 1/λ²) とまったく同じ形で、物差しを R にしたことで、鋼の種類や支え方が違う板も同じ線で比べられます。',
+  },
+  {
+    kicker: '現実の板',
+    head: '現実の板: R = 1 付近で下がり、薄い板は余力がある',
+    body: '現実の板には、初期のゆがみと残留応力があります。そのため R = 1 の付近では、柱と同じく理想の線より下がります。ところが薄い板では逆で、波打ったあとも、支えられた縁の近くが力を受け持ち続けるので、理想の線より上まで耐えます(深緑の点。Winter の有効幅の式による目安)。ここが柱との大きな違いです。',
+  },
+  {
+    kicker: '設計式',
+    head: '設計式: R ≦ 0.7 で 1.0、R > 0.7 で 0.5/R²',
+    body: '設計で使う線(青)は、R が 0.7 以下なら低減なし、それより薄い板は 0.5/R² です。R² = σy/σel を代入すると 0.5/R² = 0.5 × σel/σy、つまり「波打ち始める応力の半分」。R = 1 付近の低下を見込み、薄い板の余力は当てにしない、安全側の線と読めます(道路橋示方書・平成24年版までの式。係数の根拠は基準の解説で確認してください)。',
   },
   {
     kicker: '実験室',
-    head: '幅・厚み・リブを変えて、押してみる',
-    body: '板の幅と厚み、リブの本数を変えると、幅厚比パラメータ R と強さが変わります。グラフの紫の点が、いまの板です。押す強さを上げていくと、まず設計で認める強さを超え、薄い板は波打ち、やがて縁が降伏して限界に達します。',
+    head: '幅・厚み・支え方を変えて、押してみる',
+    body: '板の幅と厚み、支え方を変えると、R が変わり、板がグラフの横軸の上を動きます。押す応力を上げると、厚い板はそのまま降伏し、薄い板は波打ってから限界に達します。',
   },
 ];
 
+const SIDE: Record<number, React.ReactNode> = {
+  1: <Steps title="弾性局部座屈応力(導き方は 5 番目の場面)" steps={[['', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`]]} note="柱のオイラー座屈応力 σe = π²E/(l/r)² にあたる。" />,
+  2: (
+    <Steps
+      title="綱引き(どちらも波の高さ w に比例)"
+      steps={[
+        ['押し出す力', String.raw`\propto\ \sigma\,t\times w`],
+        ['戻す力', String.raw`\propto\ D\times\text{曲がり}\ \propto\ D\,w`],
+        ['互角', String.raw`\sigma=\sigma_{el}`],
+      ]}
+      note="D = Et³/{12(1−ν²)} は板の曲げ剛性。w が両辺で消えるので、境目は応力だけで決まる。"
+    />
+  ),
+  3: <Steps title="幅と厚みの効き方" steps={[['', String.raw`\sigma_{el}\ \propto\ \left(\dfrac{t}{b}\right)^2`], ['柱では', String.raw`\sigma_e\ \propto\ \left(\dfrac{1}{l/r}\right)^2`]]} />,
+  4: (
+    <Steps
+      title="σel の導出: 帯を柱とみなす"
+      steps={[
+        ['出発点', String.raw`\sigma_e=\dfrac{\pi^2E}{(l/r)^2}`],
+        ['帯 = 柱', String.raw`l\to b,\ r=\dfrac{t}{\sqrt{12}}\ \Rightarrow\ \dfrac{\pi^2E}{12}\left(\dfrac{t}{b}\right)^2`],
+        ['横に縮めない', String.raw`\times\dfrac{1}{1-\nu^2}`],
+        ['縁の支え', String.raw`\times k`],
+        ['結果', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`],
+      ]}
+      note="帯は幅 1・厚さ t の長方形断面: I = t³/12、A = t、r = √(I/A) = t/√12。"
+    />
+  ),
+  5: (
+    <Steps
+      title="支え方と k(長い板)"
+      steps={[
+        ['両縁 支持', 'k = 4.0'],
+        ['両縁 固定', 'k = 6.97'],
+        ['一縁 支持・一縁 自由', 'k = 0.425(設計では 0.43)'],
+      ]}
+      note="柱の有効座屈長 le にあたるもの。k が大きいほど σel が大きい。"
+    />
+  ),
+  6: (
+    <Steps
+      title="R の導出(λ と同じ作り方)"
+      steps={[
+        ['定義', String.raw`R=\sqrt{\dfrac{\sigma_y}{\sigma_{el}}}`],
+        ['σel を代入', String.raw`\dfrac{\sigma_y}{\sigma_{el}}=\dfrac{12(1-\nu^2)\,\sigma_y}{k\pi^2E}\left(\dfrac{b}{t}\right)^2`],
+        ['平方根', String.raw`R=\dfrac{b}{t}\sqrt{\dfrac{12(1-\nu^2)\,\sigma_y}{k\pi^2E}}`],
+        ['柱では', String.raw`\lambda=\dfrac{l}{r}\cdot\dfrac{1}{\pi}\sqrt{\dfrac{\sigma_y}{E}}`],
+      ]}
+      note={`両縁支持(k = 4)、σy = 355、E = 2.0×10⁵ N/mm²、ν = 0.3 なら R = b/t ÷ ${BT}。`}
+    />
+  ),
+  7: <Steps title="理想の板" steps={[['', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{\sigma_{el}}{\sigma_y}\right)=\min\left(1,\ \dfrac{1}{R^2}\right)`]]} />,
+  8: <Steps title="現実の板の強さの目安(両縁支持)" steps={[['Winter', String.raw`\dfrac{\sigma_u}{\sigma_y}=\dfrac{R-0.22}{R^2}\quad(R>0.673)`]]} note="有効幅の考え方による目安(Eurocode 3 の両縁支持板と同じ形)。理想の線とは R = 1.22 で交わる。" />,
+  9: (
+    <Steps
+      title="設計式(道路橋示方書・平成24年版まで)"
+      steps={[
+        ['R ≦ 0.7', String.raw`\dfrac{\sigma_{cl}}{\sigma_y}=1.0`],
+        ['R > 0.7', String.raw`\dfrac{\sigma_{cl}}{\sigma_y}=\dfrac{0.5}{R^2}=0.5\,\dfrac{\sigma_{el}}{\sigma_y}`],
+      ]}
+      note="式どおりだと R = 0.7 のすぐ上で 1.02 になるので、1.0 で頭打ちにして描いている。"
+    />
+  ),
+};
+
 export default function Stage5() {
   const [scene, setScene] = useState(0);
-  const [lab, setLab] = useState<Lab5>({ b: 1000, t: 12, ribs: 0, load: 0.3 });
+  const [lab, setLab] = useState<Lab5>({ b: 900, t: 12, k: 4, load: 0.3 });
   const { canvasRef, capRef, show } = useShow((c) => new Stage5Show(c));
   const go = (n: number) => {
     const next = Math.max(0, Math.min(SCENES.length - 1, n));
@@ -66,14 +144,17 @@ export default function Stage5() {
     setLab(next);
     if (show.current) show.current.lab = next;
   };
-  const bp = panelWidth(lab.b, lab.ribs);
-  const R = plateR(bp, lab.t, SIGMA_Y);
-  const R0 = plateR(lab.b, lab.t, SIGMA_Y);
-  const strength = plateStrength(R);
-  const strength0 = plateStrength(R0);
+  const R = labR(lab);
+  const free = lab.k < 1;
+  const design = plateStrength(R);
   const ps = plateState(lab.load, R);
-  const state =
-    ps === 'ok'
+  const state = free
+    ? lab.load >= Math.min(1, plateTheory(R))
+      ? R <= 1
+        ? '降伏した'
+        : '波打った(σel に達した)'
+      : '平らなまま耐えている'
+    : ps === 'ok'
       ? '設計で認める範囲。板は平らなまま'
       : ps === 'overDesign'
         ? '設計で認める強さは超えた(板はまだ平ら)'
@@ -91,71 +172,71 @@ export default function Stage5() {
       onScene={go}
       canvasRef={canvasRef}
       capRef={capRef}
-      hint="波の高さは見やすく誇張しています・横になぞると回り込めます"
+      hint="板の厚みと波の高さは見やすく誇張しています・横になぞると回り込めます"
       side={
-        scene === 5 || scene === 7 ? (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
-            <Chip color="#6d28d9" text="座屈の理論値" />
-            <Chip color="#e11d48" text="降伏の天井" />
-            <Chip color="#16a34a" text="実際の強さの目安" />
-            <Chip color="#0284c7" text="設計で認める強さ" />
-          </div>
-        ) : undefined
+        <>
+          {SIDE[scene]}
+          {scene >= 7 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
+              <Chip color="#e11d48" text="降伏の天井 1.0" />
+              <Chip color="#6d28d9" text="σel/σy = 1/R²" />
+              <Chip color="#16a34a" text="理想の板" />
+              {scene >= 8 && <Chip color="#0f766e" text="現実の板(目安)" />}
+              {scene >= 9 && <Chip color="#0284c7" text="設計式" />}
+            </div>
+          )}
+          {scene >= 1 && scene <= 5 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
+              <Chip color="#1f2a44" text="外力(押す力)" />
+              <Chip color="#64748b" text="反力" />
+              <Chip color="#ea580c" text="押し出す力" />
+              <Chip color="#0284c7" text="戻す力(回復力)" />
+              <Chip color="#16a34a" text="縁の支え" />
+            </div>
+          )}
+        </>
       }
       lab={
         <div className="grid gap-3 lg:grid-cols-2">
-          <Card title="板とリブ">
-            <LabSlider label="板の幅 b" term="bt" value={lab.b} min={300} max={2000} step={50} show={`${lab.b} mm`} color="#6d28d9" onChange={(v) => change({ b: v })} />
+          <Card title="板と支え方">
+            <LabSlider label="板の幅 b" term="bt" value={lab.b} min={200} max={2000} step={50} show={`${lab.b} mm`} color="#6d28d9" onChange={(v) => change({ b: v })} />
             <LabSlider label="板の厚み t" value={lab.t} min={6} max={40} step={1} show={`${lab.t} mm`} color="#0284c7" onChange={(v) => change({ t: v })} />
-            <div className="mt-3">
-              <p className="text-base font-bold">縦のリブ(補剛材)</p>
-              <div className="mt-1 grid grid-cols-3 gap-2">
-                {[0, 1, 2].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => change({ ribs: n })}
-                    aria-pressed={lab.ribs === n}
-                    className={`h-11 rounded-lg border text-sm font-bold ${lab.ribs === n ? 'border-gold bg-gold/15 text-gold' : 'border-studio-600 text-ink-dim'}`}
-                  >
-                    {n === 0 ? 'なし' : `${n} 本`}
-                  </button>
-                ))}
-              </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {[
+                [4, '両縁支持 k = 4.0'],
+                [0.43, '自由突出 k = 0.43'],
+              ].map(([k, t]) => (
+                <button
+                  key={k}
+                  onClick={() => change({ k: k as number })}
+                  aria-pressed={lab.k === k}
+                  className={`h-11 rounded-lg border text-sm font-bold ${lab.k === k ? 'border-gold bg-gold/15 text-gold' : 'border-studio-600 text-ink-dim'}`}
+                >
+                  {t}
+                </button>
+              ))}
             </div>
             <div className="mt-3">
-              <LabSlider label="押す強さ" term="load" hint="降伏に対する割合" value={lab.load} min={0} max={1.05} step={0.01} show={pct(lab.load)} color="#0284c7" onChange={(v) => change({ load: v })} />
+              <LabSlider label="押す応力 σ/σy" term="load" value={lab.load} min={0} max={1.05} step={0.01} show={lab.load.toFixed(2)} color="#1f2a44" onChange={(v) => change({ load: v })} />
             </div>
             <p className="mt-1 text-base font-bold text-gold">{state}</p>
           </Card>
-          <Card title="この板の強さ">
+          <Card title="この板の数値">
             <dl className="space-y-2 text-sm">
-              <Row label="リブで分けた1枚の幅" value={`${Math.round(bp)} mm`} />
-              <Row label="幅厚比(幅 ÷ 厚み)" value={(bp / lab.t).toFixed(1)} />
-              <Row label="幅厚比パラメータ R" value={R.toFixed(2)} big />
-              <Row label="波打ち始める応力(理論値)" value={pct(plateTheory(R))} />
-              <Row label="実際の強さの目安(有効幅)" value={pct(plateWinter(R))} />
-              <Row label="設計で認める強さ(旧基準)" value={pct(strength)} big />
+              <Row label="幅厚比 b/t" value={(lab.b / lab.t).toFixed(1)} />
+              <Row label={<>弾性局部座屈応力 <Tex>{'\\sigma_{el}'}</Tex></>} value={`${Math.round(sigmaEl(lab.b, lab.t, lab.k))} N/mm²`} />
+              <Row label={<>幅厚比パラメータ <Tex>{'R=\\sqrt{\\sigma_y/\\sigma_{el}}'}</Tex></>} value={R.toFixed(2)} big />
+              <Row label={<>理想 <Tex>{'\\min(1,1/R^2)'}</Tex></>} value={Math.min(1, plateTheory(R)).toFixed(2)} />
+              {!free && <Row label="現実の板の目安(Winter)" value={plateWinter(R).toFixed(2)} />}
+              <Row label={<>設計式 <Tex>{'\\sigma_{cl}/\\sigma_y'}</Tex></>} value={design.toFixed(2)} big />
             </dl>
-            {lab.ribs > 0 && (
-              <p className="mt-2 text-sm">
-                リブなしに比べて、理論値は <strong className="num text-gold">{(lab.ribs + 1) ** 2} 倍</strong>、設計で認める強さは{' '}
-                <strong className="num text-gold">{(strength / strength0).toFixed(1)} 倍</strong>。
-              </p>
-            )}
-            <p className="mt-2 text-sm text-ink-dim">
-              {R <= 0.7 ? 'R が 0.7 以下なので、設計上は波打つ影響を見込まなくてよい板です。これ以上リブを足しても、設計で認める強さは増えません。' : 'R が 0.7 より大きいので、設計上は波打つ影響を見込む板です。'}
-            </p>
-            <div className="mt-2 overflow-x-auto text-sm">
-              <Tex block>{String.raw`R=\sqrt{\dfrac{\sigma_y}{\sigma_{el}}}=\dfrac{b}{t}\sqrt{\dfrac{\sigma_y}{E}\cdot\dfrac{12(1-\nu^2)}{\pi^2 k}}`}</Tex>
-            </div>
-            <p className="text-xs leading-relaxed text-ink-dim">
-              R は「降伏」と「板の座屈」の勝負指標。σel = {Math.round(sigmaEl(bp, lab.t))} N/mm²(k = 4、ν = 0.3、E = 2.0×10⁵ N/mm²)、σy = {SIGMA_Y} N/mm²。
-              リブは十分に硬いものとしています。
+            <p className="mt-2 text-xs leading-relaxed text-ink-dim">
+              σy = {SIGMA_Y} N/mm²、E = 2.0×10⁵ N/mm²、ν = 0.3。グラフの赤い点が、いまの板の設計式の値です。{free ? '自由突出板では、現実の板の目安(深緑)は表示していません(別の式になるため)。' : ''}
             </p>
           </Card>
         </div>
       }
-      note="計算の前提: 一様な圧縮を受ける、両側の縁が支えられた長い板(座屈係数 k = 4)。強さの線は道路橋示方書(平成24年版まで)の両縁支持板の式(R ≦ 0.7 で 1.0、それより大きいと 0.5/R²)。式どおりだと R = 0.7 のすぐ上で 1.02 になるため、1.0 で頭打ちにして描いています。この式は残留応力・初期のゆがみを見込み、波打った後の余力を見込まない安全側の値で、現行の版では見直されています(平成29年版の式は出典で確認できていないため載せていません)。緑の線は Winter の有効幅の式(Eurocode 3 と同じ形。R ≦ 0.673 で 1.0、それより大きいと (R−0.22)/R²)。リブ付きの板は、リブを完全に硬い支えとみなして、区切られた板それぞれに上の式を当てた理想化で、道路橋示方書の補剛板の規定(別の曲線)とは異なります。場面の例は R = 1.4 の板。"
+      note={`計算の前提: 一様な圧縮を受ける長い板。σel = kπ²E/{12(1−ν²)} × (t/b)²(両縁支持 k = 4、自由突出 k = 0.43)。並べた板は R = 0.3〜2.1(両縁支持・σy = 355 N/mm² で b/t ≒ ${Math.round(BT1 * 0.3)}〜${Math.round(BT1 * 2.1)})。現実の板の点は Winter の有効幅の式(R ≦ 0.673 で 1.0、それより大きいと (R−0.22)/R²)による目安で、実験値ではありません。設計式は道路橋示方書(平成24年版まで)の形(R ≦ 0.7 で 1.0、それより大きいと 0.5/R²)。式どおりだと R = 0.7 のすぐ上で 1.02 になるため、1.0 で頭打ちにして描いています。平成29年版の式は出典で確認できていないため載せていません。板の色は応力の大きさ(波打った後の、縁に偏った分布は模式図)。`}
     />
   );
 }
@@ -164,19 +245,15 @@ function Chip({ color, text }: { color: string; text: string }) {
   return (
     <span className="flex items-center gap-1.5">
       <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
-      <span>
-        <Rich text={text} />
-      </span>
+      {text}
     </span>
   );
 }
 
-function Row({ label, value, big }: { label: string; value: string; big?: boolean }) {
+function Row({ label, value, big }: { label: React.ReactNode; value: string; big?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt>
-        <Rich text={label} />
-      </dt>
+      <dt>{label}</dt>
       <dd className={`num font-bold ${big ? 'text-2xl text-gold' : 'text-lg'}`}>{value}</dd>
     </div>
   );

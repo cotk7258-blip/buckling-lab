@@ -3,12 +3,46 @@ import { solveColumn } from '../physics/column.ts';
 import { idealCurve } from '../physics/curves.ts';
 import { CURVES, S4_AMP, S4_FAT, Stage4Show } from '../three/stage4.ts';
 import type { CurveKey } from '../three/stage4.ts';
-import { Card, LabSlider, StoryShell, useShow } from '../ui/Story.tsx';
+import { Card, LabSlider, Steps, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
 import { Tex } from '../ui/Tex.tsx';
 import { Rich } from '../ui/glossary.tsx';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
+
+const SIDE4: Record<number, React.ReactNode> = {
+  3: (
+    <Steps
+      title="オイラーの線を σy で割る"
+      steps={[
+        ['オイラー座屈応力', String.raw`\sigma_e=\dfrac{\pi^2E}{(l/r)^2}`],
+        ['σy で割る', String.raw`\dfrac{\sigma_e}{\sigma_y}=\dfrac{1}{\lambda^2}\quad(\lambda\text{ は次の場面で})`],
+      ]}
+    />
+  ),
+  4: (
+    <Steps
+      title="λ の導出"
+      steps={[
+        ['定義', String.raw`\lambda=\sqrt{\dfrac{\sigma_y}{\sigma_e}}`],
+        ['σe を代入', String.raw`\dfrac{\sigma_y}{\sigma_e}=\dfrac{\sigma_y\,(l/r)^2}{\pi^2E}`],
+        ['平方根', String.raw`\lambda=\dfrac{1}{\pi}\sqrt{\dfrac{\sigma_y}{E}}\cdot\dfrac{l}{r}`],
+        ['理想の柱', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{1}{\lambda^2}\right)`],
+      ]}
+      note={`σy = 355、E = 2.0×10⁵ N/mm² なら λ = 1 は l/r = π√(E/σy) ≒ ${Math.round(Math.PI * Math.sqrt(200000 / 355))}。`}
+    />
+  ),
+  6: (
+    <Steps
+      title="設計曲線(道路橋示方書・平成24年版まで)"
+      steps={[
+        ['λ ≦ 0.2', String.raw`\sigma_{cg}/\sigma_y=1.0`],
+        ['0.2 < λ ≦ 1.0', String.raw`1.109-0.545\lambda`],
+        ['1.0 < λ', String.raw`1/(0.773+\lambda^2)`],
+      ]}
+    />
+  ),
+};
 
 const SCENES: SceneText[] = [
   {
@@ -29,12 +63,12 @@ const SCENES: SceneText[] = [
   {
     kicker: 'オイラーの線',
     head: '長さが2倍なら、強さは4分の1',
-    body: '長い柱の点は、1本の曲線にきれいに乗ります。長さが2倍になると強さは4分の1、3倍なら9分の1。約280年前にオイラーが見つけた法則です。ところがこの線は、短い柱の側で空高く伸びていきます。短くすれば無限に強くなる、というのはおかしい。',
+    body: '長い柱の点は、1本の曲線にきれいに乗ります。オイラー座屈応力 σe = π²E/(l/r)² の線です(映像2)。長さが2倍になると強さは4分の1。縦軸は σy で割った σcr/σy、横軸はこのあと作る物差し λ で描いているので、この線は 1/λ² になります。ところがこの線は、短い柱の側で空高く伸びていきます。短くすれば無限に強くなる、というのはおかしい。',
   },
   {
     kicker: '天井',
     head: '理想の柱の強さは、2本の線の低い方',
-    body: 'どんなに短くても、材料の限界(降伏)は超えられません。これが天井です。理想の柱の強さは、天井とオイラーの線の低い方。2本の線がぶつかる所の細長さを 1 と決めた物差しが「細長比パラメータ」です。1 より小さければ降伏が先、大きければ座屈が先。降伏と座屈の、勝負の指標です。',
+    body: 'どんなに短くても、材料の限界(降伏)は超えられません。これが天井 σcr/σy = 1 です。理想の柱の強さは、天井とオイラーの線の低い方。2本の線がぶつかるのは σe = σy の所です。そこで σy/σe の平方根を物差しにしたのが、細長比パラメータ λ = √(σy/σe)。σe の式を入れると λ = (1/π)√(σy/E) × l/r で、λ = 1 がちょうどぶつかる点。1 より小さければ降伏が先、大きければ座屈が先です。横軸の下の l/r は、σy = 355 N/mm² の鋼での値です。',
   },
   {
     kicker: '現実',
@@ -85,6 +119,8 @@ export default function Stage4() {
       capRef={capRef}
       hint={`たわみは ${S4_AMP} 倍、柱の太さは ${S4_FAT} 倍に誇張・横になぞると回り込めます`}
       side={
+        <>
+        {SIDE4[scene]}
         <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
           <Chip color="#16a34a" text="理想の柱" />
           <Chip color="#1f2a44" text="現実の柱" />
@@ -92,6 +128,7 @@ export default function Stage4() {
           <Chip color="#e11d48" text="降伏の天井" />
           <Chip color="#0284c7" text="設計曲線" />
         </div>
+        </>
       }
       lab={
         <div className="grid gap-3 lg:grid-cols-2">

@@ -3,7 +3,7 @@ import { solveColumn, viewAtDeflection, viewAtLoad } from '../physics/column.ts'
 import type { ColumnPath } from '../physics/column.ts';
 import { aij, aisc, dohshiOld, eurocode, idealCurve } from '../physics/curves.ts';
 import { HColumn } from './hcolumn.ts';
-import { ShowBase, arrow, drawTube, label, line, ramp, setArrow, setLine, tube } from './kit.ts';
+import { ShowBase, arrow, drawTube, label, line, placeArrow, ramp, setArrow, setLine, tube } from './kit.ts';
 
 const E_OVER_FY = 200000 / 355;
 export const LAMS = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0];
@@ -71,6 +71,10 @@ export class Stage4Show extends ShowBase {
   private extra = new Map<CurveKey, THREE.Mesh>();
   private mark1: THREE.Group;
   private probe: THREE.Line;
+  private reacts: THREE.Group[] = [];
+  private outs: THREE.Group[] = [];
+  private backs: THREE.Group[] = [];
+  private ftags: THREE.Sprite[] = [];
   /** 実験室: 見ている細長さ、重ねる曲線、押している柱 */
   labLam = 0.9;
   overlays: Record<CurveKey, boolean> = { dohshi: true, aisc: false, ecb: false, ecc: false, aij: false };
@@ -127,14 +131,15 @@ export class Stage4Show extends ShowBase {
     };
     for (const l of [0.5, 1, 1.5, 2]) {
       axis(X(l), Y(0), X(l), Y(0) - 0.07);
-      put(l.toFixed(1), X(l), Y(0) - 0.22, '#44536e', 0.85);
+      put(l.toFixed(1), X(l), Y(0) - 0.22, '#1f2a44', 0.85);
+      put(`l/r ${Math.round(l * Math.PI * Math.sqrt(E_OVER_FY))}`, X(l), Y(0) - 0.46, '#64748b', 0.6);
     }
     for (const s of [0.5, 1]) {
       axis(X(0), Y(s), X(2.25), Y(s), '#d5dce8');
-      put(`${s * 100}%`, X(0) - 0.38, Y(s), '#44536e', 0.85);
+      put(s.toFixed(1), X(0) - 0.32, Y(s), '#1f2a44', 0.85);
     }
-    put('強さ', X(0) - 0.38, Y(1.3), '#1f2a44', 0.8);
-    put('細長さ →', X(2.25) - 0.45, Y(0) - 0.5, '#1f2a44', 0.8);
+    put('σcr/σy', X(0) + 0.1, Y(1.32), '#1f2a44', 0.8);
+    put('細長比パラメータ λ →', X(1.75), Y(0.13), '#1f2a44', 0.7, 2);
 
     this.cEuler = curveTube((l) => 1 / (l * l), 0.878, 2.25, 0.022, '#6d28d9');
     this.cYield = curveTube(() => 1, 0, 2.25, 0.022, '#e11d48');
@@ -186,6 +191,24 @@ export class Stage4Show extends ShowBase {
     this.scene.add(this.mark1);
     this.probe = line('#6d28d9');
     this.scene.add(this.probe);
+    // 反力と、曲げる力・戻す力
+    for (let i = 0; i < N; i++) {
+      const r = arrow('#64748b');
+      r.scale.set(1.1, 1, 1.1);
+      const o = arrow('#ea580c');
+      const b = arrow('#0284c7');
+      this.scene.add(r, o, b);
+      this.reacts.push(r);
+      this.outs.push(o);
+      this.backs.push(b);
+    }
+    for (const [t, c] of [['外力 P', '#1f2a44'], ['反力', '#64748b'], ['曲げる力 P×y', '#ea580c'], ['戻す力', '#0284c7']] as const) {
+      const sp = label(t, c, t.length > 5 ? 2 : 1);
+      sp.scale.multiplyScalar(0.55);
+      sp.visible = false;
+      this.scene.add(sp);
+      this.ftags.push(sp);
+    }
     this.setScene(0);
   }
 
@@ -335,7 +358,31 @@ export class Stage4Show extends ShowBase {
         this.caps[i].position.set(x, col.topY + 0.04, ZC);
         const p = v.step.P;
         setArrow(this.arrows[i], x, col.topY + 0.1 + 0.12 + 0.5 * p, p > 0.01 ? -(0.12 + 0.5 * p) : 0, ZC);
+        setArrow(this.reacts[i], x, -0.14 - (0.12 + 0.5 * p), p > 0.01 ? 0.12 + 0.5 * p : 0, ZC + 0.32);
+        const D = col.D;
+        const kk = 1.6 * D;
+        const ratio = Math.min(1.25, p / Math.max(1e-6, path.Pu));
+        const y = col.topY / 2;
+        const on = D > 0.06;
+        placeArrow(this.outs[i], x + D + 0.12, y + 0.12, ZC + 0.2, on ? kk * ratio : 0, 0);
+        placeArrow(this.backs[i], x + D - 0.12, y - 0.12, ZC + 0.2, on ? -kk : 0, 0);
       }
+    }
+    // 札は、映像の主役の柱(長い柱)だけに
+    {
+      const i = 9;
+      const col = this.cols[i];
+      const x = X(LAMS[i]);
+      const on = s === 2 && col.D > 0.06;
+      const kk = 1.6 * col.D;
+      this.ftags[0].visible = s === 2;
+      this.ftags[0].position.set(x + 0.5, col.topY + 0.75, ZC + 0.3);
+      this.ftags[1].visible = s === 2;
+      this.ftags[1].position.set(x + 0.45, -0.45, ZC + 0.4);
+      this.ftags[2].visible = on;
+      this.ftags[2].position.set(x + col.D + 0.12 + kk + 0.55, col.topY / 2 + 0.12, ZC + 0.3);
+      this.ftags[3].visible = on;
+      this.ftags[3].position.set(x + col.D - 0.12 - kk - 0.4, col.topY / 2 - 0.12, ZC + 0.3);
     }
     // 点
     const pop = 1 - Math.exp(-dt * 10);

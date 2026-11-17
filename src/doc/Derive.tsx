@@ -133,7 +133,7 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
         ]}
       />
       <P>片側が自由になるだけで k は約 1/10。同じ b/t でも σel は約 1/10 になります。</P>
-      <MovieLink n={5} label="板の座屈(幅が半分で4倍、リブの効果)" onStage={onStage} />
+      <MovieLink n={5} label="板の座屈(σel と R の導き方、設計式)" onStage={onStage} />
 
       <H id="d4">4. λ(細長比パラメータ)の導出</H>
       <Lead>λ は「降伏応力 σy」と「オイラー座屈応力 σe」の比の平方根。σe の式を代入すると、照査で使う λ の式になる</Lead>

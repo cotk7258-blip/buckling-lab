@@ -218,3 +218,20 @@ export function placeArrow(g: THREE.Group, x: number, y: number, z: number, dx: 
   shaft.position.y = sl / 2;
   head.position.y = sl + 0.13;
 }
+
+const UP = new THREE.Vector3(0, 1, 0);
+const DIR = new THREE.Vector3();
+/** 矢印を (x, y, z) から (dx, dy, dz) の向き・長さで置く(3次元の好きな向き) */
+export function aimArrow(g: THREE.Group, x: number, y: number, z: number, dx: number, dy: number, dz: number) {
+  const a = Math.hypot(dx, dy, dz);
+  g.visible = a > 0.04;
+  if (!g.visible) return;
+  g.position.set(x, y, z);
+  g.quaternion.setFromUnitVectors(UP, DIR.set(dx / a, dy / a, dz / a));
+  const shaft = g.getObjectByName('shaft')!;
+  const head = g.getObjectByName('head')!;
+  const sl = Math.max(0.01, a - 0.26);
+  shaft.scale.y = sl;
+  shaft.position.y = sl / 2;
+  head.position.y = sl + 0.13;
+}

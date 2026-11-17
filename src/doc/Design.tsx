@@ -178,7 +178,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         <Callout title="柱と板の、いちばん大きな違い">
           柱は、座屈すると押す力がそのまま「曲げる力」に化けるので、座屈した時点でほぼ限界です。板は、縁が支えられているので、波打っても全体が崩れません。だから板の実際の強さは、R が大きいほど理想の線を上回ります。
         </Callout>
-        <MovieLink n={5} label="板の座屈(有効幅、リブの効果)" onStage={onStage} />
+        <MovieLink n={5} label="板の座屈(理想の板・現実の板・設計式)" onStage={onStage} />
       </Section>
 
       <Section id="ds-p3" no="板 ③" title="設計式 0.5/R² は「波打ち始める応力の半分」" lead="R > 0.7 の設計式に R² = σy/σel を代入すると、σy が消えて 0.5σel が残る。">

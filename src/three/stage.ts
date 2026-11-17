@@ -4,6 +4,7 @@ import type { ColumnPath, ColumnView } from '../physics/column.ts';
 import { ExplainScene } from './explain.ts';
 import type { ExplainMode } from './explain.ts';
 import { BG, addStudioEnvironment, makeGlowMaterial, makeRenderer, writeStressColor } from './common.ts';
+import { arrow, label, placeArrow } from './kit.ts';
 
 /** たわみを絵の上で何倍に見せるか */
 export const DEFL_AMP = 12;
@@ -44,7 +45,7 @@ class Column3D {
   hw = 0.3;
   lastD = 0;
 
-  constructor(x: number, glow: { value: number }, machine: THREE.Material) {
+  constructor(x: number, glow: { value: number }, machine: THREE.Material, withTags = false) {
     this.mat = makeGlowMaterial(glow, { vertexColors: true, clippingPlanes: [this.clipLow] });
     this.ghostMat = new THREE.MeshBasicMaterial({
       color: '#64748b',
@@ -93,7 +94,23 @@ class Column3D {
     this.light = new THREE.PointLight('#ff2d55', 0, 6, 1.6);
     this.light.position.set(0, BASE_Y + COL_H / 2, 1.2);
     this.group.add(this.light);
+    // 曲げる力(押す力 × たわみ)と、戻す力(回復力)
+    this.fOut = arrow('#ea580c');
+    this.fBack = arrow('#0284c7');
+    for (const a of [this.fOut, this.fBack]) a.scale.set(1.5, 1, 1.5);
+    this.group.add(this.fOut, this.fBack);
+    if (withTags)
+      for (const [t, c] of [['曲げる力 P×たわみ', '#ea580c'], ['戻す力', '#0284c7']] as const) {
+        const sp = label(t, c, t.length > 5 ? 2 : 1);
+        sp.scale.multiplyScalar(0.6);
+        sp.visible = false;
+        this.group.add(sp);
+        this.ftags.push(sp);
+      }
   }
+  private fOut: THREE.Group;
+  private fBack: THREE.Group;
+  private ftags: THREE.Sprite[] = [];
 
   private capPlate(y: number, machine: THREE.Material) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.07, 1.0), machine);
@@ -259,6 +276,19 @@ class Column3D {
     const pulse = view.collapsed ? 0.6 + 0.4 * Math.sin(time * 7) : 0;
     this.light.intensity = view.collapse > 0 ? (2 + 6 * (1 - view.collapse)) * pulse : 0;
     this.light.position.x = D;
+    // たわみが見えてきたら、柱の中ほどに力の矢印。座屈したら曲げる力が勝つ
+    const fy = BASE_Y + COL_H / 2 - shorten / 2;
+    const fon = D > 0.08 && this.cutaway < 0.05;
+    const k = 0.9 * D;
+    const out = view.collapsed ? k * 1.35 : k;
+    placeArrow(this.fOut, D + this.bw / 2 + 0.1, fy + 0.18, 0.3, fon ? out : 0, 0);
+    placeArrow(this.fBack, D - this.bw / 2 - 0.1, fy - 0.18, 0.3, fon ? -k : 0, 0);
+    if (this.ftags.length) {
+      this.ftags[0].visible = fon;
+      this.ftags[0].position.set(D + this.bw / 2 + 0.1 + out + 0.75, fy + 0.18, 0.4);
+      this.ftags[1].visible = fon;
+      this.ftags[1].position.set(D - this.bw / 2 - 0.1 - k - 0.45, fy - 0.18, 0.4);
+    }
   }
 }
 
@@ -330,7 +360,7 @@ export class Stage3D {
     rim.position.set(-6, 4, -5);
     this.scene.add(rim);
 
-    this.cols = COL_X.map((x) => new Column3D(x, this.glow, machine));
+    this.cols = COL_X.map((x, i) => new Column3D(x, this.glow, machine, i === 1));
     for (const c of this.cols) this.scene.add(c.group);
 
     // 横になぞると回り込む(縦のスクロールはページに渡す)

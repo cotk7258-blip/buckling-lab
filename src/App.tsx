@@ -9,10 +9,10 @@ import Stage6 from './stages/Stage6.tsx';
 
 const STAGES = [
   { no: 1, title: '曲げとテコ', sub: 'なぜ H形なのか' },
-  { no: 2, title: 'オイラー座屈', sub: '突然曲がる理由' },
+  { no: 2, title: 'オイラー座屈', sub: '全体座屈の式' },
   { no: 3, title: '理想と現実', sub: '理論より早い理由' },
-  { no: 4, title: '設計曲線', sub: 'あの形の理由' },
-  { no: 5, title: '板の座屈', sub: 'リブが効く理由' },
+  { no: 4, title: '設計曲線', sub: 'λ と設計式' },
+  { no: 5, title: '板の座屈', sub: '局部座屈の式と R' },
   { no: 6, title: '座屈の照査', sub: '軸力・曲げ・安全率' },
 ];
 

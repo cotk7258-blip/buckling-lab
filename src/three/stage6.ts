@@ -190,7 +190,7 @@ export class Stage6Show extends ShowBase {
     super(canvas);
     this.addFloor(-0.2);
     this.scene.add(this.gOne, this.gPair, this.gGraph, this.gNM);
-    this.box = new Box6(4.4, 1.0, true);
+    this.box = new Box6(4.4, 1.0, false);
     this.weak = new Box6(4.4, 1.0, true, 0.045);
     this.gOne.add(this.box.group, this.weak.group);
     for (const [t, x, y] of [['リブ', 1.25, 3.4], ['パネル', -1.35, 2.2], ['角', 1.35, 1.2]] as const) {
@@ -241,7 +241,7 @@ export class Stage6Show extends ShowBase {
       put(yl, GX(0) + 0.35, GY(1.33), '#1f2a44', 0.75, 2);
       put(xl, GX(1.55), GY(0) - 0.5, '#1f2a44', 0.75, 2);
     };
-    frame(this.gGraph, '柱の細長さ →', '強さ', [0.5, 1, 1.5, 2].map((l) => [GX(l), l.toFixed(1)]), [[GY(1), '100%'], [GY(0.5), '50%']]);
+    frame(this.gGraph, '細長比パラメータ λ →', 'σ/σy', [0.5, 1, 1.5, 2].map((l) => [GX(l), l.toFixed(1)]), [[GY(1), '1.0'], [GY(0.5), '0.5']]);
     this.cG = tube(curvePts(strengthG), 0.036, '#0284c7');
     this.gGraph.add(this.cG);
     for (const c of ['#0284c7', '#6d28d9']) {
@@ -253,7 +253,7 @@ export class Stage6Show extends ShowBase {
     this.loadTag = tag('発生応力', '#ea580c', 0.7);
     this.gGraph.add(this.loadLine, this.loadTag);
 
-    frame(this.gNM, '曲げ(横からの力)→', '軸力(許容値 σcz = 100%)', [[NX(0.5), '50%'], [NX(1), '100%']], [[NY(0.5), '50%'], [NY(1), '100%']]);
+    frame(this.gNM, '曲げ σbc/σb →', '軸力 σc/σcz', [[NX(0.5), '0.5'], [NX(1), '1.0']], [[NY(0.5), '0.5'], [NY(1), '1.0']]);
     this.pt = dotMesh('#1f2a44');
     this.hit = dotMesh('#6d28d9', 0.07);
     this.ray = line('#1f2a44');
@@ -324,23 +324,17 @@ export class Stage6Show extends ShowBase {
     this.sideArrow(0, 0);
     this.loadLine.visible = false;
     this.loadTag.visible = false;
-    const still: BoxState = { Dg: 0, Al: 0, m: 8, mode: 'panel', load: 0 };
+    const still: BoxState = { Dg: 0, Al: 0, m: 4, mode: 'plate', load: 0 };
     if (s === 0) {
       this.show(this.gOne);
       const t = c % 24;
       this.box.update(still);
-      this.tags[0].visible = t > 5;
-      this.tags[2].visible = t > 5;
-      this.tags[1].visible = t > 11;
-      this.box.highlightPanel(t > 11);
       this.caption =
-        t < 5
+        t < 8
           ? '箱形の柱。薄い板を4枚、溶接して作る'
-          : t < 11
-            ? '板の真ん中に付いた縦の板が、リブ(補剛材)'
-            : t < 18
-              ? 'リブと角で区切られた1区画を、パネルと呼ぶ'
-              : '柱が曲がる座屈と、板が波打つ座屈。順に整理する';
+          : t < 16
+            ? '柱ごと曲がる座屈(全体座屈)と、板が波打つ座屈(局部座屈)がある'
+            : '①局部座屈 → ②全体座屈 → ③複合座屈 の順に照査する';
       this.look(0, 2.3, 2.6, 3.4, 28 + Math.sin(c * 0.3) * 10, 12);
     } else if (s === 1) {
       this.show(this.gOne);
@@ -354,15 +348,14 @@ export class Stage6Show extends ShowBase {
       this.show(this.gOne);
       const t = c % 16;
       const p = ramp(t, 1, 5) * (1 - ramp(t, 15, 16));
-      const A = 0.1 * ramp(t, 4.6, 6) * (1 - ramp(t, 15, 16));
+      const A = 0.18 * ramp(t, 4.6, 6) * (1 - ramp(t, 15, 16));
       this.box.update({ ...still, Al: A, load: p });
-      this.box.highlightPanel(t > 10.5 && t < 15);
       this.caption =
         t < 4.6
           ? '同じように押しても、板が薄いと…'
           : t < 10.5
             ? '局部座屈: 柱はまっすぐのまま、板だけが波打つ'
-            : 'リブと角は動かない。その間のパネルが波打つ = パネル座屈';
+            : '角は動かない。その間の板が波打つ。決め手は R(映像5)';
       this.look(0, 2.3, 2.4, 3.2, 34, 12);
     } else if (s === 3) {
       this.show(this.gOne);

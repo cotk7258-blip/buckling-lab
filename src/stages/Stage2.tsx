@@ -1,9 +1,59 @@
 import { useState } from 'react';
 import { SUPPORTS, Stage2Show } from '../three/stage2.ts';
 import type { Lab2, Support } from '../three/stage2.ts';
-import { Card, LabSlider, StoryShell, useShow } from '../ui/Story.tsx';
+import { Card, LabSlider, Steps, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
 import { Tex } from '../ui/Tex.tsx';
+
+const SIDE2: Record<number, React.ReactNode> = {
+  1: (
+    <Steps
+      title="綱引き(どちらもずれ y に比例)"
+      steps={[
+        ['曲げる力', String.raw`M=P\times y`],
+        ['戻す力', String.raw`-EI\,y''`],
+        ['釣合い', String.raw`EI\,y''+P\,y=0`],
+      ]}
+      note="y″ は曲がり具合(曲率)。山なりのカーブでマイナスになるので、戻す力は −EI·y″ と書く。"
+    />
+  ),
+  2: <Steps title="長さの効き方" steps={[['', String.raw`P_e\ \propto\ \dfrac{1}{l^2}`]]} note="長さが2倍なら 1/4、3倍なら 1/9。" />,
+  3: (
+    <Steps
+      title="釣合い式を解く"
+      steps={[
+        ['整理', String.raw`y''+k^2y=0,\quad k^2=\dfrac{P}{EI}`],
+        ['解の形', String.raw`y=A\sin kx\quad(\text{両端で }y=0)`],
+        ['両端の条件', String.raw`\sin kl=0\ \Rightarrow\ kl=\pi`],
+        ['曲がり具合', String.raw`y''=-\left(\dfrac{\pi}{l}\right)^2y`],
+      ]}
+      note="形はサインカーブ。π はここから出てくる。"
+    />
+  ),
+  4: (
+    <Steps
+      title="オイラーの式と、応力の形"
+      steps={[
+        ['座屈荷重', String.raw`P_e=\dfrac{\pi^2EI}{l^2}`],
+        ['応力にする', String.raw`\sigma_e=\dfrac{P_e}{A}=\dfrac{\pi^2E\,(Ar^2)}{A\,l^2}`],
+        ['オイラー座屈応力', String.raw`\sigma_e=\dfrac{\pi^2E}{(l/r)^2}`],
+      ]}
+      note="r = √(I/A) は断面二次半径、l/r が細長比。σe は E と細長比だけで決まり、σy を含まない。この σe から、映像4 で物差し λ を作る。"
+    />
+  ),
+  5: (
+    <Steps
+      title="支え方は有効座屈長 le に置きかえる"
+      steps={[
+        ['両端ピン', 'le = 1.0 l'],
+        ['片方固定・片方ピン', 'le ≒ 0.7 l'],
+        ['両端固定', 'le = 0.5 l'],
+        ['片持ち', 'le = 2.0 l'],
+        ['式', String.raw`\sigma_e=\dfrac{\pi^2E}{(l_e/r)^2}`],
+      ]}
+    />
+  ),
+};
 
 const SCENES: SceneText[] = [
   {
@@ -79,27 +129,17 @@ export default function Stage2() {
       capRef={capRef}
       hint="曲がり方は見やすく誇張しています・横になぞると回り込めます"
       side={
-        scene === 4 ? (
-          <div className="rounded-2xl border border-studio-600 bg-studio-900 p-3">
-            <div className="overflow-x-auto text-xl">
-              <Tex block>{String.raw`P_e = \dfrac{\pi^2 E I}{L^2}`}</Tex>
+        <>
+          {SIDE2[scene]}
+          {scene <= 5 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
+              <Chip2 color="#1f2a44" text="外力(押す力 P)" />
+              <Chip2 color="#64748b" text="反力" />
+              <Chip2 color="#ea580c" text="曲げる力 P × y" />
+              <Chip2 color="#0284c7" text="戻す力(回復力)EI × 曲がり" />
             </div>
-            <ul className="mt-1 space-y-1.5 text-sm">
-              <li>
-                <Tex>{String.raw`\pi^2`}</Tex> … 座屈の形がサインカーブだから
-              </li>
-              <li>
-                <Tex>{'EI'}</Tex> … 曲げへの踏ん張り(材料の硬さ × 断面の形)
-              </li>
-              <li>
-                <Tex>{'L^2'}</Tex> … 長いほどカーブがゆるく、戻す力が弱い
-              </li>
-            </ul>
-            <p className="mt-2 text-xs text-ink-dim">
-              支え方が違うときは、L の代わりに有効座屈長 <Tex>{'l_e'}</Tex>(サインカーブ半分の長さ)を使います。
-            </p>
-          </div>
-        ) : undefined
+          )}
+        </>
       }
       lab={
         <div className="grid gap-3 lg:grid-cols-2">
@@ -173,5 +213,14 @@ export default function Stage2() {
       }
       note="支え方ごとの強さ: 片持ち 1/4 倍、両端ピン 1 倍、片方固定・片方ピン 2.05 倍(有効座屈長 0.699L)、両端固定 4 倍。座屈の形は、片持ち 1−cos(πx/2L)、両端ピン sin(πx/L)、両端固定 (1−cos(2πx/L))/2、片方固定・片方ピンは tan(kL)=kL の解(kL=4.493)から。"
     />
+  );
+}
+
+function Chip2({ color, text }: { color: string; text: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+      {text}
+    </span>
   );
 }

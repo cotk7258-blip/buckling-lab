@@ -32,6 +32,14 @@ class Bar {
   private topGroup = new THREE.Group();
   private arrow: THREE.Group;
   private wave: THREE.Mesh | null = null;
+  private react: THREE.Group;
+  private fOut: THREE.Group;
+  private fBack: THREE.Group;
+  private tagsF: THREE.Sprite[] = [];
+  private xiMax = 0.5;
+  /** 反力と、曲げる力・戻す力の矢印を出すか。札も出すか */
+  forces = true;
+  tags = false;
   D = 0;
   topX = 0;
   topY = 0;
@@ -84,10 +92,33 @@ class Bar {
     this.wave = tube(pts, 0.035, '#e11d48', 0.9);
     this.wave.visible = false;
     this.group.add(this.wave);
+    // 反力(下の支えから上向き)、曲げる力(外力 P × ずれ)と戻す力(回復力)
+    this.react = arrow('#64748b');
+    this.react.scale.set(1.4, 1, 1.4);
+    this.fOut = arrow('#ea580c');
+    this.fBack = arrow('#0284c7');
+    for (const a of [this.fOut, this.fBack]) a.scale.set(1.3, 1, 1.3);
+    this.group.add(this.react, this.fOut, this.fBack);
+    for (const [t, c] of [['外力 P', '#1f2a44'], ['反力', '#64748b'], ['曲げる力', '#ea580c'], ['戻す力', '#0284c7']] as const) {
+      const sp = label(t, c);
+      sp.scale.multiplyScalar(0.6);
+      sp.visible = false;
+      this.group.add(sp);
+      this.tagsF.push(sp);
+    }
+    let best = 0;
+    for (let i = 0; i <= 100; i++) {
+      const v = Math.abs(w(i / 100));
+      if (v > best) {
+        best = v;
+        this.xiMax = i / 100;
+      }
+    }
   }
 
   /** D: いちばんずれる所のずれ。load: 矢印の長さ(0〜1 くらい)。wave: 赤い目印を出すか */
-  update(D: number, load: number, showWave = false) {
+  /** ratio: 押す力 ÷ 座屈荷重(曲げる力と戻す力の比)。省略すると、その矢印は出さない */
+  update(D: number, load: number, showWave = false, ratio?: number) {
     this.D = D;
     const w = SUPPORTS[this.sup].w;
     const pos = this.mesh.geometry.attributes.position as THREE.BufferAttribute;
@@ -108,6 +139,25 @@ class Bar {
     const len = 0.25 + 0.7 * Math.min(1.3, load);
     placeArrow(this.arrow, this.topX, this.topY + 0.22 + len, 0, 0, load > 0.005 ? -len : 0);
     if (this.wave) this.wave.visible = showWave && D > this.Dfin * 0.9;
+    const base = this.sup === 'pp' ? -0.4 : -0.34;
+    const rl = load > 0.005 ? len : 0;
+    placeArrow(this.react, 0, base - rl, 0, 0, this.forces ? rl : 0);
+    const on = this.forces && ratio !== undefined && D > 0.04;
+    const xi = this.xiMax;
+    const x = D * w(xi);
+    const y = xi * H - D * D * this.short[Math.round(xi * 200)];
+    const k = 2.4 * Math.abs(D);
+    placeArrow(this.fOut, x + 0.12, y + 0.15, 0.15, on ? k * (ratio ?? 0) : 0, 0);
+    placeArrow(this.fBack, x - 0.12, y - 0.15, 0.15, on ? -k : 0, 0);
+    const tg = this.tags;
+    this.tagsF[0].visible = tg && load > 0.005;
+    this.tagsF[0].position.set(this.topX + 0.55, this.topY + 0.5, 0.2);
+    this.tagsF[1].visible = tg && this.forces && load > 0.005;
+    this.tagsF[1].position.set(0.45, base - 0.35, 0.2);
+    this.tagsF[2].visible = tg && on;
+    this.tagsF[2].position.set(x + 0.12 + k * (ratio ?? 0) + 0.45, y + 0.15, 0.25);
+    this.tagsF[3].visible = tg && on;
+    this.tagsF[3].position.set(x - 0.12 - k - 0.4, y - 0.15, 0.25);
   }
 
   /** 高さ xi(0〜1)の位置 */
@@ -168,6 +218,7 @@ export class Stage2Show extends ShowBase {
     this.scene.add(this.g0, this.g2, this.g3, this.g5, this.gLab);
 
     this.main = new Bar('pp', 3.0, 0.5);
+    this.main.tags = true;
     this.g0.add(this.main.group);
     this.hOut = arrow('#ea580c');
     this.hBack = arrow('#0284c7');
@@ -256,7 +307,7 @@ export class Stage2Show extends ShowBase {
       const t = c % 15;
       const p = Math.min(1, ramp(t, 1, 8) * 1.0) * (1 - ramp(t, 13.5, 15));
       const D = 0.5 * (ramp(t, 7.9, 8.6) - ramp(t, 13.5, 15));
-      this.main.update(D, p);
+      this.main.update(D, p, false, p);
       this.forces(0, 0, false);
       this.caption =
         t < 1
@@ -305,8 +356,8 @@ export class Stage2Show extends ShowBase {
         dS = 0.4 * ramp(p, 0.99, 1.02);
         this.caption = p < 0.25 ? `2本を同じ力で押す。押す力 ${pct(p)}` : p < 0.99 ? `押す力 ${pct(p)}。長い棒は 25% で座屈した` : '長さが2倍なら、座屈する力は 1/4(長さの2乗に反比例)';
       }
-      this.short.update(dS, p);
-      this.long.update(dL, p);
+      this.short.update(dS, p, false, Math.min(1.02, p));
+      this.long.update(dL, p, false, Math.min(1.02, p / 0.25));
       this.tags2[2].visible = dS > 0.3;
       this.tags2[3].visible = dL > 0.3 && t >= 10;
       this.look(-0.2, 1.4, 3.0, 2.8, 10, 6);
@@ -345,7 +396,7 @@ export class Stage2Show extends ShowBase {
         const g = SUPPORTS[b.sup].gain;
         const goal = p >= g ? 0.36 : 0;
         this.dyn[i] += (goal * fade - this.dyn[i]) * (1 - Math.exp(-dt * 6));
-        b.update(this.dyn[i], Math.min(p, g * 1.02) / 4.2 + 0.05 * Math.min(1, p), true);
+        b.update(this.dyn[i], Math.min(p, g * 1.02) / 4.2 + 0.05 * Math.min(1, p), true, Math.min(p, g * 1.02) / g);
         const on = this.dyn[i] > 0.3;
         this.tags5[i][0].visible = on;
         this.tags5[i][1].visible = on;
@@ -370,7 +421,7 @@ export class Stage2Show extends ShowBase {
       // 降伏が先に来る長さでは、弾性座屈の形には曲げない
       const goal = load >= 1 && !this.lab.yieldFirst ? b.H * 0.24 * Math.min(1, 0.6 + (load - 1) * 2) : 0;
       this.dyn[0] += (goal - this.dyn[0]) * (1 - Math.exp(-dt * 5));
-      b.update(this.dyn[0], load * 0.8, true);
+      b.update(this.dyn[0], load * 0.8, true, this.lab.yieldFirst ? undefined : Math.min(1.1, load));
       this.caption = '';
       this.look(0, 1.4, 2.8, 3.4, 10, 6);
     }
