@@ -238,3 +238,40 @@ test('許容応力度の形の照査: 式どうしのつながりと、手計算
   const bad = c.check({ sy, E, nu: 0.3, b, t, k: 0.43, slenderY: 20, slenderZ: 200, sc: 60, sbcy: 30, sbcz: 20, sbgy: 200 });
   assert.equal(bad.valid, false);
 });
+
+test('理論から設計式へ: ペリー・ロバートソンの式と、各国の式・数値例の照合', async () => {
+  const t = await import('./theory.ts');
+  const c = await import('./curves.ts');
+  // 解は「縁の応力 = 降伏」を満たす
+  for (const [lam, eta] of [
+    [0.5, 0.1],
+    [1, 0.3],
+    [1.6, 0.2],
+  ]) {
+    const s = t.perry(lam, eta);
+    const p = t.edgeParts(s, lam, eta);
+    assert.ok(Math.abs(p.axial + p.bend + p.extra - 1) < 1e-9, `λ=${lam}`);
+  }
+  // Eurocode 3 の式は、η = α(λ − 0.2) としたペリー・ロバートソンの式そのもの
+  for (let lam = 0.25; lam < 2.5; lam += 0.05) {
+    for (const a of [0.21, 0.34, 0.49]) assert.ok(Math.abs(c.eurocode(lam, a) - t.perry(lam, a * (lam - 0.2))) < 1e-12);
+  }
+  // 不整なしなら理想の線(λ ≦ 1 で 1、λ > 1 で 1/λ²)
+  for (const lam of [0.5, 0.99, 1.5, 2]) assert.ok(Math.abs(t.perry(lam, 0) - t.idealColumn(lam)) < 1e-9);
+  // 理想との差は λ = 1 付近で最大(η = 0.3 で λ = 0.95〜1.05 の範囲に最大)
+  let best = 0;
+  let at = 0;
+  for (let lam = 0.2; lam < 2.5; lam += 0.01) {
+    const d = t.idealColumn(lam) - t.perry(lam, 0.3);
+    if (d > best) {
+      best = d;
+      at = lam;
+    }
+  }
+  assert.ok(at > 0.9 && at < 1.1, `最大の差の位置 λ=${at}`);
+  // 道示の曲線は λ → 大で 1/λ² に近づく(λ = 5 で比 0.97 以上)
+  assert.ok(c.dohshiOld(5) / t.idealColumn(5) > 0.97);
+  // 縁降伏の相関: 曲げだけなら 1、軸力だけなら 1(pe > 1 のとき)
+  assert.equal(t.edgeYieldMoment(0, 2), 1);
+  assert.equal(t.edgeYieldMoment(1, 2), 0);
+});
