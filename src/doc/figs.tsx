@@ -892,3 +892,99 @@ export function CurvesPair({ lam, R, n }: { lam?: number; R?: number; n?: string
   );
 }
 
+
+/* ================= 図: 波打った板の、幅方向の応力 ================= */
+
+/**
+ * 板の幅方向に並ぶ応力の模式図。波打つまでは一様。波打った後は、中央を σel のまま頭打ちにし、
+ * 増えた分を縁に寄せる(分布の形 1 − sin(πy/b)、平均がちょうど σ平均 になる)。縁が σy に届いたところが限界。
+ */
+export function FigPlateStress({ n }: { n: string }) {
+  const R = 1.6;
+  const el = 1 / (R * R); // σel/σy
+  const shape = 1 - 2 / Math.PI; // 1 − sin(πy/b) の幅方向の平均
+  const ult = el + (1 - el) * shape; // 縁が σy に届く平均応力
+  const [avg, setAvg] = useState(0.3);
+  const narrow = useNarrow();
+  const W = narrow ? 360 : 560;
+  const H = 300;
+  const x0 = 40;
+  const x1 = W - 20;
+  const base = 250;
+  const sc = 170; // σy の高さ
+  const N = 24;
+  const over = Math.max(0, avg - el);
+  const sAt = (u: number) => (avg <= el ? avg : el + (over * (1 - Math.sin(Math.PI * u))) / shape);
+  const edge = sAt(0);
+  const be = avg / edge; // 有効幅の割合
+  const amp = Math.min(26, over * 90);
+  const wave = Array.from({ length: 41 }, (_, i) => {
+    const u = i / 40;
+    return `${x0 + (x1 - x0) * u},${44 - amp * Math.sin(Math.PI * u)}`;
+  }).join(' ');
+  const yOf = (s: number) => base - s * sc;
+  const state = avg < el ? 0 : avg < ult - 0.005 ? 1 : 2;
+  return (
+    <Fig
+      n={n}
+      title="波打った板は、中央が力を受けなくなり、縁に力が寄る"
+      caption={`R = ${R} の両縁支持板(σel = σy/R² ≒ ${el.toFixed(2)}σy)を、幅方向に輪切りにした模式図。上は板の断面の形、下は幅方向に並ぶ圧縮応力。波打った後の分布は、中央を σel のままとした簡単なモデルで、形は模式的です(実際は中央もやや下がる)。このモデルで縁が σy に届く平均応力は ${ult.toFixed(2)}σy で、von Kármán の有効幅の式 1/R = ${(1 / R).toFixed(2)} に近い値になります。`}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="波打った板の応力分布">
+        {/* 板の断面(上から見た形ではなく、押す向きに見た輪切り) */}
+        <text x={x0} y={16} fontSize={12} fill={C.dim}>
+          板の輪切り(両縁は支えられている)
+        </text>
+        <polyline points={wave} fill="none" stroke={C.ink} strokeWidth={5} strokeLinecap="round" />
+        {[x0, x1].map((x) => (
+          <polygon key={x} points={`${x},${44} ${x - 8},${58} ${x + 8},${58}`} fill={C.green} />
+        ))}
+        {/* 応力の柱 */}
+        {Array.from({ length: N }, (_, i) => {
+          const u = (i + 0.5) / N;
+          const s = sAt(u);
+          const bw = ((x1 - x0) / N) * 0.8;
+          const x = x0 + (x1 - x0) * u - bw / 2;
+          return <rect key={i} x={x} y={yOf(s)} width={bw} height={s * sc} fill={s >= 0.999 ? C.red : C.blue} opacity={0.75} />;
+        })}
+        {/* 有効幅 */}
+        {state > 0 && (
+          <g fill="none" stroke={C.green} strokeWidth={2} strokeDasharray="5 4">
+            <rect x={x0} y={yOf(edge)} width={((x1 - x0) * be) / 2} height={edge * sc} />
+            <rect x={x1 - ((x1 - x0) * be) / 2} y={yOf(edge)} width={((x1 - x0) * be) / 2} height={edge * sc} />
+          </g>
+        )}
+        <line x1={x0} y1={base} x2={x1} y2={base} stroke={C.axis} />
+        <line x1={x0 - 6} y1={yOf(1)} x2={x1} y2={yOf(1)} stroke={C.red} strokeWidth={2} />
+        <text x={x0 - 8} y={yOf(1) + 4} fontSize={12} fill={C.red} textAnchor="end" fontWeight={700}>
+          σy
+        </text>
+        <line x1={x0 - 6} y1={yOf(el)} x2={x1} y2={yOf(el)} stroke={C.violet} strokeWidth={1.5} strokeDasharray="5 4" />
+        <text x={x0 - 8} y={yOf(el) + 4} fontSize={12} fill={C.violet} textAnchor="end" fontWeight={700}>
+          σel
+        </text>
+        <line x1={x0 - 6} y1={yOf(avg)} x2={x1} y2={yOf(avg)} stroke={C.ink} strokeWidth={1} strokeDasharray="2 3" />
+        <text x={(x0 + x1) / 2} y={yOf(avg) - 4} fontSize={12} fill={C.ink} textAnchor="middle" fontWeight={700}>
+          平均 {avg.toFixed(2)}σy
+        </text>
+        <text x={(x0 + x1) / 2} y={base + 18} fontSize={12} fill={C.dim} textAnchor="middle">
+          縁 ← 板の幅 b → 縁
+        </text>
+      </svg>
+      <Knob label="押す力(板の平均応力 / σy)" value={avg} min={0.05} max={ult} step={0.005} show={avg.toFixed(2)} color={C.ink} onChange={setAvg} />
+      <p className="mt-1 text-[15px] leading-relaxed">
+        {state === 0 && <>まだ波打っていない(平均 &lt; σel)。幅のどこでも同じ応力で受けている。</>}
+        {state === 1 && (
+          <>
+            σel を超えて波打った。ふくらんだ中央は逃げるので、それ以上の力を受けない。増えた分は、支えられてまっすぐな縁が受け持つ。緑の点線は「縁の応力で受けるとしたら何割の幅で足りるか」= 有効幅 <b className="num">{pct(be)}</b>。
+          </>
+        )}
+        {state === 2 && (
+          <>
+            縁が σy に届いた。ここがこの板の限界で、平均すると <b className="num">{pct(avg)}</b> の σy しか受けられない。断面の全部を σy まで使えるという前提が、ここで崩れる。
+          </>
+        )}
+      </p>
+    </Fig>
+  );
+}
