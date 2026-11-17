@@ -43,6 +43,8 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
       <MovieLink n={2} label="オイラー座屈(曲げる力と戻す力の綱引き)" onStage={onStage} />
 
       <H id="d1">1. オイラー座屈: 曲がった柱の釣合い</H>
+      <P>まず図2-1 のボタンを ① から順に押して、2つの「回す力」が逆向きに釣り合う様子を見てください。下の手順1〜3 は、それを式で書いたものです。</P>
+      <FigColumnEq />
       <Step n={1} title="外力が曲げようとする力(モーメント)">
         位置 x で柱が y だけ横にずれると、軸力 P は「腕の長さ y」で柱を回そうとします。
         <Eq tex={String.raw`M=P\times y`} />
@@ -53,10 +55,9 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
         <MovieLink n={1} label="曲げとテコ(なぜ M = EI × 曲率 か)" onStage={onStage} />
       </Step>
       <Step n={3} title="2つが釣り合う条件">
-        マイナスは「たわみを戻す向き」の意味です。移項すると、柱の釣合い式になります。
+        外力は左回り、柱の踏ん張りは右回りに回そうとし、その大きさが等しい(図2-1 の④)。マイナスは、山なりのカーブで y″ が負になるのを、正の量(曲がり具合 1/R)に直すためのものです。移項すると、柱の釣合い式になります。
                   <Eq n="1" strong tex={String.raw`P\,y=-EI\,y''\quad\Longrightarrow\quad EI\,y''+P\,y=0`} note="柱の釣合い式" />
               </Step>
-      <FigColumnEq />
       <Step n={4} title="式を整理して、解の形を見つける">
         両辺を EI で割り、k² = P/EI とおくと y″ + k²y = 0。これを y″ = −k²y と読むと、「曲がり具合は、ずれ y に比例して逆向き」。ずれが大きい所ほど強く元に戻る向きに曲がる形は、波(sin・cos)です。
         <Eq tex={String.raw`y=A\sin kx+B\cos kx\qquad(\text{確かめ: }(\sin kx)''=-k^2\sin kx)`} />

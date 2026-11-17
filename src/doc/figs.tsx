@@ -69,61 +69,227 @@ export function FigFlow({ onJump }: { onJump?: (id: string) => void }) {
 
 /* ================= 図: 曲がった柱の釣合い ================= */
 
+/** 点 (px, py) のまわりの円弧の矢印。角度は度(右=0、上=90)。ccw: 左回り */
+function ArcArrow(props: { px: number; py: number; r: number; from: number; to: number; ccw: boolean; color: string; w?: number }) {
+  const { px, py, r, from, to, ccw, color } = props;
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const pt = (d: number) => [px + r * Math.cos(rad(d)), py - r * Math.sin(rad(d))];
+  const [x0, y0] = pt(from);
+  const [x1, y1] = pt(to);
+  const span = Math.abs(to - from);
+  // 終点での進む向き(画面座標)
+  const t = rad(to);
+  const dir = ccw ? [-Math.sin(t), -Math.cos(t)] : [Math.sin(t), Math.cos(t)];
+  const nx = -dir[1];
+  const ny = dir[0];
+  const hl = 11;
+  const hw = 6;
+  const tip = [x1 + dir[0] * 4, y1 + dir[1] * 4];
+  const head = `${tip[0]},${tip[1]} ${tip[0] - dir[0] * hl + nx * hw},${tip[1] - dir[1] * hl + ny * hw} ${tip[0] - dir[0] * hl - nx * hw},${tip[1] - dir[1] * hl - ny * hw}`;
+  return (
+    <g>
+      <path d={`M ${x0} ${y0} A ${r} ${r} 0 ${span > 180 ? 1 : 0} ${ccw ? 0 : 1} ${x1} ${y1}`} fill="none" stroke={color} strokeWidth={props.w ?? 3.5} />
+      <polygon points={head} fill={color} />
+    </g>
+  );
+}
+
+/** まっすぐな矢印(x1,y1 が先端) */
+function Arr(props: { x0: number; y0: number; x1: number; y1: number; color: string; w?: number }) {
+  const { x0, y0, x1, y1, color } = props;
+  const len = Math.hypot(x1 - x0, y1 - y0);
+  if (len < 3) return null;
+  const ux = (x1 - x0) / len;
+  const uy = (y1 - y0) / len;
+  const hl = Math.min(10, len * 0.6);
+  const hw = 5;
+  return (
+    <g>
+      <line x1={x0} y1={y0} x2={x1 - ux * hl * 0.8} y2={y1 - uy * hl * 0.8} stroke={color} strokeWidth={props.w ?? 3} />
+      <polygon points={`${x1},${y1} ${x1 - ux * hl - uy * hw},${y1 - uy * hl + ux * hw} ${x1 - ux * hl + uy * hw},${y1 - uy * hl - ux * hw}`} fill={color} />
+    </g>
+  );
+}
+
+const EQ_STEPS: [number, string][] = [
+  [0, '① 切り出す'],
+  [1, '② 外力が回す'],
+  [2, '③ 柱が踏ん張る'],
+  [3, '④ 釣り合う'],
+];
+
 export function FigColumnEq() {
-  const [xr, setXr] = useState(0.35);
+  const [xr, setXr] = useState(0.4);
+  const [step, setStep] = useState(0);
   const narrow = useNarrow();
   const W = narrow ? 360 : 560;
-  const H = 300;
-  const top = 34;
-  const bot = H - 30;
+  const H = 400;
+  const top = 50;
+  const bot = H - 34;
   const L = bot - top;
-  const cx = narrow ? 110 : 150;
-  const A = 46;
-  const yAt = (r: number) => A * Math.sin(Math.PI * r);
-  const pts = Array.from({ length: 61 }, (_, i) => `${cx + yAt(i / 60)},${bot - (L * i) / 60}`).join(' ');
-  const yy = bot - L * xr;
-  const dx = yAt(xr);
-  const tx = cx + 90;
+  const cx = narrow ? 70 : 170;
+  const A = narrow ? 76 : 86;
+  const X = (r: number) => cx + A * Math.sin(Math.PI * r);
+  const Y = (r: number) => bot - L * r;
+  const path = (r0: number, r1: number) =>
+    Array.from({ length: 41 }, (_, i) => {
+      const r = r0 + ((r1 - r0) * i) / 40;
+      return `${X(r)},${Y(r)}`;
+    }).join(' ');
+  const px = X(xr);
+  const py = Y(xr);
+  const sinv = Math.sin(Math.PI * xr);
+  const ratio = sinv; // ずれ y・曲がり具合 1/R とも、最大の何割か
+  // 曲がりの円(曲率中心は左=内側)
+  const d1 = ((A * Math.PI) / L) * Math.cos(Math.PI * xr);
+  const kap = ((A * Math.PI * Math.PI) / (L * L)) * sinv / (1 + d1 * d1) ** 1.5;
+  const R = 1 / Math.max(kap, 1e-6);
+  const tx = -d1;
+  const tn = Math.hypot(1, d1);
+  // 曲線の接線(上向き): (d1, -1)/tn。内側の法線: (-1, -d1)/tn
+  const nX = -1 / tn;
+  const nY = -d1 / tn;
+  void tx;
+  const ccx = px + nX * R;
+  const ccy = py + nY * R;
+  const arcHalf = Math.min(0.9, 70 / R);
+  const a0 = Math.atan2(py - ccy, px - ccx);
+  const arcPts = Array.from({ length: 31 }, (_, i) => {
+    const a = a0 - arcHalf + (2 * arcHalf * i) / 30;
+    return `${ccx + R * Math.cos(a)},${ccy + R * Math.sin(a)}`;
+  }).join(' ');
+  const arcEnd = [ccx + R * Math.cos(a0 - arcHalf), ccy + R * Math.sin(a0 - arcHalf)];
+  const mag = 0.35 + 0.65 * ratio; // 回す矢印の大きさ(見やすさのため下限あり)
+  const fs = narrow ? 12 : 13;
+  const s1 = step >= 1;
+  const s2 = step >= 2;
+  const s3 = step >= 3;
+  const springs = [-28, -14, 14, 28];
+
+  const texts = [
+    <>
+      高さ x で柱を輪切りにして、<b>上の部分だけ</b>を取り出します。柱は止まっているので、取り出した上の部分も止まっている。つまり、上の部分にかかる力は、押す・回すの両方で釣り合っているはずです。
+    </>,
+    <>
+      上の部分には、上端で外力 <b>P が真下</b>に(濃紺)、切り口で下の部分から <b>P が真上</b>に(灰)かかります。同じ大きさ・逆向きなので、押す力は打ち消し合う。ところが2本は横に <b>y</b> だけずれているので、上の部分を<b style={{ color: C.orange }}>左回りに回そうとします</b>(オレンジ)。回す強さは「力 × ずれ」で <b>P × y</b>。これが外力のモーメントです。
+    </>,
+    <>
+      切り口では、曲がりの<b>内側(左)の鉄は縮んで押し返し</b>、<b>外側(右)の鉄は伸びて引き戻します</b>(青の小さな矢印)。左が上向き、右が下向きの力の組なので、上の部分を<b style={{ color: C.blue }}>右回りに回そうとします</b>(青)。強さは「硬さ × 断面の形 × 曲がり具合」で <b>EI × 1/R</b>(R は紫の円の半径。きつく曲がるほど R が小さく、踏ん張りが大きい)。
+    </>,
+    <>
+      上の部分が回らない = <b style={{ color: C.orange }}>左回り</b>と<b style={{ color: C.blue }}>右回り</b>が同じ強さ。だから <b>P × y = EI × 1/R</b>。「逆方向に釣り合う」とは、この2つの回す向きが逆で、大きさが等しいことです。
+      式の <b>−</b> は向きを表す記号ではなく、y″ の符号を直すためのものです。このカーブは右へ膨らんで戻る山なりなので、y″(y を高さで2回微分した値)はマイナス。曲がり具合 1/R はプラスの量なので <b>1/R = −y″</b>。こうして <b>P·y = −EI·y″</b> になります。
+    </>,
+  ];
+
   return (
-    <Fig n="2-1" title="少し曲がった柱の、ある高さでの力の釣合い" caption="両端ピンの柱を、横にわずかに曲げた状態。高さ x の位置で輪切りにすると、上から押す力 P が腕の長さ y で柱を回そうとする(外力のモーメント)。柱はそれに逆らって曲げに抵抗する。曲がり具合 y″ は、山なりのカーブでマイナスになるので、抵抗は −EI·y″ と書く。">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="曲がった柱の釣合い">
+    <Fig
+      n="2-1"
+      title="曲がった柱を輪切りにして、上の部分の釣合いを見る"
+      caption="両端ピンの柱が、座屈荷重でわずかに曲がった状態(サインカーブ)。曲がりの大きさは見やすく誇張しています。切り口の灰の矢印は、P を支える一様な押し返し(断面全体の合計)を中心に1本で描いたもの。青の小さな矢印は、そこに上乗せされる曲げの分だけを描いています。"
+    >
+      <Seg value={step} options={EQ_STEPS} onChange={setStep} />
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 block w-full" role="img" aria-label="曲がった柱の上の部分の釣合い">
+        {/* 元の軸 */}
         <line x1={cx} y1={top} x2={cx} y2={bot} stroke={C.gray} strokeDasharray="4 4" />
-        <polyline points={pts} fill="none" stroke={C.blue} strokeWidth={5} strokeLinecap="round" />
-        {[top, bot].map((y, i) => (
-          <g key={i}>
-            <polygon points={i ? `${cx},${y} ${cx - 10},${y + 16} ${cx + 10},${y + 16}` : `${cx},${y} ${cx - 10},${y - 16} ${cx + 10},${y - 16}`} fill={C.ink} />
+        {/* 下の部分(外す) */}
+        <polyline points={path(0, xr)} fill="none" stroke={C.blue} strokeWidth={6} strokeLinecap="round" opacity={0.18} />
+        <polygon points={`${cx},${bot} ${cx - 10},${bot + 16} ${cx + 10},${bot + 16}`} fill={C.ink} opacity={0.25} />
+        <text x={cx + 16} y={bot - 4} fontSize={fs} fill={C.dim}>
+          下の部分(外す)
+        </text>
+        {/* 上の部分 */}
+        <polyline points={path(xr, 1)} fill="none" stroke={C.blue} strokeWidth={7} strokeLinecap="round" />
+        <polygon points={`${cx},${top} ${cx - 10},${top - 14} ${cx + 10},${top - 14}`} fill={C.ink} />
+        {/* 切り口 */}
+        <line x1={px - 32} y1={py} x2={px + 32} y2={py} stroke={C.violet} strokeWidth={3} />
+        {!s1 && (
+          <text x={px + 32} y={py + 4} fontSize={fs} fill={C.violet} fontWeight={700}>
+            ここで輪切り(高さ x)
+          </text>
+        )}
+        {/* ② 外力 P と、切り口で支える P、腕 y */}
+        {s1 && (
+          <g>
+            <Arr x0={cx} y0={4} x1={cx} y1={top - 16} color={C.navy} w={4} />
+            <text x={cx + 10} y={20} fontSize={fs + 1} fill={C.navy} fontWeight={700}>
+              外力 P
+            </text>
+            <Arr x0={px} y0={py + 33} x1={px} y1={py + 3} color={C.gray} w={4} />
+            <text x={px + 40} y={py + 94} fontSize={fs} fill={C.dim} fontWeight={700}>
+              ↑ 下から支える P(灰)
+            </text>
+            <line x1={cx} y1={py} x2={px} y2={py} stroke={C.orange} strokeWidth={3} />
+            <line x1={cx} y1={py - 7} x2={cx} y2={py + 7} stroke={C.orange} strokeWidth={2} />
+            <text x={(cx + px) / 2} y={py - 9} fontSize={fs + 1} fill={C.orange} fontWeight={700} textAnchor="middle">
+              y
+            </text>
+            <ArcArrow px={px} py={py} r={40} from={-55} to={55 * mag} ccw color={C.orange} />
+            <text x={px + 22} y={py - 52} fontSize={fs + 1} fill={C.orange} fontWeight={700}>
+              左回り P × y
+            </text>
           </g>
-        ))}
-        <line x1={cx} y1={4} x2={cx} y2={top - 18} stroke={C.red} strokeWidth={3} />
-        <polygon points={`${cx - 6},${top - 22} ${cx + 6},${top - 22} ${cx},${top - 16}`} fill={C.red} />
-        <text x={cx + 10} y={16} fontSize={14} fill={C.red} fontWeight={700}>
-          P
-        </text>
-        <line x1={cx - 30} y1={yy} x2={cx + dx + 30} y2={yy} stroke={C.violet} strokeDasharray="3 3" />
-        <line x1={cx} y1={yy} x2={cx + dx} y2={yy} stroke={C.orange} strokeWidth={3} />
-        <circle cx={cx + dx} cy={yy} r={5} fill={C.orange} />
-        <text x={cx + dx / 2} y={yy - 8} fontSize={13} fill={C.orange} fontWeight={700} textAnchor="middle">
-          y
-        </text>
-        <text x={cx - 34} y={yy + 4} fontSize={13} fill={C.violet} fontWeight={700} textAnchor="end">
-          x
-        </text>
-        <g fontSize={13} fill={C.ink}>
-          <text x={tx} y={yy - 28} fontWeight={700} fill={C.orange}>
-            外力が曲げようとする: M = P × y
-          </text>
-          <text x={tx} y={yy - 8} fontWeight={700} fill={C.blue}>
-            柱が抵抗する: −EI × y″
-          </text>
-          <text x={tx} y={yy + 14} fill={C.dim}>
-            ずれ y は最大の {Math.round((dx / A) * 100)}%。曲がり具合 y″ も最大の {Math.round((dx / A) * 100)}%
-          </text>
-          <text x={tx} y={yy + 34} fill={C.dim}>
-            y が大きい所ほど、y″ も大きい(同じ形の波)
-          </text>
-        </g>
+        )}
+        {/* ③ 切り口の踏ん張り(曲げの分)と曲がりの円 */}
+        {s2 && (
+          <g>
+            {springs.map((o) => {
+              const l = Math.abs(o) * 1.4 * (0.3 + 0.7 * ratio);
+              const x = px + o;
+              return o < 0 ? <Arr key={o} x0={x} y0={py + l + 4} x1={x} y1={py + 2} color={C.blue} w={2.5} /> : <Arr key={o} x0={x} y0={py - 2} x1={x} y1={py + l + 2} color={C.blue} w={2.5} />;
+            })}
+            <ArcArrow px={px} py={py} r={62} from={55 * mag} to={-55} ccw={false} color={C.blue} />
+            <text x={px + 40} y={py + 72} fontSize={fs + 1} fill={C.blue} fontWeight={700}>
+              右回り EI × 1/R
+            </text>
+            {['内側(左)は', '縮んで押し返す', '外側(右)は', '伸びて引き戻す'].map((t, i) => (
+              <text key={t} x={px - 38} y={py + 20 + i * (fs + 3)} fontSize={fs - 1} fill={C.blue} textAnchor="end">
+                {t}
+              </text>
+            ))}
+            <polyline points={arcPts} fill="none" stroke={C.violet} strokeWidth={2} strokeDasharray="5 4" />
+            <text x={arcEnd[0] + 6} y={arcEnd[1] - 4} fontSize={fs} fill={C.violet} fontWeight={700}>
+              曲がりの円(半径 R)
+            </text>
+          </g>
+        )}
+        {/* ④ 釣合い */}
+        {s3 && (
+          <g fontSize={fs + 1} fontWeight={700}>
+            <rect x={W - (narrow ? 172 : 250)} y={top - 4} width={narrow ? 166 : 240} height={58} rx={10} fill="#ffffff" stroke={C.ink} />
+            <text x={W - (narrow ? 89 : 130)} y={top + 18} textAnchor="middle">
+              <tspan fill={C.orange}>P × y</tspan>
+              <tspan fill={C.ink}> = </tspan>
+              <tspan fill={C.blue}>EI × 1/R</tspan>
+            </text>
+            <text x={W - (narrow ? 89 : 130)} y={top + 42} textAnchor="middle" fill={C.ink}>
+              = −EI × y″
+            </text>
+          </g>
+        )}
       </svg>
-      <Knob label="輪切りにする高さ x / l" value={xr} min={0.05} max={0.95} step={0.01} show={xr.toFixed(2)} color={C.violet} onChange={setXr} />
+      <p className="mt-1 text-[15px] leading-relaxed">{texts[step]}</p>
+      {s3 && (
+        <div className="mt-2 space-y-1 text-sm">
+          <p className="font-bold">この高さでの大きさ(柱の真ん中を 100% とする)</p>
+          {[
+            ['外力が回す P × y', C.orange],
+            ['柱が踏ん張る EI × 1/R', C.blue],
+          ].map(([t, c]) => (
+            <div key={t} className="flex items-center gap-2">
+              <span className="w-40 shrink-0" style={{ color: c }}>
+                {t}
+              </span>
+              <span className="h-3 rounded" style={{ width: `${ratio * 45}%`, background: c }} />
+              <span className="num">{pct(ratio)}</span>
+            </div>
+          ))}
+          <p className="text-[13px] text-ink-dim">
+            ずれ y も曲がり具合 1/R も、サインカーブでは高さによって同じ割合で変わる。だから座屈荷重のときは、どの高さで切っても2つが等しい。荷重がそれより小さいと右回り(踏ん張り)が勝って、まっすぐに戻る。
+          </p>
+        </div>
+      )}
+      <Knob label="輪切りにする高さ x / l" value={xr} min={0.1} max={0.9} step={0.01} show={xr.toFixed(2)} color={C.violet} onChange={setXr} />
     </Fig>
   );
 }
