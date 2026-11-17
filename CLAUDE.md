@@ -38,7 +38,7 @@
 - 配色(2026-11-15 ユーザー指摘「黒系はかっこいいが難しそう。もっとシンプルに」で黒基調から明るい背景に変更): 背景は明るい灰青、文字は濃紺。圧縮=青、引張=オレンジ、降伏=赤(「降伏の天井」も赤)、目印・注目=紫(Tailwind の名前は `gold` のまま。引張のオレンジと紛れないよう金色をやめた)、理想の柱=緑、設計の線=青。`src/index.css` の @theme と `src/three/common.ts` の表。`studio-*` は名前はそのままで明るい色。3D の札(Sprite)とグラフの下地は toneMapped: false・fog: false(灰色がかるのを防ぐ)。「計算の前提」は折りたたみ(details)。
 - レビューの記録(2026-11-15、文脈を持たない別の Claude に厳しく見させた。Codex は作業環境から呼べないので `REVIEW_FOR_CODEX.md` に依頼書を置いた): 柱の式・係数・倍率は検算で問題なし。直した主な点 = ①Stage 5 で旧道示の 0.5/R² を「実際の強さ」と見せていた→「設計で認める強さ(旧基準)」と呼び、波打った後も縁で耐える分を見込んだ目安(Winter の有効幅の式 `plateWinter`)を別の線で出す。実験室の状態は4段階(`plateState`)。②Stage 3 の「残っている踏ん張り」は降伏していない部分の、その部分の中心まわりの値にする(元の中心まわりだと過大で、「いまの限界」の印に届く前に崩壊していた)。③Stage 2 の実験室は長さ 4〜16 m。座屈荷重が降伏荷重を超える長さでは「オイラーの式が使えない」と出し、弾性座屈の形に曲げない。④「幅が半分で4倍」は応力の話と明記。⑤建築学会の線は長い柱で理想の線に重なる理由を注記。⑥「折れた」→「座屈した」。⑦定規は 30×2 mm の比(225倍)。未確認のまま残した点は `REVIEW_FOR_CODEX.md`。
 - 2026-11-15 ユーザー指示「全ステージをこのクオリティーと解説の解像度で作って」。2026-11-15 ユーザーの指摘「もっと立体的に、H鋼が座屈していくイメージを。NHKレベルの分かりやすさ」で 2D の図から 3D の番組仕立てに作り直した。図やグラフを並べるだけの画面に戻さない。
-- 公開: main に push すると GitHub Actions が https://cotk7258-blip.github.io/buckling-lab/ へ出す。クラウドの作業環境からはこの URL に接続できないので、見た目は `npx vite preview` + Playwright(`--use-angle=swiftshader`)の画像で確かめる。
+- 公開(2026-11-17 にリポジトリを組織 kouzourikigaku へ移した。個人名が出ないアドレスにするため): main に push すると GitHub Actions が https://kouzourikigaku.github.io/buckling-lab/ へ出す。クラウドの作業環境からはこの URL に接続できないので、見た目は `npx vite preview` + Playwright(`--use-angle=swiftshader`)の画像で確かめる。
 
 ## コマンド
 `npm install` → `npm run dev` / `npm run build`(型チェック込み)/ `npm test`
