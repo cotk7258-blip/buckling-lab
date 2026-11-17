@@ -271,7 +271,11 @@ test('理論から設計式へ: ペリー・ロバートソンの式と、各国
   assert.ok(at > 0.9 && at < 1.1, `最大の差の位置 λ=${at}`);
   // 道示の曲線は λ → 大で 1/λ² に近づく(λ = 5 で比 0.97 以上)
   assert.ok(c.dohshiOld(5) / t.idealColumn(5) > 0.97);
-  // 縁降伏の相関: 曲げだけなら 1、軸力だけなら 1(pe > 1 のとき)
+  // 縁降伏の相関: 曲げだけなら 1。初期たわみがあると、曲げ 0 の端点はペリー・ロバートソンの式になる
   assert.equal(t.edgeYieldMoment(0, 2), 1);
   assert.equal(t.edgeYieldMoment(1, 2), 0);
+  for (const [lam, eta] of [[0.8, 0.15], [1.2, 0.3]]) {
+    const s = t.perry(lam, eta);
+    assert.ok(t.edgeYieldMoment(s, 1 / (lam * lam), eta) < 1e-9 && t.edgeYieldMoment(s - 0.01, 1 / (lam * lam), eta) > 0);
+  }
 });

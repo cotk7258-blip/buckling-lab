@@ -30,8 +30,8 @@ export function edgeParts(s: number, lam: number, eta: number) {
 export const idealPlate = (R: number) => Math.min(1, 1 / (R * R));
 
 /**
- * 軸力と曲げを受ける柱の、縁の応力が降伏に達する条件(理論の形)。
- * n = σc/σy、m = σb/σy、pe = σe/σy として n + m/(1 − n/pe) ≦ 1。
- * この境界で、軸力 n のとき許される曲げ m。
+ * 軸力と曲げを受ける、初期たわみのある柱の、縁の応力が降伏に達する条件(理論の形)。
+ * n = σc/σy、m = σbc/σy、pe = σe/σy として n + (n·η + m)/(1 − n/pe) ≦ 1。
+ * この境界で、軸力 n のとき許される曲げ m(負になる所では 0)。m = 0 の端点はペリー・ロバートソンの式 (perry) になる。
  */
-export const edgeYieldMoment = (n: number, pe: number) => (n >= 1 || n >= pe ? 0 : (1 - n) * (1 - n / pe));
+export const edgeYieldMoment = (n: number, pe: number, eta = 0) => (n >= pe ? 0 : Math.max(0, (1 - n) * (1 - n / pe) - n * eta));

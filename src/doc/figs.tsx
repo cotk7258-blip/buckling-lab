@@ -40,7 +40,7 @@ export function FigFlow({ onJump }: { onJump?: (id: string) => void }) {
     </button>
   );
   return (
-    <Fig n="1" title="3つの照査のつながり(押すと、その節へ)">
+    <Fig n="1-1" title="3つの照査のつながり(押すと、その節へ)">
       <div className="space-y-2">
         {row('①', '局部座屈(軸力のみ)', 'ov-local', [
           <Node key="1" k="板の寸法・材料" tex="b,\,t,\,k,\,\sigma_y" tone="in" />,
@@ -85,7 +85,7 @@ export function FigColumnEq() {
   const dx = yAt(xr);
   const tx = cx + 90;
   return (
-    <Fig n="2" title="少し曲がった柱の、ある高さでの力の釣合い" caption="両端ピンの柱を、横にわずかに曲げた状態。高さ x の位置で輪切りにすると、上から押す力 P が腕の長さ y で柱を回そうとする(外力のモーメント)。柱はそれに逆らって曲げに抵抗する。曲がり具合 y″ は、山なりのカーブでマイナスになるので、抵抗は −EI·y″ と書く。">
+    <Fig n="2-1" title="少し曲がった柱の、ある高さでの力の釣合い" caption="両端ピンの柱を、横にわずかに曲げた状態。高さ x の位置で輪切りにすると、上から押す力 P が腕の長さ y で柱を回そうとする(外力のモーメント)。柱はそれに逆らって曲げに抵抗する。曲がり具合 y″ は、山なりのカーブでマイナスになるので、抵抗は −EI·y″ と書く。">
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="曲がった柱の釣合い">
         <line x1={cx} y1={top} x2={cx} y2={bot} stroke={C.gray} strokeDasharray="4 4" />
         <polyline points={pts} fill="none" stroke={C.blue} strokeWidth={5} strokeLinecap="round" />
@@ -136,7 +136,7 @@ export function FigModes() {
   const shape = (cx: number, n: number) =>
     Array.from({ length: 81 }, (_, i) => `${cx + 26 * Math.sin((n * Math.PI * i) / 80)},${H - 34 - (150 * i) / 80}`).join(' ');
   return (
-    <Fig n="3" title="曲がったまま釣り合える形は、波の数 n ごとに決まる" caption="kl = nπ のときだけ、曲がった形でも釣り合える。荷重は n² に比例し、いちばん小さい n = 1 が座屈荷重になる。n = 2 以上は、途中を横から押さえない限り現れない。">
+    <Fig n="2-2" title="曲がったまま釣り合える形は、波の数 n ごとに決まる" caption="kl = nπ のときだけ、曲がった形でも釣り合える。荷重は n² に比例し、いちばん小さい n = 1 が座屈荷重になる。n = 2 以上は、途中を横から押さえない限り現れない。">
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="座屈の形">
         {[1, 2, 3].map((n, i) => {
           const cx = 100 + i * 160;
@@ -169,7 +169,7 @@ export function FigStrip() {
   const y1 = 190;
   const strips = 10;
   return (
-    <Fig n="5" title="長い板を、押す向きに並んだ「帯(細い柱)」の集まりとみなす" caption="帯1本は、幅1・厚さ t の長方形断面の柱。波1つの長さ(≒ 板の幅 b)を柱の長さとみなすと、オイラー式から出発できる。ただし帯は隣とつながっていて横に縮めず(× 1/(1−ν²))、両側の縁が支えられている(× k)。">
+    <Fig n="2-3" title="長い板を、押す向きに並んだ「帯(細い柱)」の集まりとみなす" caption="帯1本は、幅1・厚さ t の長方形断面の柱。波1つの長さ(≒ 板の幅 b)を柱の長さとみなすと、オイラー式から出発できる。ただし帯は隣とつながっていて横に縮めず(× 1/(1−ν²))、両側の縁が支えられている(× k)。">
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="板と帯">
         <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill="#eef2f8" stroke={C.axis} />
         {Array.from({ length: strips - 1 }, (_, i) => (
@@ -232,7 +232,7 @@ export function FigLambdaRuler() {
   const H = 120;
   const X = (v: number) => 20 + (Math.min(2.2, v) / 2.2) * (W - 40);
   return (
-    <Fig n="6" title="λ は「σe = σy になる基準の柱」の何倍細長いか" caption="基準の柱の細長比は π√(E/σy)。鋼が強い(σy が大きい)ほど基準の柱は太く短くなり、同じ l/r でも λ は大きくなる。">
+    <Fig n="2-4" title="λ は「σe = σy になる基準の柱」の何倍細長いか" caption="基準の柱の細長比は π√(E/σy)。鋼が強い(σy が大きい)ほど基準の柱は太く短くなり、同じ l/r でも λ は大きくなる。">
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="λ の目盛り">
         <rect x={X(0)} y={34} width={X(1) - X(0)} height={26} fill="#fde7c8" />
         <rect x={X(1)} y={34} width={X(2.2) - X(1)} height={26} fill="#dbeafe" />
@@ -498,7 +498,7 @@ export function FigBand({ n }: { n: string }) {
     <Fig
       n={n}
       title="現実の柱の計算結果(点)と、設計式(線)"
-      caption="点は、この教材の柱の計算(溶接 H形鋼、残留応力と初期たわみを入れた繊維モデル。映像3 と同じ計算)。設計式(紺)は、こうした結果の下側を通る。λ ≦ 0.2 で平ら、λ = 1 で2つの式がつながり、λ が大きいとオイラーの線に近づく。実際の設計式は、多数の座屈実験と解析に基づいて決められている。"
+      caption="点は、この教材の柱の計算(溶接 H形鋼、σy = 355 N/mm²、残留応力と初期たわみを入れた繊維モデル。映像3 と同じ計算)。設計式(紺)は、λ ≧ 0.3 ではこれらの点の下側を通る。λ = 0.2 の点はわずかに下(約 98%)だが、これはこの計算が降伏後のひずみ硬化を入れていないため。λ ≦ 0.2 で平ら、λ = 1 で2つの式がつながり、λ が大きいとオイラーの線に近づく。実際の設計式は、多数の座屈実験と解析に基づいて決められたとされている。"
     >
       <Plot
         aria="計算の点と設計式"
@@ -582,7 +582,7 @@ export function FigPlate({ n }: { n: string }) {
       <Knob label="見る板の R" value={R} min={0.3} max={2.4} step={0.01} show={R.toFixed(2)} color={C.red} onChange={setR} />
       <p className="text-sm">
         理想 <b className="num">{pct(idealPlate(R))}</b> ・ 実際の目安 <b className="num text-green-700">{pct(plateWinter(R))}</b> ・ 設計式 <b className="num" style={{ color: C.navy }}>{pct(plateStrength(R))}</b>
-        {R > 0.7 && <span className="text-ink-dim">(設計式 = 理想の {pct(plateStrength(R) / idealPlate(R))})</span>}
+        {R > 0.7 && <span className="text-ink-dim">(設計式 = 波打ち始める応力 σel の 50%。理想の強さ min(σy, σel) に対しては {pct(plateStrength(R) / idealPlate(R))})</span>}
       </p>
     </Fig>
   );
@@ -593,6 +593,8 @@ export function FigPlate({ n }: { n: string }) {
 export function FigInteraction({ n, initial = 3, point }: { n: string; initial?: 1 | 2 | 3; point?: [number, number] }) {
   const [step, setStep] = useState<1 | 2 | 3>(initial);
   const [lam, setLam] = useState(1.2);
+  // 初期たわみ L/1000、σy = 235、長方形断面(図3-2 と同じ条件)
+  const eta = etaFromImp(lam, 1000, E / 235);
   const [pb, setPb] = useState(0.8);
   const pe = 1 / (lam * lam);
   const pu = dohshiOld(lam);
@@ -604,7 +606,7 @@ export function FigInteraction({ n, initial = 3, point }: { n: string; initial?:
     <Fig
       n={n}
       title="軸力と曲げ: 理論の形から、設計式へ"
-      caption="縦は軸力、横は曲げ(どちらも σy に対する割合)。① 増幅を考えない足し算。② 縁の応力が降伏に達する条件に、軸力による増幅を入れた理論の形。③ 設計式: 軸力だけの端点を全体座屈の許容値 σcz に、曲げだけの端点を曲げの許容値に置き換え、σe を 0.8 倍して安全側にしたもの。ここでは局部座屈の低減なし(R ≦ 0.7)とした。"
+      caption="縦は軸力、横は曲げ(どちらも σy に対する割合)。① 増幅を考えない足し算。② (19) の理論の形(初期たわみ L/1000、σy = 235、長方形断面。軸力だけの端点はペリー・ロバートソンの式の値)。③ 設計式 (21): 軸力だけの端点を全体座屈の許容値 σcz に、曲げだけの端点を曲げの許容値に置き換え、σe を 0.8 倍したもの。ここでは局部座屈の低減なし(R ≦ 0.7)とした。"
     >
       <Plot
         aria="軸力と曲げの相関"
@@ -618,7 +620,7 @@ export function FigInteraction({ n, initial = 3, point }: { n: string; initial?:
         yFmt={(v) => v.toFixed(2)}
         series={[
           { pts: [[0, 1], [1, 0]], color: C.gray, width: step === 1 ? 3 : 1.8, dash: step === 1 ? undefined : '5 4' },
-          ...(step >= 2 ? [{ pts: curve((nn) => edgeYieldMoment(nn, pe), Math.min(1, pe)), color: C.orange, width: step === 2 ? 3 : 1.8, dash: step === 2 ? undefined : '5 4' }] : []),
+          ...(step >= 2 ? [{ pts: curve((nn) => edgeYieldMoment(nn, pe, eta), perry(lam, eta)), color: C.orange, width: step === 2 ? 3 : 1.8, dash: step === 2 ? undefined : '5 4' }] : []),
           ...(step >= 3 ? [{ pts: curve(designM, Math.min(pu, 0.8 * pe)), color: C.violet, width: 3.2 }] : []),
         ]}
         dots={step === 3 ? [[m0, n0, C.ink, 6], [0, pu, C.violet, 5], [pb, 0, C.violet, 5]] : []}
@@ -635,7 +637,7 @@ export function FigInteraction({ n, initial = 3, point }: { n: string; initial?:
       <Legend items={[[C.gray, '① 足し算だけ'], ...(step >= 2 ? ([[C.orange, '② 縁の降伏+増幅(理論の形)']] as [string, string][]) : []), ...(step >= 3 ? ([[C.violet, '③ 設計式(U = 1 の線)']] as [string, string][]) : [])]} />
       <Seg value={step} options={[[1, '① 足し算'], [2, '② 理論の形'], [3, '③ 設計式']]} onChange={setStep} />
       <div className="grid gap-x-4 sm:grid-cols-2">
-        <Knob label="柱の細長比パラメータ λ" value={lam} min={0.3} max={1.8} step={0.01} show={lam.toFixed(2)} color={C.violet} onChange={setLam} />
+        <Knob label="柱の細長比パラメータ λ" value={lam} min={0.3} max={1.7} step={0.01} show={lam.toFixed(2)} color={C.violet} onChange={setLam} />
         <Knob label="曲げの許容値 σb/σy" value={pb} min={0.4} max={1} step={0.01} show={pb.toFixed(2)} color={C.violet} onChange={setPb} />
       </div>
     </Fig>
