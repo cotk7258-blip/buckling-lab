@@ -83,7 +83,6 @@ export function FigColumnEq() {
   const pts = Array.from({ length: 61 }, (_, i) => `${cx + yAt(i / 60)},${bot - (L * i) / 60}`).join(' ');
   const yy = bot - L * xr;
   const dx = yAt(xr);
-  const curv = (Math.PI ** 2 * A * Math.sin(Math.PI * xr)) / (L * L);
   const tx = cx + 90;
   return (
     <Fig n="2" title="少し曲がった柱の、ある高さでの力の釣合い" caption="両端ピンの柱を、横にわずかに曲げた状態。高さ x の位置で輪切りにすると、上から押す力 P が腕の長さ y で柱を回そうとする(外力のモーメント)。柱はそれに逆らって曲げに抵抗する。曲がり具合 y″ は、山なりのカーブでマイナスになるので、抵抗は −EI·y″ と書く。">
@@ -117,7 +116,7 @@ export function FigColumnEq() {
             柱が抵抗する: −EI × y″
           </text>
           <text x={tx} y={yy + 14} fill={C.dim}>
-            y = {(dx / A).toFixed(2)} × 最大、曲がり具合 y″ ∝ −{(curv * 1000).toFixed(2)}
+            ずれ y は最大の {Math.round((dx / A) * 100)}%。曲がり具合 y″ も最大の {Math.round((dx / A) * 100)}%
           </text>
           <text x={tx} y={yy + 34} fill={C.dim}>
             y が大きい所ほど、y″ も大きい(同じ形の波)
@@ -132,7 +131,7 @@ export function FigColumnEq() {
 /* ================= 図: 座屈の形と荷重 ================= */
 
 export function FigModes() {
-  const W = 420;
+  const W = 520;
   const H = 230;
   const shape = (cx: number, n: number) =>
     Array.from({ length: 81 }, (_, i) => `${cx + 26 * Math.sin((n * Math.PI * i) / 80)},${H - 34 - (150 * i) / 80}`).join(' ');
@@ -140,7 +139,7 @@ export function FigModes() {
     <Fig n="3" title="曲がったまま釣り合える形は、波の数 n ごとに決まる" caption="kl = nπ のときだけ、曲がった形でも釣り合える。荷重は n² に比例し、いちばん小さい n = 1 が座屈荷重になる。n = 2 以上は、途中を横から押さえない限り現れない。">
       <svg viewBox={`0 0 ${W} ${H}`} className="block w-full" role="img" aria-label="座屈の形">
         {[1, 2, 3].map((n, i) => {
-          const cx = 80 + i * 130;
+          const cx = 100 + i * 160;
           return (
             <g key={n}>
               <line x1={cx} y1={H - 34} x2={cx} y2={H - 184} stroke={C.gray} strokeDasharray="4 4" />
