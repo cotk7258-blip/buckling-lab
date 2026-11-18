@@ -246,9 +246,9 @@ export class Stage2Show extends ShowBase {
     this.bar3.group.position.x = -2.9;
     this.g3.add(this.bar3.group);
     const defs: [(x: number) => number, string, string, number][] = [
-      [(x) => Math.sin(Math.PI * x), '#1f2a44', 'ずれ', -1.2],
-      [(x) => Math.cos(Math.PI * x), '#0284c7', '傾き', 0.6],
-      [(x) => -Math.sin(Math.PI * x), '#6d28d9', '曲がりのきつさ', 2.5],
+      [(x) => Math.sin(Math.PI * x), '#1f2a44', 'ずれ y', -1.2],
+      [(x) => Math.cos(Math.PI * x), '#0284c7', '傾き y′', 0.6],
+      [(x) => -Math.sin(Math.PI * x), '#6d28d9', '曲がり y″', 2.5],
     ];
     for (const [f, c, name, x] of defs) {
       const p = plot(f, c, 3.0);
@@ -363,7 +363,7 @@ export class Stage2Show extends ShowBase {
       this.look(-0.2, 1.4, 3.0, 2.8, 10, 6);
     } else if (s === 3 || s === 4) {
       this.only(this.g3);
-      const t = this.cyc(24, c);
+      const t = this.cyc(30, c);
       const D = 0.5 * (0.75 + 0.25 * Math.sin(c * 0.8));
       this.bar3.update(D, 1);
       const show = s === 4 ? [1, 1, 1] : [ramp(t, 1, 2), ramp(t, 6, 7), ramp(t, 12, 13)];
@@ -379,8 +379,10 @@ export class Stage2Show extends ShowBase {
             : t < 12
               ? '傾き: 両端でいちばん大きく、真ん中でゼロ'
               : t < 18
-                ? '曲がりのきつさ: 真ん中で最大。もとの形と同じ波で、向きが逆'
-                : '真ん中のきつさ = ずれ × (π/長さ)²。π は、波の形から来ている';
+                ? '傾きの変わり方 = 曲がりのきつさ: 真ん中で最大。もとの形と同じ波で、向きが逆'
+                : t < 24
+                  ? 'これが映像1 の曲率 1/R。式では y″ と書き、山なりでは負なので 1/R = −y″'
+                  : '真ん中のきつさ = ずれ × (π/長さ)²。π は、波の形から来ている';
       else {
         const k = Math.floor(c / 6) % 3;
         this.caption = ['π² : 座屈の形がサインカーブだから', 'EI : 曲げへの踏ん張り(STAGE 1 の硬さ × 形)', 'L² : 長いほどカーブがゆるく、戻す力が弱い'][k];

@@ -53,7 +53,7 @@ const SCENES: SceneText[] = [
 const TERMS = [
   { tex: 'E', name: 'ヤング係数', plain: '材料の硬さ(バネ1本の硬さ)' },
   { tex: 'I', name: '断面二次モーメント', plain: '断面の踏ん張りやすさ(バネの並び方)' },
-  { tex: String.raw`\dfrac{1}{R}`, name: '曲率', plain: '曲がり具合(R は曲がりの半径)' },
+  { tex: String.raw`\dfrac{1}{R}`, name: '曲率', plain: '曲がり具合(R は曲がりの半径)。映像2 では、たわみ y を2回微分した y″ で表す' },
 ];
 
 export default function Stage1() {

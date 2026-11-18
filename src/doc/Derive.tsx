@@ -50,8 +50,12 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
         <Eq tex={String.raw`M=P\times y`} />
       </Step>
       <Step n={2} title="柱が曲げに抵抗する力">
-        梁の基本式です。y″ は曲がり具合(曲率)、EI は曲げ剛性(E は材料の硬さ、I は断面の曲げにくさ)。
-        <Eq tex={String.raw`\text{抵抗モーメント}=-EI\,y''`} />
+        映像1 で見た梁の基本式は「抵抗モーメント = EI × 曲がり具合 1/R」です(E は材料の硬さ、I は断面の曲げにくさ、R は曲がりの半径)。ここでは、この 1/R を、ずれ y の式で書き直します。
+        <Eq tex={String.raw`M_{\text{抵抗}}=EI\times\dfrac{1}{R}`} />
+        <P>
+          <b>1/R と y″ のつながり</b>: 曲がり具合とは「傾きが、進むにつれてどれだけ変わるか」です。傾きは y を1回微分した y′、その変わり方は2回微分した y″。半径 R の円の頂上付近は y ≒ −x²/(2R) と書けるので、y′ = −x/R、y″ = −1/R になります。つまり、たわみが小さい(傾きがわずかな)柱では、曲がり具合 1/R は y″ の大きさそのもので、山なり(上に凸)のカーブでは y″ が負なので 1/R = −y″ です。
+        </P>
+        <Eq tex={String.raw`\dfrac{1}{R}=-y''\quad\Longrightarrow\quad M_{\text{抵抗}}=-EI\,y''`} note="正確には 1/R = −y″ ÷ (1 + y′²) の 3/2 乗。柱のたわみは長さの数百分の1ほどで y′² はごく小さいので、分母を 1 とみなす。" />
         <MovieLink n={1} label="曲げとテコ(なぜ M = EI × 曲率 か)" onStage={onStage} />
       </Step>
       <Step n={3} title="2つが釣り合う条件">
