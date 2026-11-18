@@ -202,6 +202,13 @@ test('複合座屈(映像用の無次元の形): check.ts と同じ式で、限�
   const r = c.check(i);
   const U = b.usage(i.sc / sy, i.sbcz / sy, r.scz / sy, r.sez / sy);
   assert.ok(Math.abs(U - r.U) < 1e-9, `${U} ${r.U}`);
+  // 2方向の曲げ: check.ts と同じ値になり、倍率を掛けると U = 1
+  const i2 = { ...i, slenderY: 45, sbcy: 25, sbgy: 180 };
+  const r2 = c.check(i2);
+  const args = [i2.sc / sy, i2.sbcy / i2.sbgy, i2.sbcz / sy, r2.scz / sy, r2.sey / sy, r2.sez / sy] as const;
+  assert.ok(Math.abs(b.usage2(...args) - r2.U) < 1e-9, `${b.usage2(...args)} ${r2.U}`);
+  const g2 = b.loadFactor2(...args);
+  assert.ok(Math.abs(b.usage2(g2 * args[0], g2 * args[1], g2 * args[2], args[3], args[4], args[5]) - 1) < 1e-9);
 });
 
 test('許容応力度の形の照査: 式どうしのつながりと、手計算との照合', async () => {

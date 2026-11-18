@@ -38,3 +38,38 @@ export function loadFactor(n: number, m: number, pu: number, pe: number): number
   if (a * c < 1e-12) return 1 / (a + m);
   return (s - Math.sqrt(s * s - 4 * a * c)) / (2 * a * c);
 }
+
+// ---- 2方向の曲げ(強軸 y まわり・弱軸 z まわり)。check.ts と同じ式 ----
+//  my = σbcy/σbgy(強軸まわりの曲げの使用割合の素)、mz = σbcz/σb0(弱軸まわり)
+//  pey、pez = 強軸・弱軸まわりのオイラー座屈応力 σe/σy
+
+/** 3つの項 [軸力, 強軸の曲げ/αy, 弱軸の曲げ/αz]。α ≦ 0 なら Infinity を含む */
+export function terms2(n: number, my: number, mz: number, pu: number, pey: number, pez: number): [number, number, number] {
+  const ay = alpha(n, pey);
+  const az = alpha(n, pez);
+  return [n / pu, ay > 0 ? my / ay : Infinity, az > 0 ? mz / az : Infinity];
+}
+
+/** 使用割合の合計 U = σc/σcz + σbcy/(σbgy·αy) + σbcz/(σb0·αz) */
+export function usage2(n: number, my: number, mz: number, pu: number, pey: number, pez: number): number {
+  const [a, b, c] = terms2(n, my, mz, pu, pey, pez);
+  return a + b + c;
+}
+
+/** 軸力と2方向の曲げを同じ割合で増やしたとき、U = 1 に達する倍率 */
+export function loadFactor2(n: number, my: number, mz: number, pu: number, pey: number, pez: number): number {
+  if (n <= 0 && my <= 0 && mz <= 0) return Infinity;
+  const f = (g: number) => usage2(g * n, g * my, g * mz, pu, pey, pez);
+  let lo = 0;
+  let hi = 1;
+  for (let k = 0; k < 60 && f(hi) < 1; k++) {
+    lo = hi;
+    hi *= 2;
+  }
+  for (let k = 0; k < 60; k++) {
+    const mid = (lo + hi) / 2;
+    if (f(mid) < 1) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}

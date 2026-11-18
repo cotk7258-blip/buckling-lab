@@ -50,14 +50,24 @@ const SCENES: SceneText[] = [
     body: '厚い板(R < 1)は、波打つ前に全体が降伏します。強さは天井の 1.0。薄い板(R > 1)は σel で波打ちます。σel/σy = 1/R² なので、その点は紫の線に乗ります。理想の板の強さは min(1, 1/R²)。柱の min(1, 1/λ²) とまったく同じ形で、物差しを R にしたことで、鋼の種類や支え方が違う板も同じ線で比べられます。',
   },
   {
-    kicker: '現実の板',
+    kicker: '現実の板 ①',
+    head: '溶接のゆがみと残留応力で、早めに崩れる',
+    body: '鋼橋の板は溶接で組み立てます。溶接部は冷えて縮むので、溶接した縁の近くには引張(オレンジ)、中央側には圧縮(青)の残留応力が残り、板もわずかに反ります(初期たわみ)。反った板は、σel に届く前から少しずつふくらみ、中央は残留圧縮が上乗せされて早く降伏に近づきます。柱の初期たわみ・残留応力と同じしくみです。だから σel と σy が近い R = 1 の付近で、強さが理想の線より下がります。',
+  },
+  {
+    kicker: '現実の板 ②',
     head: '現実の板: R = 1 付近で下がり、薄い板は余力がある',
-    body: '現実の板には、初期のゆがみと残留応力があります。そのため R = 1 の付近では、柱と同じく理想の線より下がります。ところが薄い板では逆で、波打ったあとも、支えられた縁の近くが力を受け持ち続けるので、理想の線より上まで耐えます(深緑の点。Winter の有効幅の式による目安)。ここが柱との大きな違いです。',
+    body: '前の場面のゆがみと残留応力のため、R = 1 の付近では、柱と同じく理想の線より下がります。ところが薄い板では逆で、波打ったあとも、支えられた縁の近くが力を受け持ち続けるので、理想の線より上まで耐えます(深緑の点。Winter の有効幅の式による目安)。ここが柱との大きな違いです。',
+  },
+  {
+    kicker: '板だけの理由',
+    head: '波打つと、中央が働かず、縁に力が寄る',
+    body: '柱の照査は「断面の全部が σy まで働く」ことを前提にしています。ところが板が波打つと、ふくらんだ中央は横へ逃げて、それ以上の力を受けません。増えた力は、支えられてまっすぐな縁だけが受けます(板の上の柱の並び)。縁が σy に届いたところで、その板は限界です。平均すると σy に届かないので、板には「σy × 低減率」までしか認めません。これが局部座屈の低減率の意味で、この使える割合 σcl/σy は柱全体の強さにも掛かります(映像6)。応力の並び方は、簡単なモデルによる模式図です。',
   },
   {
     kicker: '設計式',
     head: '設計式: R ≦ 0.7 で 1.0、R > 0.7 で 0.5/R²',
-    body: '設計で使う線(青)は、R が 0.7 以下なら低減なし、それより薄い板は 0.5/R² です。R² = σy/σel を代入すると 0.5/R² = 0.5 × σel/σy、つまり「波打ち始める応力の半分」。R = 1 付近の低下を見込み、薄い板の余力は当てにしない、安全側の線と読めます(道路橋示方書・平成24年版までの式。係数の根拠は基準の解説で確認してください)。',
+    body: '設計で使う線(青)は、R が 0.7 以下なら低減なし、それより薄い板は 0.5/R² です。R² = σy/σel を代入すると 0.5/R² = 0.5 × σel/σy、つまり「波打ち始める応力の半分」。R = 1 付近の低下を見込み、薄い板の余力は当てにしない、安全側の線と読めます。数値のうち、境目の 0.7 は 0.5/R² がちょうど 1.0 になる R = √0.5 ≒ 0.707 を丸めたもので、式の形から決まります。0.5 は試験・解析の結果と、R に応じた安全余裕から決めた係数とされています(道路橋示方書・平成24年版までの式。具体的な決め方は基準の解説で確認してください)。',
   },
   {
     kicker: '実験室',
@@ -117,15 +127,37 @@ const SIDE: Record<number, React.ReactNode> = {
     />
   ),
   7: <Steps title="理想の板" steps={[['', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{\sigma_{el}}{\sigma_y}\right)=\min\left(1,\ \dfrac{1}{R^2}\right)`]]} />,
-  8: <Steps title="現実の板の強さの目安(両縁支持)" steps={[['Winter', String.raw`\dfrac{\sigma_u}{\sigma_y}=\dfrac{R-0.22}{R^2}\quad(R>0.673)`]]} note="有効幅の考え方による目安(Eurocode 3 の両縁支持板と同じ形)。理想の線とは R = 1.22 で交わる。" />,
-  9: (
+  9: <Steps title="現実の板の強さの目安(両縁支持)" steps={[['Winter', String.raw`\dfrac{\sigma_u}{\sigma_y}=\dfrac{R-0.22}{R^2}\quad(R>0.673)`]]} note="有効幅の考え方による目安(Eurocode 3 の両縁支持板と同じ形)。理想の線とは R = 1.22 で交わる。" />,
+  11: (
     <Steps
       title="設計式(道路橋示方書・平成24年版まで)"
       steps={[
         ['R ≦ 0.7', String.raw`\dfrac{\sigma_{cl}}{\sigma_y}=1.0`],
         ['R > 0.7', String.raw`\dfrac{\sigma_{cl}}{\sigma_y}=\dfrac{0.5}{R^2}=0.5\,\dfrac{\sigma_{el}}{\sigma_y}`],
       ]}
-      note="式どおりだと R = 0.7 のすぐ上で 1.02 になるので、1.0 で頭打ちにして描いている。"
+      note="0.7 = √0.5 ≒ 0.707(0.5/R² が 1.0 になる点)を丸めた境目。0.5 は試験・解析と安全余裕から決めた係数(具体は要確認)。式どおりだと R = 0.7 のすぐ上で 1.02 になるので、1.0 で頭打ちにして描いている。"
+    />
+  ),
+  8: (
+    <Steps
+      title="初期たわみは、押すと増える(柱と同じ)"
+      steps={[
+        ['はじめの反り', String.raw`w_0`],
+        ['押したとき', String.raw`w=\dfrac{w_0}{1-\sigma/\sigma_{el}}`],
+        ['中央の応力', String.raw`\sigma+\sigma_{\text{残留}}+\text{反りによる曲げ}`],
+      ]}
+      note="σ が σel に近いほど反りは大きくなる。R = 1 付近では σel ≒ σy なので、降伏に近い所で反りが大きく増え、理想の線より手前で限界になる。"
+    />
+  ),
+  10: (
+    <Steps
+      title="縁に寄る応力と、有効幅"
+      steps={[
+        ['有効幅', String.raw`\dfrac{b_{\text{有効}}}{b}=\dfrac{\sigma_{\text{平均}}}{\sigma_{\text{縁}}}`],
+        ['縁が σy で限界', String.raw`\dfrac{\sigma_u}{\sigma_y}\approx\dfrac{1}{R}\quad(\text{von Kármán})`],
+        ['この板 R = 1.6', String.raw`\dfrac{1}{1.6}=0.63`],
+      ]}
+      note="映像の応力の並びは、中央を σel のままとした簡単なモデル。限界の平均応力は 0.61σy で、von Kármán の 1/R に近い。"
     />
   ),
 };
@@ -176,13 +208,26 @@ export default function Stage5() {
       side={
         <>
           {SIDE[scene]}
-          {scene >= 7 && (
+          {(scene === 7 || scene === 9 || scene >= 11) && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip color="#e11d48" text="降伏の天井 1.0" />
               <Chip color="#6d28d9" text="σel/σy = 1/R²" />
               <Chip color="#16a34a" text="理想の板" />
-              {scene >= 8 && <Chip color="#0f766e" text="現実の板(目安)" />}
-              {scene >= 9 && <Chip color="#0284c7" text="設計式" />}
+              {scene >= 9 && <Chip color="#0f766e" text="現実の板(目安)" />}
+              {scene >= 11 && <Chip color="#0284c7" text="設計式" />}
+            </div>
+          )}
+          {scene === 8 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
+              <Chip color="#0284c7" text="圧縮(中央側の残留応力+押す力)" />
+              <Chip color="#ea580c" text="引張(溶接した縁の近く)" />
+            </div>
+          )}
+          {scene === 10 && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
+              <Chip color="#0284c7" text="幅方向の応力(板の上の柱)" />
+              <Chip color="#e11d48" text="σy に届いた所" />
+              <Chip color="#6d28d9" text="σel(波打ち始める応力)" />
             </div>
           )}
           {scene >= 1 && scene <= 5 && (

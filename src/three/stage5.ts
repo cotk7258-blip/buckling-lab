@@ -55,6 +55,8 @@ export interface PlateLook {
   /** 波の山での、押し出す力(外力による)と戻す力(回復力)の矢印の長さ */
   fOut?: number;
   fBack?: number;
+  /** 幅方向の応力 σ/σy(u = 0〜1、圧縮を正)。指定すると level・pattern より優先する */
+  stressAt?: (u: number) => number;
   /** 周りを薄くして、真ん中の帯を見せる(0〜1)。帯のたわみ */
   ghost?: number;
   strip?: number;
@@ -167,7 +169,10 @@ export class Plate {
       const v = this.base[i * 3 + 1] / a + 0.5;
       const w = this.shape(u, v, m);
       pa[i * 3 + 2] = this.base[i * 3 + 2] + A * w;
-      if (o.level === undefined) {
+      if (o.stressAt) {
+        writeStressColor(this.tmp, 0, Math.max(-1, Math.min(1, o.stressAt(u))), 1, STEEL);
+        this.c.setRGB(this.tmp[0], this.tmp[1], this.tmp[2]);
+      } else if (o.level === undefined) {
         this.c.copy(STEEL).offsetHSL(0, 0, A > 0.001 ? w * 0.2 * Math.min(1, A / 0.06) : 0);
       } else {
         const e = this.o.free ? 1 - u : Math.abs(Math.cos(Math.PI * u));
@@ -298,6 +303,12 @@ const ZG = -0.5;
 /** 両縁支持(k = 4)、σy = 355、E = 2.0×10⁵、ν = 0.3 で R = 1 になる幅厚比 */
 export const BT1 = 1 / plateR(1, 1, 355, 4);
 const PB = 0.5; // 並べる板の幅(絵)
+// 応力の柱(場面「縁に寄る」): 下端の高さ、σy の高さ、この板の σel/σy(R = 1.6)、分布の形 1 − sin(πu) の平均
+const NB = 18;
+const BAR0 = 2.0;
+const BARH = 0.9;
+const EDGE_EL = 1 / (1.6 * 1.6);
+const SHAPE = 1 - 2 / Math.PI;
 const thick = (R: number) => Math.max(0.035, 0.1 / R);
 
 function curve(f: (R: number) => number, r0: number, r1: number, rad: number, color: string) {
@@ -355,17 +366,48 @@ export class Stage5Show extends ShowBase {
   private gLab = new THREE.Group();
   private labPlates: Record<string, Plate> = {};
   private amp = [0, 0, 0];
+  private gBars = new THREE.Group();
+  private bars: THREE.Mesh[] = [];
+  private barTags: THREE.Sprite[] = [];
+  private barY = new THREE.Group();
+  private barEl = new THREE.Group();
   lab: Lab5 = { b: 900, t: 12, k: 4, load: 0.3 };
 
   constructor(canvas: HTMLCanvasElement) {
     super(canvas);
     this.addFloor(-0.2);
-    this.scene.add(this.gBox, this.gOne, this.gPair, this.gSup, this.gLine, this.gWall, this.gLab);
+    this.scene.add(this.gBox, this.gOne, this.gPair, this.gSup, this.gLine, this.gWall, this.gLab, this.gBars);
     this.box = new BoxCol(3.3, 1.35);
     this.gBox.add(this.box.group);
 
     this.one = new Plate(1.4, 1.4, 0.06, { loads: 3 });
     this.gOne.add(this.one.group);
+
+    // 板の上に、幅方向に並ぶ応力の柱(波打つと縁に寄る様子を見せる)
+    for (let i = 0; i < NB; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.05), new THREE.MeshStandardMaterial({ color: BACK, emissive: BACK, emissiveIntensity: 0.4 }));
+      this.gBars.add(m);
+      this.bars.push(m);
+    }
+    const hline = (g: THREE.Group, color: string, dashed: boolean, y: number, text: string) => {
+      const l = line(color, dashed);
+      setLine(l, -0.78, y, 0.78, y, 0.03);
+      const s2 = tag(text, color, 0.55);
+      s2.position.set(-0.98, y, 0.03);
+      g.add(l, s2);
+      this.gBars.add(g);
+    };
+    hline(this.barY, '#e11d48', false, BAR0 + BARH, 'σy');
+    hline(this.barEl, '#6d28d9', true, BAR0 + BARH * EDGE_EL, 'σel');
+    for (const [t, c] of [['幅方向に並ぶ応力', INK], ['縁', EDGE], ['縁', EDGE], ['中央', INK]] as const) {
+      const s2 = tag(t, c, 0.55, t.length > 4 ? 2 : 1);
+      this.gBars.add(s2);
+      this.barTags.push(s2);
+    }
+    this.barTags[0].position.set(0, BAR0 + BARH + 0.28, 0.03);
+    this.barTags[1].position.set(-0.7, BAR0 - 0.14, 0.03);
+    this.barTags[2].position.set(0.7, BAR0 - 0.14, 0.03);
+    this.barTags[3].position.set(0, BAR0 - 0.14, 0.03);
 
     this.wide = new Plate(1.4, 1.4, 0.06, { loads: 3 });
     this.wide.group.position.x = -1.15;
@@ -471,7 +513,72 @@ export class Stage5Show extends ShowBase {
   }
 
   private show(...gs: THREE.Group[]) {
-    for (const g of [this.gBox, this.gOne, this.gPair, this.gSup, this.gLine, this.gWall, this.gLab]) g.visible = gs.includes(g);
+    for (const g of [this.gBox, this.gOne, this.gPair, this.gSup, this.gLine, this.gWall, this.gLab, this.gBars]) g.visible = gs.includes(g);
+  }
+
+  /** 幅方向の応力の柱。sAt(u) = σ/σy */
+  private setBars(sAt: (u: number) => number) {
+    const w = 1.4 / NB;
+    this.bars.forEach((m, i) => {
+      const u = (i + 0.5) / NB;
+      const v = Math.max(0.002, sAt(u));
+      m.scale.set(w * 0.8, v * BARH, 1);
+      m.position.set((u - 0.5) * 1.4, BAR0 + (v * BARH) / 2, 0);
+      const mat = m.material as THREE.MeshStandardMaterial;
+      // 縁(いちばん外側の柱)が σy に届いたら赤
+      const col = sAt(0) >= 0.995 && (i === 0 || i === NB - 1) ? '#e11d48' : BACK;
+      mat.color.set(col);
+      mat.emissive.set(col);
+    });
+  }
+
+  /** 溶接のゆがみと残留応力(現実の板が R = 1 付近で弱くなる理由) */
+  private tickWeld(c: number) {
+    this.show(this.gOne);
+    const t = c % 22;
+    const fade = 1 - ramp(t, 21, 22);
+    const res = ramp(t, 1, 3) * fade;
+    const A0 = 0.035 * ramp(t, 6, 8) * fade;
+    // 押す応力 σ/σel(この板は σel ≒ σy の板、R ≒ 1 として描く)
+    const p = 0.9 * ramp(t, 10, 17) * fade;
+    // 初期たわみは、押すと 1/(1 − σ/σel) 倍に増える(柱の初期たわみと同じ)
+    const A = A0 / (1 - p);
+    // 残留応力: 溶接した縁の近くは引張、中央側は圧縮(幅で平均すると0)
+    const resid = (u: number) => res * (0.3 - 1.1 * Math.abs(Math.cos(Math.PI * u)) ** 8);
+    this.one.update({ A, load: p, stressAt: (u) => resid(u) * 0.8 + p * 0.85, railGlow: 0.6, tags: t > 10 });
+    this.caption =
+      t < 6
+        ? '溶接した縁の近くには引張(オレンジ)、中央側には圧縮(青)の残留応力が残る'
+        : t < 10
+          ? 'さらに、溶接で縮んだ分、板はわずかに反っている(初期たわみ)'
+          : t < 15
+            ? '押すと、σel に届く前から少しずつふくらむ(反りが 1/(1−σ/σel) 倍に)'
+            : '中央は残留圧縮が上乗せされ、早く降伏に近づく。だから R = 1 付近で理想より下がる';
+    this.look(0, 0.75, 1.6, 1.35, 30, 14);
+  }
+
+  /** 波打った板は、中央が力を受けず、縁に力が寄る(板の低減率が要る、板だけの理由) */
+  private tickEdge(c: number) {
+    this.show(this.gOne, this.gBars);
+    const t = c % 24;
+    const fade = 1 - ramp(t, 23, 24);
+    const el = EDGE_EL;
+    const ult = el + (1 - el) * SHAPE;
+    // 平均応力 σ/σy
+    const avg = (t < 7 ? el * ramp(t, 1, 6.5) : el + (ult - el) * ramp(t, 7, 14)) * fade;
+    const over = Math.max(0, avg - el);
+    const sAt = (u: number) => (avg <= el ? avg : el + (over * (1 - Math.sin(Math.PI * u))) / SHAPE);
+    this.setBars(sAt);
+    const A = 0.16 * Math.min(1, over / Math.max(0.01, ult - el)) + (avg >= el * 0.999 ? 0.04 : 0);
+    this.one.update({ A: A * fade, load: avg / ult, stressAt: sAt, railGlow: 1, tags: false });
+    this.barEl.visible = true;
+    this.caption =
+      t < 7
+        ? `押していく(平均 ${Math.round(avg * 100)}%)。波打つまでは、幅のどこでも同じ応力で受ける`
+        : t < 15
+          ? `σel を超えて波打った(平均 ${Math.round(avg * 100)}%)。ふくらんだ中央は逃げて、増えた力は縁が受ける`
+          : `縁が σy に届いた = この板の限界。平均すると σy の ${Math.round(ult * 100)}% しか受けられない`;
+    this.look(0, 1.75, 1.6, 2.25, 18, 8);
   }
 
   private wall(fy: number, fe: number, fi: number, fr: number, fd: number, mark: boolean, probe: number | null) {
@@ -486,7 +593,12 @@ export class Stage5Show extends ShowBase {
   }
 
   protected tick(dt: number) {
-    const s = this.sceneIndex;
+    const raw = this.sceneIndex;
+    const c0 = this.clock;
+    // 場面 8 = 溶接のゆがみと残留応力、場面 10 = 縁に寄る応力。そのほかは元の番号に読み替える
+    if (raw === 8) return this.tickWeld(c0);
+    if (raw === 10) return this.tickEdge(c0);
+    const s = raw === 9 ? 8 : raw === 11 ? 9 : raw >= 12 ? 10 : raw;
     const c = this.clock;
     const k6 = 1 - Math.exp(-dt * 6);
     if (s === 0) {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { EX, Stage6Show, strengthGL } from '../three/stage6.ts';
+import { terms2 } from '../physics/beamcolumn.ts';
+import { EX, EXB, Stage6Show, exbValues, strengthGL } from '../three/stage6.ts';
 import { Card, StoryShell, openFormulas, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
 import { Tex } from '../ui/Tex.tsx';
@@ -7,6 +8,9 @@ import { Term } from '../ui/glossary.tsx';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 const exStr = strengthGL(EX.lam, EX.R);
+const exb = exbValues();
+const exTerms = terms2(EXB.n, EXB.my, EXB.mz, exb.pu, exb.pey, exb.pez);
+const exU = exTerms[0] + exTerms[1] + exTerms[2];
 
 const SCENES: SceneText[] = [
   {
@@ -41,18 +45,18 @@ const SCENES: SceneText[] = [
   },
   {
     kicker: '③ 複合座屈',
-    head: '曲げが加わると、余力を分け合う',
-    body: '実際の柱は、上から押されるだけではありません。地震や風、水圧などで横からも力を受け、曲げられます。軸力と曲げを同時に受ける照査が、複合座屈です。考え方は「使用割合」。軸力が許容値の何割を使い、曲げが許容値の何割を使うかを足して、合計が 1 以下なら OK。グラフは縦が軸力、横が曲げで、どちらもそれだけを受けるときの許容値を 100% としています。',
+    head: '曲げは2方向。軸力・強軸・弱軸で余力を分け合う',
+    body: '実際の柱は、上から押されるだけではありません。地震や風、水圧などで横からも力を受け、曲げられます。曲げる向きは2つあります。断面の広い向きへ曲げる「強軸まわりの曲げ」と、狭い向きへ曲げる「弱軸まわりの曲げ」です。軸力と2方向の曲げを同時に受ける照査が、複合座屈です。考え方は「使用割合」。軸力・強軸の曲げ・弱軸の曲げが、それぞれ許容値の何割を使うかを足して、合計が 1 以下なら OK。グラフは縦が軸力、横が強軸の曲げ、奥行きが弱軸の曲げで、どれもそれだけを受けるときの許容値を 1.0 としています。3つの和が 1 になる三角の面の内側が、耐えられる範囲です。',
   },
   {
     kicker: '③ 複合座屈',
-    head: '軸力は、曲げを増幅する',
-    body: 'ところが、足し算だけでは足りません。横から押されて少し曲がった柱を上から押すと、押す力が「曲げる力」に化けて、曲がりがさらに大きくなります。軸力は、曲げを増幅するのです。照査式では、曲げの使用割合を α = 1 − σc ÷ (0.8σe) で割って、この増幅を入れます。軸力が増えるほど α は小さくなり、曲げが大きく効きます。耐えられる範囲は、直線より内側へへこみます(紫の線)。',
+    head: '軸力は曲げを増幅する。弱軸まわりほど大きく',
+    body: 'ところが、足し算だけでは足りません。横から曲げられて少し曲がった柱を上から押すと、押す力が「曲げる力」に化けて、曲がりがさらに大きくなります。増幅の度合いは、その向きに曲がるときのオイラー座屈応力 σe で決まり、照査式では曲げの使用割合を α = 1 − σc ÷ (0.8σe) で割ります。強軸と弱軸では細長さが違い σe も違うので、α は向きごとに別々(αy、αz)です。弱軸まわりは σe が小さいので α が小さく、増幅が大きい。耐えられる範囲は、三角の面から内側へへこんだ面(紫)になり、弱軸の側ほど大きくへこみます。',
   },
   {
     kicker: '③ 複合座屈',
     head: '使用割合の合計 U と、安全率 1/U',
-    body: 'ここまでを1行にしたのが、下の照査式です。第1項は軸力の使用割合で、分母は②の許容値 σcz。第2項は、α で割った曲げの使用割合。合計 U が 1 以下なら OK で、安全率は 1/U です。黒い点が、いま柱にかかっている軸力と曲げ。紫の線までの余裕が、安全率にあたります。α が 0 以下(σc が 0.8σe 以上)になると、この式は使えません。',
+    body: 'ここまでを1行にしたのが、下の照査式です。第1項は軸力の使用割合で、分母は②の許容値 σcz。第2項は強軸まわりの曲げを αy で割ったもの、第3項は弱軸まわりの曲げを αz で割ったもの。合計 U が 1 以下なら OK で、安全率は 1/U です。黒い点が、いま柱にかかっている軸力と2方向の曲げ。紫の面までの余裕が、安全率にあたります。αy・αz のどちらかが 0 以下(σc が 0.8σe 以上)になると、この式は使えません。',
   },
   {
     kicker: '計算へ',
@@ -85,31 +89,51 @@ export default function Stage6() {
         scene >= 6 ? (
           <div className="rounded-xl border border-studio-700 bg-studio-900 px-3 py-2 text-sm">
             <p className="text-xs font-bold text-ink-dim">
-              <Term id="beamcol">複合座屈</Term>の<Term id="check">照査</Term>式(曲げが1方向の場合)
+              <Term id="beamcol">複合座屈</Term>の<Term id="check">照査</Term>式(軸力 + 強軸・弱軸の2方向の曲げ)
             </p>
             <div className="overflow-x-auto py-1 text-base">
-              <Tex block>{String.raw`U=\dfrac{\sigma_c}{\sigma_{cz}}+\dfrac{\sigma_{bc}}{\sigma_{b}\,\alpha}\le 1,\qquad \alpha=1-\dfrac{\sigma_c}{0.8\,\sigma_e}`}</Tex>
+              <Tex block>{String.raw`U=\dfrac{\sigma_c}{\sigma_{cz}}+\dfrac{\sigma_{bcy}}{\sigma_{bgy}\,\alpha_y}+\dfrac{\sigma_{bcz}}{\sigma_{b0}\,\alpha_z}\le 1`}</Tex>
+              <Tex block>{String.raw`\alpha_y=1-\dfrac{\sigma_c}{0.8\,\sigma_{ey}},\qquad \alpha_z=1-\dfrac{\sigma_c}{0.8\,\sigma_{ez}}`}</Tex>
             </div>
             <ul className="space-y-0.5 text-xs leading-relaxed">
               <li>
-                <Tex>{'\\sigma_c'}</Tex>、<Tex>{'\\sigma_{bc}'}</Tex> … 発生する軸方向圧縮応力と、曲げによる圧縮縁応力
+                <Tex>{'\\sigma_c'}</Tex> … 発生する軸方向圧縮応力。<Tex>{'\\sigma_{cz}'}</Tex> … 全体座屈の許容値(<Tex>{'\\sigma_{cg}\\times\\sigma_{cl}/\\sigma_y'}</Tex>)
               </li>
               <li>
-                <Tex>{'\\sigma_{cz}'}</Tex> … 全体座屈の許容値(<Tex>{'\\sigma_{cg}\\times\\sigma_{cl}/\\sigma_y'}</Tex>)
+                <Tex>{'\\sigma_{bcy}'}</Tex>、<Tex>{'\\sigma_{bcz}'}</Tex> … 強軸(y)・弱軸(z)まわりの曲げによる圧縮縁応力
               </li>
               <li>
-                <Tex>{'\\sigma_b'}</Tex> … 曲げの許容値。<Tex>{'\\sigma_e'}</Tex> … <Term id="pe">オイラー座屈応力</Term>
+                <Tex>{'\\sigma_{bgy}'}</Tex> … 強軸まわりの曲げの許容値(横倒れ座屈を考慮。H形などで下がり、箱形では通常ほとんど下がらない)。<Tex>{'\\sigma_{b0}'}</Tex> … 横倒れ座屈を考えない曲げの許容値(弱軸まわりは横倒れしない)
               </li>
               <li>
-                <Term id="safety">安全率</Term> = <Tex>{'1/U'}</Tex>
+                <Tex>{'\\sigma_{ey}'}</Tex>、<Tex>{'\\sigma_{ez}'}</Tex> … 強軸・弱軸まわりの<Term id="pe">オイラー座屈応力</Term>。<Term id="safety">安全率</Term> = <Tex>{'1/U'}</Tex>
               </li>
             </ul>
+            {scene >= 8 && (
+              <div className="mt-2 border-t border-studio-700 pt-2 text-xs">
+                <p className="font-bold">例の柱の使用割合(黒い点)</p>
+                <div className="mt-1 flex h-4 w-full overflow-hidden rounded bg-studio-800">
+                  {exTerms.map((v, i) => (
+                    <span key={i} style={{ width: `${Math.min(100, v * 100)}%`, background: ['#1f2a44', '#ea580c', '#0284c7'][i] }} />
+                  ))}
+                </div>
+                <p className="mt-1 flex flex-wrap gap-x-3">
+                  <span>軸力 {exTerms[0].toFixed(2)}</span>
+                  <span style={{ color: '#ea580c' }}>強軸 {exTerms[1].toFixed(2)}</span>
+                  <span style={{ color: '#0284c7' }}>弱軸 {exTerms[2].toFixed(2)}</span>
+                  <b>U = {exU.toFixed(2)}、安全率 1/U = {(1 / exU).toFixed(2)}</b>
+                </p>
+                <p className="text-ink-dim">
+                  細長比パラメータ 強軸 {EXB.lamY}・弱軸 {EXB.lamZ}、板は厚い(R ≦ 0.7)。αy = {(1 - EXB.n / (0.8 * exb.pey)).toFixed(2)}、αz = {(1 - EXB.n / (0.8 * exb.pez)).toFixed(2)}
+                </p>
+              </div>
+            )}
             <p className="mt-1 flex flex-wrap gap-x-4 text-xs">
               <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-gold" />U = 1 の線(α あり)
+                <span className="h-2.5 w-2.5 rounded-full bg-gold" />U = 1 の面(α あり)
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: '#94a3b8' }} />α を考えない直線
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: '#94a3b8' }} />α を考えない三角の面
               </span>
             </p>
           </div>
@@ -154,7 +178,7 @@ export default function Stage6() {
           </div>
         </Card>
       }
-      note="柱の絵は模式図で、曲がりや波の形・大きさは計算結果ではありません。式は「式と Q&A」のページと同じです(道路橋示方書・平成24年版までの流儀。局部座屈 R ≦ 0.7 で 1.0、それより大きいと 0.5/R²。全体座屈は λ の区分式。複合座屈は使用割合の和で、α = 1 − σc/(0.8σe))。この映像では、曲げは1方向で、座屈する向きと同じ軸としています。2方向の曲げを含む式は「式と Q&A」を見てください。「複合座屈」という言葉は、文献によっては、複数の座屈が影響し合うこと(局部座屈と全体座屈の連成など)を指して使われることもあります。"
+      note="柱の絵は模式図で、曲がりや波の形・大きさは計算結果ではありません。式は「式と Q&A」のページと同じです(道路橋示方書・平成24年版までの流儀。局部座屈 R ≦ 0.7 で 1.0、それより大きいと 0.5/R²。全体座屈は λ の区分式。複合座屈は使用割合の和で、α = 1 − σc/(0.8σe))。柱は長方形の箱形で、断面の広い向きへの曲げを強軸まわり、狭い向きへの曲げを弱軸まわりとしています。3軸のグラフの使用割合は α で割る前の値で、面の形は例の柱(強軸 λ = 0.7、弱軸 λ = 1.3、板は厚い)の値です。「複合座屈」という言葉は、文献によっては、複数の座屈が影響し合うこと(局部座屈と全体座屈の連成など)を指して使われることもあります。"
     />
   );
 }
