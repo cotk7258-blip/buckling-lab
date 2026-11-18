@@ -33,6 +33,11 @@ export function useShow<T extends ShowBase>(make: (c: HTMLCanvasElement) => T, o
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      // 隠れているあいだ(「式と Q&A」を開いている間)は描かない
+      if (!canvasRef.current?.clientWidth) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       s.frame(dt);
       const el = capRef.current;
       if (el && el.textContent !== s.caption) {
@@ -76,11 +81,19 @@ export function StoryShell(props: {
   const { scene, total, text } = props;
   const isLab = scene === total - 1;
   const labRef = useRef<HTMLDivElement>(null);
+  const frac = (scene + 1) / total;
+  // 進み具合を App に知らせる(ナビのメーターと「映像に戻る」の表示に使う)
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('scene-change', { detail: { scene, total } }));
+  }, [scene, total]);
   return (
     <div className="mt-1">
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-3">
         <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
           <canvas ref={props.canvasRef} className="block h-[44dvh] min-h-[300px] w-full lg:h-[72dvh]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-studio-700/60" aria-hidden>
+            <div className="h-full bg-comp transition-all duration-500" style={{ width: `${frac * 100}%` }} />
+          </div>
           <p
             ref={props.capRef}
             className="pointer-events-none absolute inset-x-3 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
@@ -93,7 +106,8 @@ export function StoryShell(props: {
             aria-live="polite"
           >
             <p className="text-[11px] font-bold tracking-[0.25em] text-comp sm:text-xs">
-              {String(scene + 1).padStart(2, '0')} — {text.kicker}
+              {String(scene + 1).padStart(2, '0')}
+              <span className="opacity-60"> / {String(total).padStart(2, '0')}</span> — {text.kicker}
             </p>
             <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] sm:text-3xl">
               {text.head}
@@ -122,8 +136,9 @@ export function StoryShell(props: {
           {!isLab && (
             <p className="px-1 text-xs">
               <button onClick={() => openFormulas('式の導出')} className="font-bold text-comp underline">
-                式の導出・質問と回答を読む
+                式の導出・質問と回答を読む(補足)
               </button>
+              <span className="text-ink-dim"> … 読んだら「映像に戻る」でこの場面へ</span>
             </p>
           )}
           <div className="sticky bottom-0 z-10 -mx-3 flex items-center gap-2 bg-studio-950/90 px-3 py-2 backdrop-blur lg:static lg:mx-0 lg:bg-transparent lg:p-0">
@@ -134,10 +149,15 @@ export function StoryShell(props: {
             >
               ◀ 戻る
             </button>
-            <div className="flex flex-1 items-center justify-center gap-1" aria-hidden>
-              {Array.from({ length: total }, (_, i) => (
-                <span key={i} className={`h-1.5 rounded-full transition-all ${i === scene ? 'w-5 bg-comp' : 'w-1.5 bg-studio-600'}`} />
-              ))}
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-1" aria-label={`場面 ${scene + 1} / ${total}(${Math.round(frac * 100)}%)`}>
+              <div className="flex items-center justify-center gap-1" aria-hidden>
+                {Array.from({ length: total }, (_, i) => (
+                  <span key={i} className={`h-1.5 rounded-full transition-all ${i === scene ? 'w-4 bg-comp' : i < scene ? 'w-1.5 bg-comp/50' : 'w-1.5 bg-studio-600'}`} />
+                ))}
+              </div>
+              <span className="num text-[11px] font-bold leading-none text-ink-dim">
+                {scene + 1} / {total} ・ {Math.round(frac * 100)}%
+              </span>
             </div>
             {isLab ? (
               <button onClick={() => props.onScene(0)} className="h-12 whitespace-nowrap rounded-xl border border-studio-600 px-4 text-sm font-bold">
