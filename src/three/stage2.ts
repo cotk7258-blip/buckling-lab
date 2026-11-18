@@ -204,6 +204,7 @@ export class Stage2Show extends ShowBase {
   private bar3: Bar;
   private plots: THREE.Mesh[] = [];
   private tags3: THREE.Sprite[] = [];
+  private axes3: THREE.Line[] = [];
   /** 場面「式にする」: 柱の上の1点で、ずれ y・傾き y′・曲がり y″ を示す */
   private gProbe = new THREE.Group();
   private pY: THREE.Group;
@@ -214,6 +215,8 @@ export class Stage2Show extends ShowBase {
   private pLine: THREE.Line;
   private pTags: THREE.Sprite[] = [];
   private pKey = '';
+  private pOut: THREE.Group;
+  private pBack: THREE.Group;
   private g5 = new THREE.Group(); // 支え方4種
   private four: Bar[] = [];
   private tags5: THREE.Sprite[][] = [];
@@ -268,6 +271,7 @@ export class Stage2Show extends ShowBase {
       const s = tag(name, c, 0.7, name.length > 4 ? 2 : 1);
       s.position.set(x, -0.4, 0.2);
       this.g3.add(p, ax, s);
+      this.axes3.push(ax);
       this.plots.push(p);
       this.tags3.push(s);
     }
@@ -283,8 +287,12 @@ export class Stage2Show extends ShowBase {
       this.gProbe.add(d);
     }
     this.pLine = line('#e11d48', true);
-    this.gProbe.add(this.pY, this.pDot, this.pLine);
-    for (const [t, c] of [['ずれ y', '#1f2a44'], ['傾き y′(接線)', '#0284c7'], ['曲がり y″ = −1/R', '#6d28d9']] as const) {
+    // 場面「式にする」: 赤い点での、曲げる力(外力による)と戻す力(回復力)
+    this.pOut = arrow('#ea580c');
+    this.pBack = arrow('#0284c7');
+    for (const a of [this.pOut, this.pBack]) a.scale.set(1.1, 1, 1.1);
+    this.gProbe.add(this.pY, this.pDot, this.pLine, this.pOut, this.pBack);
+    for (const [t, c] of [['ずれ y', '#1f2a44'], ['傾き y′(接線)', '#0284c7'], ['曲がり y″ = −1/R', '#6d28d9'], ['曲げる力 P × y', '#ea580c'], ['戻す力 EI × 1/R', '#0284c7']] as const) {
       const s = tag(t, c, 0.62, Math.max(1.3, (t.length * 76 + 60) / 512));
       this.gProbe.add(s);
       this.pTags.push(s);
@@ -328,8 +336,10 @@ export class Stage2Show extends ShowBase {
   }
 
   /** 柱の上の高さ ξ の点で、ずれ(矢印)・傾き(接線)・曲がり(ぴったり合う円)を描き、グラフの同じ高さに点を打つ */
-  private probe(D: number, t: number) {
-    const xi = t < 18 ? 0.3 : t < 24 ? 0.5 - 0.38 * Math.cos(((t - 18) / 6) * Math.PI * 2) : 0.3;
+  private probe(D: number, t: number, s: number) {
+    // 赤い点の高さ: 説明の間は下から3割の所。途中で上下に動かし、最後は真ん中
+    const [a, b] = s === 3 ? [18, 24] : [21, 28];
+    const xi = t < a ? 0.3 : t < b ? 0.5 - 0.38 * Math.cos(((t - a) / (b - a)) * Math.PI * 2) : 0.5;
     const H = this.bar3.H;
     const bx = this.bar3.group.position.x;
     const px = bx + D * Math.sin(Math.PI * xi);
@@ -384,10 +394,22 @@ export class Stage2Show extends ShowBase {
         this.gProbe.add(this.pArc);
       }
     }
-    // 札は、説明している順に出す
-    const show = [t < 6 || t >= 18, (t >= 6 && t < 12) || t >= 18, t >= 12];
+    // 札は、説明している順に出す。
+    // 映像4(s = 3)は ずれ → 傾き → 曲がり、映像5(s = 4)は ずれと曲げる力 → 曲がり → 戻す力(傾きは使わない)
+    const show = s === 3 ? [true, t >= 6, t >= 12] : [true, false, t >= 7];
+    const yd = px - bx;
+    const fo = s === 4 ? 1.7 * yd : 0;
+    const fb = s === 4 && t >= 14 ? 1.7 * yd : 0;
+    placeArrow(this.pOut, px + 0.1, py + 0.15, 0.16, fo, 0);
+    placeArrow(this.pBack, px - 0.1, py - 0.32, 0.16, -fb, 0);
+    this.pTags[3].visible = fo > 0.05;
+    this.pTags[3].position.set(px + 0.1 + fo + 0.75, py + 0.3, 0.2);
+    this.pTags[4].visible = fb > 0.05;
+    this.pTags[4].position.set(px - 0.1 - fb - 0.2, py - 0.62, 0.2);
+    this.pDots[1].visible = s === 3 && t >= 6;
+    this.pDots[2].visible = s === 4 ? t >= 7 : t >= 12;
     this.pTags[0].visible = show[0];
-    this.pTags[0].position.set((bx + px) / 2, py - 0.22, 0.2);
+    this.pTags[0].position.set((bx + px) / 2, s === 4 ? py + 0.24 : py - 0.22, 0.2);
     this.pTags[1].visible = show[1];
     this.pTags[1].position.set(px + 0.95, py + 0.62, 0.2);
     this.pTags[2].visible = show[2];
@@ -463,17 +485,19 @@ export class Stage2Show extends ShowBase {
     } else if (s === 3 || s === 4) {
       this.only(this.g3);
       const t = this.cyc(s === 4 ? 36 : 30, c);
-      // 「式にする」の場面では、点の説明の間は形を止めて見やすくする
-      const D = s === 4 ? 0.5 : 0.5 * (0.75 + 0.25 * Math.sin(c * 0.8));
+      // 赤い点で値を読むので、形は止めておく
+      const D = 0.5;
       this.bar3.update(D, 1);
-      const show = s === 4 ? [1, 1, 1] : [ramp(t, 1, 2), ramp(t, 6, 7), ramp(t, 12, 13)];
+      // 映像4: グラフを ずれ → 傾き → 曲がり の順に出す。映像5: ずれと曲がりだけ(傾きは使わない)
+      const show = s === 4 ? [1, 0, ramp(t, 7, 8)] : [ramp(t, 1, 2), ramp(t, 6, 7), ramp(t, 12, 13)];
       this.plots.forEach((p, i) => {
         p.scale.x = (D / 0.5) * 0.6;
         p.visible = show[i] > 0.01;
+        this.axes3[i].visible = s === 3 || i !== 1;
         this.tags3[i].visible = show[i] > 0.5;
       });
-      this.gProbe.visible = s === 4;
-      if (s === 4) this.probe(D, t);
+      this.gProbe.visible = true;
+      this.probe(D, t, s);
       if (s === 3)
         this.caption =
           t < 6
@@ -486,16 +510,19 @@ export class Stage2Show extends ShowBase {
                   ? 'これが映像1 の曲率 1/R。式では y″ と書き、山なりでは負なので 1/R = −y″'
                   : '真ん中のきつさ = ずれ × (π/長さ)²。π は、波の形から来ている';
       else {
+        // 釣合いから座屈荷重の式へ: 曲げる力 P·y と 戻す力 EI·(π/l)²·y を、赤い点で比べる
         this.caption =
-          t < 6
-            ? '黒の矢印 = ずれ y: 赤い点が、元のまっすぐな線から横にずれた量'
-            : t < 12
-              ? '青の線 = 傾き y′: 赤い点での柱の向き(接線)。真ん中で 0、両端で最大'
-              : t < 18
-                ? '紫の円 = 曲がり y″: 赤い点のカーブにぴったり合う円。半径 R が小さいほどきつい(y″ = −1/R)'
-                : t < 24
-                  ? '赤い点を動かすと、右の3本のグラフの同じ高さに、y・y′・y″ の値が出る'
-                  : ['π² : 座屈の形がサインカーブだから', 'EI : 曲げへの踏ん張り(STAGE 1 の硬さ × 形)', 'L² : 長いほどカーブがゆるく、戻す力が弱い'][Math.floor((t - 24) / 4) % 3];
+          t < 7
+            ? '赤い点で比べる。曲げる力(オレンジ)= 押す力 P × ずれ y'
+            : t < 14
+              ? '曲がり具合 1/R = −y″ = (π/l)² × y。サインカーブでは、曲がりがずれに比例する(右の2本は同じ形)'
+              : t < 21
+                ? '戻す力(青)= 踏ん張り EI × 1/R = EI × (π/l)² × y'
+                : t < 28
+                  ? 'どの高さでも、2つの力はどちらも y に比例。比べた結果は、点をどこへ動かしても同じ'
+                  : t < 32
+                    ? 'P × y = EI × (π/l)² × y。両辺の y が消えて、P = π²EI/l²'
+                    : '互角になる P はひとつだけ。これがオイラーの座屈荷重 Pe';
       }
       this.look(0, 1.35, 3.9, 2.7, 6, 5);
     } else if (s === 5) {
