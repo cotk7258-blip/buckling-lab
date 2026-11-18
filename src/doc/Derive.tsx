@@ -105,8 +105,8 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
         幅 1・厚さ t の帯は長方形断面なので I = t³/12、A = t、r = t/√12。波1つの長さを b とすると (l/r)² = 12(b/t)²。
         <Eq tex={String.raw`\sigma=\dfrac{\pi^2E}{12}\left(\dfrac{t}{b}\right)^2`} />
       </Step>
-      <Step n={2} title="板は横に縮めない(ポアソン効果)">
-        帯は隣の帯とつながっていて、幅方向に自由に縮めません。そのぶん少し硬くなります(ν = 0.3 で約 1.1 倍)。
+      <Step n={2} title="板は横に自由に変形できない(ポアソン効果)">
+        帯1本だけなら、曲げたときに幅方向へも自由に伸び縮みできます(ポアソン効果)。板の中の帯は隣の帯とつながっているので、その横向きの変形が抑えられ、そのぶん少し硬くなります(ν = 0.3 で 1/(1−ν²) ≒ 1.1 倍)。
         <Eq tex={String.raw`\times\dfrac{1}{1-\nu^2}`} />
       </Step>
       <Step n={3} title="縁端の支え">
@@ -133,7 +133,7 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
           ['基本の形', 'π²E × (1/細長比)²', 'π²E × (t/b)² × 係数'],
         ]}
       />
-      <P>片側が自由になるだけで k は約 1/10。同じ b/t でも σel は約 1/10 になります。</P>
+      <P>片側が自由になるだけで k は約 1/9(0.425 ÷ 4)。同じ b/t でも σel は約 1/9 になります。</P>
       <MovieLink n={5} label="板の座屈(σel と R の導き方、設計式)" onStage={onStage} />
 
       <H id="d4">4. λ(細長比パラメータ)の導出</H>

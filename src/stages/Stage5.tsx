@@ -32,7 +32,7 @@ const SCENES: SceneText[] = [
   {
     kicker: 'σel の導出',
     head: '板は「細い柱の束」。オイラーの式に2つの補正',
-    body: '板を、押す向きの細い帯に分けて考えます。帯1本は、長さ b・厚さ t の柱です。その柱のオイラー座屈応力は、断面二次半径 r = t/√12 を入れて π²E/12 × (t/b)²。ただし帯は隣とつながっていて横に縮めないので、少し硬くなり 1/(1−ν²) 倍。さらに両側の縁の支えが波打ちを抑えるので、係数 k を掛けます。これで σel の式になります。',
+    body: '板を、押す向きの細い帯に分けて考えます。帯1本は、長さ b・厚さ t の柱です。その柱のオイラー座屈応力は、断面二次半径 r = t/√12 を入れて π²E/12 × (t/b)²。ただし帯は隣とつながっていて、曲げたときの横向きの変形(ポアソン効果)が抑えられるので、少し硬くなり 1/(1−ν²) 倍。さらに両側の縁の支えが波打ちを抑えるので、係数 k を掛けます。これで σel の式になります。',
   },
   {
     kicker: '支え方',
@@ -96,7 +96,7 @@ const SIDE: Record<number, React.ReactNode> = {
       steps={[
         ['出発点', String.raw`\sigma_e=\dfrac{\pi^2E}{(l/r)^2}`],
         ['帯 = 柱', String.raw`l\to b,\ r=\dfrac{t}{\sqrt{12}}\ \Rightarrow\ \dfrac{\pi^2E}{12}\left(\dfrac{t}{b}\right)^2`],
-        ['横に縮めない', String.raw`\times\dfrac{1}{1-\nu^2}`],
+        ['横の変形を抑える', String.raw`\times\dfrac{1}{1-\nu^2}`],
         ['縁の支え', String.raw`\times k`],
         ['結果', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`],
       ]}

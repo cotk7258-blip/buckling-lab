@@ -684,7 +684,7 @@ export class Stage5Show extends ShowBase {
       } else if (t < 15) {
         ghost = 1 - ramp(t, 10, 11);
         strip = 0.2 * (1 - ramp(t, 10, 11));
-        this.caption = '隣の帯とつながっていて、横に縮めない → × 1/(1−ν²)(約 1.1 倍)';
+        this.caption = '隣の帯とつながっていて、横向きに自由に変形できない → × 1/(1−ν²)(約 1.1 倍)';
       } else {
         glow = ramp(t, 15, 16);
         p = Math.min(1, ramp(t, 16, 19));
