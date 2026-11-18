@@ -33,6 +33,16 @@ const SIDE2: Record<number, React.ReactNode> = {
     />
   ),
   4: (
+    <>
+    <Steps
+      title="映像の赤い点での y・y′・y″(両端ピン、x は下端からの高さ)"
+      steps={[
+        ['ずれ y(黒の矢印)', String.raw`y=A\sin\dfrac{\pi x}{l}`],
+        ['傾き y′(青の接線)', String.raw`y'=A\,\dfrac{\pi}{l}\cos\dfrac{\pi x}{l}`],
+        ['曲がり y″(紫の円)', String.raw`y''=-A\left(\dfrac{\pi}{l}\right)^2\sin\dfrac{\pi x}{l}=-\dfrac{1}{R}`],
+      ]}
+      note="y″ = −(π/l)²·y なので、曲がりのきつさは、ずれに比例する。戻す力 EI·(−y″) = EI(π/l)²·y と、曲げる力 P·y が等しくなる P が座屈荷重 π²EI/l²。"
+    />
     <Steps
       title="オイラーの式と、応力の形"
       steps={[
@@ -42,6 +52,7 @@ const SIDE2: Record<number, React.ReactNode> = {
       ]}
       note="r = √(I/A) は断面二次半径、l/r が細長比。σe は E と細長比だけで決まり、σy を含まない。この σe から、映像4 で物差し λ を作る。"
     />
+    </>
   ),
   5: (
     <Steps
@@ -81,7 +92,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '式にする',
     head: 'オイラーの座屈荷重',
-    body: '戻す力 = 踏ん張り(EI)× カーブのきつさ(ずれ × π²/L²)。曲げる力 = 押す力 P × ずれ。この2つが互角になる P が座屈荷重です。両辺の「ずれ」が消えて、下の式が残ります。',
+    body: '戻す力 = 踏ん張り(EI)× カーブのきつさ(ずれ × π²/L²)。曲げる力 = 押す力 P × ずれ。この2つが互角になる P が座屈荷重です。両辺の「ずれ」が消えて、下の式が残ります。映像では、柱の赤い点で、ずれ y(黒の矢印)、傾き y′(青の接線)、曲がり y″(紫の円。半径 R の逆数で、y″ = −1/R)を示し、右の3本のグラフの同じ高さに、その値を点で打っています。',
   },
   {
     kicker: '支え方',
