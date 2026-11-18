@@ -98,6 +98,10 @@ export abstract class ShowBase {
   /** いまの場面と、その場面に入ってからの秒 */
   sceneIndex = 0;
   clock = 0;
+  /** いまの場面の動き1回分の長さ(秒)と、くり返すかどうか。0 は長さなし(実験室など)。tick の中で cyc・once で決める */
+  dur = 0;
+  loop = false;
+  private durSet = false;
   time = 0;
   protected aspect = 1;
   private w = 0;
@@ -162,6 +166,31 @@ export abstract class ShowBase {
   protected onScene(_i: number) {}
   protected abstract tick(dt: number): void;
 
+  /** T 秒でくり返す動き。c を T で割った余りを返し、場面の長さを記録する(最初に呼んだものが有効) */
+  protected cyc(T: number, c = this.clock) {
+    if (!this.durSet) {
+      this.dur = T;
+      this.loop = true;
+      this.durSet = true;
+    }
+    return c % T;
+  }
+  /** 一度だけ流れる動き(T 秒で終わる)。c をそのまま返し、場面の長さを記録する */
+  protected once(T: number, c = this.clock) {
+    if (!this.durSet) {
+      this.dur = T;
+      this.loop = false;
+      this.durSet = true;
+    }
+    return c;
+  }
+  /** 場面の動きの進み具合: p = 1回分のうちどこまで(0〜1)、done = 1回分を見終えたか。長さがなければ null */
+  clip(): { p: number; done: boolean; loop: boolean } | null {
+    if (this.dur <= 0) return null;
+    const k = this.clock / this.dur;
+    return { p: this.loop ? k % 1 : Math.min(1, k), done: k >= 1, loop: this.loop };
+  }
+
   frame(dt: number) {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
@@ -175,6 +204,8 @@ export abstract class ShowBase {
     }
     this.clock += dt;
     this.time += dt;
+    this.durSet = false;
+    this.dur = 0;
     this.tick(dt);
     const k = this.first ? 1 : 1 - Math.exp(-dt * 2.4);
     const kAz = this.first ? 1 : 1 - Math.exp(-dt * 5);

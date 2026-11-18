@@ -397,7 +397,7 @@ export class Stage1Show extends ShowBase {
   }
 
   private tickRuler(c: number) {
-    const t = c % 17;
+    const t = this.cyc(17, c);
     const push = ramp(t, 1, 3.5) - ramp(t, 5, 6.3);
     const roll = ramp(t, 6.5, 8.5) - ramp(t, 16, 17);
     const push2 = ramp(t, 9, 11) - ramp(t, 15, 16);
@@ -435,7 +435,7 @@ export class Stage1Show extends ShowBase {
   }
 
   private tickBlock(c: number, kMax = 0.36, cap = true) {
-    const t = c % 16;
+    const t = this.cyc(16, c);
     const k = kMax * (ramp(t, 1, 4) - ramp(t, 15, 16));
     const hh = this.block.h / 2;
     this.block.update(k, (y) => (-k * y) / (kMax * hh) * 0.8, Math.min(1, (k / kMax) * 3));
@@ -463,7 +463,7 @@ export class Stage1Show extends ShowBase {
   }
 
   private tickBank(c: number, lever: boolean) {
-    const t = c % (lever ? 20 : 15);
+    const t = this.cyc((lever ? 20 : 15), c);
     const tilt = 0.15 * (lever ? 1 : ramp(t, 1, 3.5));
     this.bank7.update(tilt, lever ? 1 : ramp(t, 7, 8.5));
     const bx = this.bank7.group.position.x;
@@ -504,7 +504,7 @@ export class Stage1Show extends ShowBase {
   }
 
   private tickPair(c: number) {
-    const t = c % 22;
+    const t = this.cyc(22, c);
     const tilt = 0.13 * ramp(t, 1, 3);
     this.bank4.update(tilt, 1);
     this.bank8.update(tilt, 1);
@@ -563,7 +563,7 @@ export class Stage1Show extends ShowBase {
   }
 
   private tickMorph(c: number, cap = true) {
-    const t = c % 18;
+    const t = this.cyc(18, c);
     const p = ramp(t, 2.5, 7.5) - ramp(t, 17, 18);
     this.setMorph(p);
     this.morphTags[1].visible = p > 0.98;
@@ -635,7 +635,7 @@ export class Stage1Show extends ShowBase {
       this.tickPair(c);
     } else if (s === 5) {
       // 断面の変形(0〜13 秒)→ 同じ力で曲げ比べ(13〜30 秒)
-      const t = c % 30;
+      const t = this.cyc(30, c);
       if (t < 13) {
         this.showOnly(this.gMorph);
         this.tickMorph(t);
@@ -644,6 +644,7 @@ export class Stage1Show extends ShowBase {
         this.tickBend(t);
       }
     } else if (s === 6) {
+      this.cyc(18);
       // 式の記号を1つずつ絵で見せる
       const f = this.focus >= 0 ? this.focus : Math.floor(c / 6) % 3;
       if (f === 0) {

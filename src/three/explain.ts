@@ -172,6 +172,13 @@ export class ExplainScene {
     this.clock = 0;
   }
 
+  /** 場面の動きの進み具合(1回分は spring が 17 秒、ほかは 23 秒でくり返す) */
+  clip(mode: ExplainMode) {
+    const T = mode === 'spring' ? 17 : 23;
+    const k = this.clock / T;
+    return { p: k % 1, done: k >= 1, loop: true };
+  }
+
   /** バネ i の長さ・色を決める。s は応力(圧縮を正、-1〜1)、hot は熱、dead は降伏して働かない度合い */
   private setSpring(i: number, len: number, s: number, hot: number, dead = 0) {
     this.springs[i].scale.y = len;

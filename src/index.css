@@ -87,3 +87,12 @@ input[type='range']::-moz-range-thumb {
 .telop {
   animation: telop-in 0.5s ease-out;
 }
+
+/* 場面の動きを見終えたら「次へ」を軽く光らせる */
+@keyframes next-ready {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(11, 111, 194, 0.55); }
+  50% { box-shadow: 0 0 0 7px rgba(11, 111, 194, 0); }
+}
+[data-next][data-done='1'] {
+  animation: next-ready 1.6s ease-in-out infinite;
+}

@@ -405,6 +405,15 @@ export class Stage3D {
     this.explain.reset();
   }
 
+  /** 説明用の場面の動きの進み具合。説明用の場面でなければ null */
+  explainClip() {
+    return this.explainMode ? this.explain.clip(this.explainMode) : null;
+  }
+  /** 説明用の場面を最初から */
+  replayExplain() {
+    this.explain.reset();
+  }
+
   /** 柱の上のラベルを置く画面上の位置(px)。映っていなければ null */
   labelPos(i: number): { x: number; y: number } | null {
     if (this.pose.focus === 'realMid' || this.explainMode) return null;

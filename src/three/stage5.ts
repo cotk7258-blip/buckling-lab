@@ -535,7 +535,7 @@ export class Stage5Show extends ShowBase {
   /** 溶接のゆがみと残留応力(現実の板が R = 1 付近で弱くなる理由) */
   private tickWeld(c: number) {
     this.show(this.gOne);
-    const t = c % 22;
+    const t = this.cyc(22, c);
     const fade = 1 - ramp(t, 21, 22);
     const res = ramp(t, 1, 3) * fade;
     const A0 = 0.035 * ramp(t, 6, 8) * fade;
@@ -560,7 +560,7 @@ export class Stage5Show extends ShowBase {
   /** 波打った板は、中央が力を受けず、縁に力が寄る(板の低減率が要る、板だけの理由) */
   private tickEdge(c: number) {
     this.show(this.gOne, this.gBars);
-    const t = c % 24;
+    const t = this.cyc(24, c);
     const fade = 1 - ramp(t, 23, 24);
     const el = EDGE_EL;
     const ult = el + (1 - el) * SHAPE;
@@ -603,7 +603,7 @@ export class Stage5Show extends ShowBase {
     const k6 = 1 - Math.exp(-dt * 6);
     if (s === 0) {
       this.show(this.gBox);
-      const t = c % 16;
+      const t = this.cyc(16, c);
       const p = ramp(t, 1, 6) * (1 - ramp(t, 15, 16));
       const A = 0.2 * ramp(t, 5, 6.5) * (1 - ramp(t, 15, 16));
       this.box.update(A, 3, p);
@@ -611,7 +611,7 @@ export class Stage5Show extends ShowBase {
       this.look(0, 1.75, 2.6, 3.0, 32, 14);
     } else if (s === 1) {
       this.show(this.gOne);
-      const t = c % 16;
+      const t = this.cyc(16, c);
       const p = Math.min(1, ramp(t, 2, 9)) * (1 - ramp(t, 14.5, 16));
       const A = 0.2 * (ramp(t, 8.9, 9.6) - ramp(t, 14.5, 16));
       this.one.update({ A, load: p, level: 0.5 * p, pattern: A > 0.02 ? 0.4 : 0, edge: 0.6, railGlow: ramp(t, 0.5, 2), tags: true });
@@ -620,7 +620,7 @@ export class Stage5Show extends ShowBase {
       this.look(0, 0.75, 1.6, 1.35, 32, 14);
     } else if (s === 2) {
       this.show(this.gOne);
-      const t = c % 30;
+      const t = this.cyc(30, c);
       let p = 0.5;
       let A = 0;
       if (t < 7) {
@@ -643,7 +643,7 @@ export class Stage5Show extends ShowBase {
       this.look(0.15, 0.85, 1.7, 1.45, 72, 10);
     } else if (s === 3) {
       this.show(this.gPair);
-      const t = c % 24;
+      const t = this.cyc(24, c);
       const fade = 1 - ramp(t, 23, 24);
       const p = 4.2 * ramp(t, 1.5, 15) * fade;
       this.amp[0] += ((p >= 1 ? 0.2 : 0) * fade - this.amp[0]) * k6;
@@ -665,7 +665,7 @@ export class Stage5Show extends ShowBase {
       this.look(0.05, 0.8, 2.4, 1.6, 30, 12);
     } else if (s === 4) {
       this.show(this.gOne);
-      const t = c % 24;
+      const t = this.cyc(24, c);
       let ghost = 0;
       let strip = 0;
       let A = 0;
@@ -692,7 +692,7 @@ export class Stage5Show extends ShowBase {
       this.look(0, 0.75, 1.6, 1.35, 34, 12);
     } else if (s === 5) {
       this.show(this.gSup);
-      const t = c % 24;
+      const t = this.cyc(24, c);
       const fade = 1 - ramp(t, 23, 24);
       const p = 1.05 * ramp(t, 2, 17) * fade;
       const kr = 0.43 / 4;
@@ -713,7 +713,7 @@ export class Stage5Show extends ShowBase {
     } else if (s >= 6 && s <= 9) {
       this.show(this.gLine, this.gWall);
       this.look(0, 2.2, 4.4, 2.55, 6, 8);
-      const t = c;
+      const t = this.once([15, 14, 17, 15][s - 6], c);
       // 板ごとの押す力と、波の大きさ
       const loads = new Array(N).fill(0);
       const amps = new Array(N).fill(0);

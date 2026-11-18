@@ -245,9 +245,11 @@ export class Stage4Show extends ShowBase {
     const GRAPH: [number, number, number, number, number, number] = [0.05, Y(0.5), 4.2, 2.9, 5, 3];
 
     if (s === 0) {
+      this.once(8);
       this.caption = c < 4 ? '同じ H形鋼で、長さだけが違う柱を10本' : '短い柱と長い柱。耐えられなくなるしくみは同じでしょうか';
       this.look(0, 1.45, 4.0, 2.1, 14, 10);
     } else if (s === 1) {
+      this.once(10);
       load[0] = hold(0) * ramp(c, 1, 5);
       squash[0] = ramp(c, 4, 6);
       pI[0] = c > 7 ? 1 : 0;
@@ -256,7 +258,7 @@ export class Stage4Show extends ShowBase {
       if (c < 7) this.look(X(0.2), 0.2, 1.1, 1.15, 22, 12);
       else this.look(...WHOLE);
     } else if (s === 2) {
-      const cc = c % 13;
+      const cc = this.cyc(13, c);
       defl[9] = (1 / 150) * (ramp(cc, 1, 4) - ramp(cc, 8.5, 11));
       squash[0] = 1;
       load[0] = hold(0);
@@ -280,6 +282,7 @@ export class Stage4Show extends ShowBase {
       done(0);
       done(9);
       if (s === 3) {
+        this.once(13);
         for (let j = 8; j >= 4; j--) {
           const t0 = 1 + (8 - j) * 0.8;
           load[j] = hold(j) * ramp(c, t0, t0 + 0.7);
@@ -296,6 +299,7 @@ export class Stage4Show extends ShowBase {
         for (let j = 4; j <= 8; j++) done(j);
         fe = 1;
         if (s === 4) {
+          this.once(13);
           fy = ramp(c, 0.6, 2.6);
           for (let j = 3; j >= 1; j--) {
             const t0 = 3 + (3 - j) * 0.8;
@@ -315,6 +319,7 @@ export class Stage4Show extends ShowBase {
           fy = 1;
           fi = 1;
           if (s === 5) {
+            this.once(12);
             for (let j = N - 1; j >= 0; j--) {
               const t0 = 1.2 + (N - 1 - j) * 0.65;
               load[j] = hold(j) * ramp(c, t0, t0 + 0.55);
@@ -328,6 +333,7 @@ export class Stage4Show extends ShowBase {
               pR[j] = 1;
             }
             if (s === 6) {
+              this.once(9);
               cloud = ramp(c, 0.6, 2.4);
               this.caption = c < 4.2 ? '不整の大きさを変えると、点は帯になって散らばる' : '設計曲線は、この群れの下側を通るように引かれている';
             } else {

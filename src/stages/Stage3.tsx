@@ -5,6 +5,7 @@ import { Stage3D, DEFL_AMP } from '../three/stage.ts';
 import type { CameraPose } from '../three/stage.ts';
 import { Section3D } from '../three/section.ts';
 import { Tex } from '../ui/Tex.tsx';
+import { ClipBar, ClipLabel, updateClip } from '../ui/Story.tsx';
 import { Rich, Term } from '../ui/glossary.tsx';
 
 const E_OVER_FY = 200000 / 355; // E = 2.0×10^5 N/mm²、σy = 355 N/mm²(SM490Y 相当)
@@ -193,7 +194,7 @@ export default function Stage3() {
   const capRef = useRef<HTMLParagraphElement>(null);
   const stageRef = useRef<Stage3D | null>(null);
   // 毎フレーム読む値(React の再描画を待たずに使う)
-  const live = useRef({ load: 0, target: 0, speed: 0.1, mix: 0, mixTarget: 0, ctx, auto: true, playing, slow, focusReal });
+  const live = useRef({ load: 0, from: 0, target: 0, speed: 0.1, mix: 0, mixTarget: 0, ctx, auto: true, playing, slow, focusReal });
   live.current.ctx = ctx;
   live.current.playing = playing;
   live.current.slow = slow;
@@ -210,6 +211,7 @@ export default function Stage3() {
     } else {
       const sc = SCENES[scene];
       L.auto = true;
+      L.from = L.load;
       L.target = sc.target(ctx);
       L.speed = sc.speed;
       L.mixTarget = sc.stress ? 1 : 0;
@@ -236,6 +238,11 @@ export default function Stage3() {
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      // 隠れているあいだ(「式と Q&A」を開いている間)は描かない
+      if (!mainRef.current?.clientWidth) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       t += dt;
       const L = live.current;
       const c = L.ctx;
@@ -281,6 +288,16 @@ export default function Stage3() {
         setHud(h);
       }
       if (!L.auto && L.playing && L.load >= c.loadMax) setPlaying(false);
+      // 場面の動きの進み具合: 説明用の場面はくり返しの周期、試験機は荷重が行き先に着くまで
+      const ex = stage.explainClip();
+      let clip: { p: number; done: boolean; loop: boolean } | null = null;
+      if (ex) clip = ex;
+      else if (L.auto) {
+        const span = Math.abs(L.target - L.from);
+        const left = Math.abs(L.target - L.load);
+        clip = span < 0.003 ? { p: 1, done: true, loop: false } : { p: Math.min(1, 1 - left / span), done: left < 0.003, loop: false };
+      }
+      updateClip(mainRef.current?.closest('[data-shell]') ?? null, clip);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -292,6 +309,18 @@ export default function Stage3() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 場面の札を押したら、その場面を最初から
+  const replay = () => {
+    const L = live.current;
+    if (stageRef.current?.explainClip()) stageRef.current.replayExplain();
+    else if (L.auto) {
+      L.load = Math.max(0, L.from);
+    }
+  };
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('scene-change', { detail: { scene, total: LAB + 1 } }));
+  }, [scene]);
 
   const go = (n: number) => {
     const next = Math.max(0, Math.min(LAB, n));
@@ -320,11 +349,12 @@ export default function Stage3() {
   const kicker = sc ? sc.kicker : '実験室';
 
   return (
-    <div className="mt-1">
+    <div className="mt-1" data-shell>
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-3">
         {/* 3D の舞台。見出しのテロップは映像に重ねる */}
         <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
           <canvas ref={mainRef} className="block h-[37dvh] min-h-[280px] w-full lg:h-[72dvh]" />
+          <ClipBar />
           <ColumnLabel refEl={labelRefs[0]} name="理想の柱" term="ideal" load={hud.pI} buckled={hud.cI} color="#16a34a" />
           <ColumnLabel refEl={labelRefs[1]} name="現実の柱" term="real" load={hud.pR} buckled={hud.cR} color="#1f2a44" />
           <p
@@ -337,8 +367,12 @@ export default function Stage3() {
             className="telop pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-studio-950 via-studio-950/85 to-transparent px-3 pb-2.5 pt-10 sm:px-5 sm:pb-4"
             aria-live="polite"
           >
-            <p className="text-[11px] font-bold tracking-[0.25em] text-comp sm:text-xs">
-              {String(scene + 1).padStart(2, '0')} — {kicker}
+            <p className="flex items-center justify-between gap-2 text-[11px] font-bold tracking-[0.25em] text-comp sm:text-xs">
+              <span className="min-w-0 truncate">
+                {String(scene + 1).padStart(2, '0')}
+                <span className="opacity-60"> / {String(LAB + 1).padStart(2, '0')}</span> — {kicker}
+              </span>
+              <ClipLabel onReplay={replay} />
             </p>
             <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] sm:text-3xl">
               {head}
@@ -398,13 +432,18 @@ export default function Stage3() {
             >
               ◀ 戻る
             </button>
-            <div className="flex flex-1 items-center justify-center gap-1.5" aria-hidden>
-              {Array.from({ length: LAB + 1 }, (_, i) => (
-                <span
-                  key={i}
-                  className={`h-1.5 rounded-full transition-all ${i === scene ? 'w-6 bg-comp' : 'w-1.5 bg-studio-600'}`}
-                />
-              ))}
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+              <div className="flex items-center justify-center gap-1" aria-hidden>
+                {Array.from({ length: LAB + 1 }, (_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 rounded-full transition-all ${i === scene ? 'w-4 bg-comp' : i < scene ? 'w-1.5 bg-comp/50' : 'w-1.5 bg-studio-600'}`}
+                  />
+                ))}
+              </div>
+              <span className="num text-[11px] font-bold leading-none text-ink-dim">
+                {scene + 1} / {LAB + 1} ・ {Math.round(((scene + 1) / (LAB + 1)) * 100)}%
+              </span>
             </div>
             {isLab ? (
               <button onClick={() => go(0)} className="h-12 whitespace-nowrap rounded-xl border border-studio-600 px-4 text-sm font-bold">
@@ -412,6 +451,7 @@ export default function Stage3() {
               </button>
             ) : (
               <button
+                data-next
                 onClick={() => go(scene + 1)}
                 className="h-12 whitespace-nowrap rounded-xl bg-comp px-6 text-base font-bold text-studio-950"
               >

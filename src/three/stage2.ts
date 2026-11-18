@@ -304,7 +304,7 @@ export class Stage2Show extends ShowBase {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     if (s === 0) {
       this.only(this.g0);
-      const t = c % 15;
+      const t = this.cyc(15, c);
       const p = Math.min(1, ramp(t, 1, 8) * 1.0) * (1 - ramp(t, 13.5, 15));
       const D = 0.5 * (ramp(t, 7.9, 8.6) - ramp(t, 13.5, 15));
       this.main.update(D, p, false, p);
@@ -318,7 +318,7 @@ export class Stage2Show extends ShowBase {
       this.look(0, 1.45, 2.4, 2.75, 12, 6);
     } else if (s === 1) {
       this.only(this.g0);
-      const t = c % 30;
+      const t = this.cyc(30, c);
       let p = 0.5;
       let D = 0;
       if (t < 7) {
@@ -343,7 +343,7 @@ export class Stage2Show extends ShowBase {
       this.look(0, 1.45, 3.0, 2.75, 10, 6);
     } else if (s === 2) {
       this.only(this.g2);
-      const t = c % 24;
+      const t = this.cyc(24, c);
       let dS = 0;
       let dL = 0;
       let p = 0;
@@ -363,7 +363,7 @@ export class Stage2Show extends ShowBase {
       this.look(-0.2, 1.4, 3.0, 2.8, 10, 6);
     } else if (s === 3 || s === 4) {
       this.only(this.g3);
-      const t = c % 24;
+      const t = this.cyc(24, c);
       const D = 0.5 * (0.75 + 0.25 * Math.sin(c * 0.8));
       this.bar3.update(D, 1);
       const show = s === 4 ? [1, 1, 1] : [ramp(t, 1, 2), ramp(t, 6, 7), ramp(t, 12, 13)];
@@ -388,7 +388,7 @@ export class Stage2Show extends ShowBase {
       this.look(0, 1.35, 3.9, 2.7, 6, 5);
     } else if (s === 5) {
       this.only(this.g5);
-      const t = c % 28;
+      const t = this.cyc(28, c);
       const p = 4.25 * ramp(t, 2, 19) * (1 - ramp(t, 27, 28));
       const fade = 1 - ramp(t, 27, 28);
       let cap = '同じ棒が4本。違うのは、両端の支え方だけ';

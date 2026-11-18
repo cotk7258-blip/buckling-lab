@@ -9,6 +9,60 @@ export function openFormulas(tab: string) {
   window.dispatchEvent(new CustomEvent('open-formulas', { detail: tab }));
 }
 
+export type Clip = { p: number; done: boolean; loop: boolean } | null;
+
+/**
+ * 場面の動きの進み具合を画面に書く(毎フレーム呼ぶ)。root は data-shell を付けた枠。
+ * 上端のバー(data-clip-bar)、テロップの札(data-clip-label)、見終えたら「次へ」(data-next)を光らせる。
+ */
+export function updateClip(root: Element | null, clip: Clip) {
+  if (!root) return;
+  const track = root.querySelector<HTMLElement>('[data-clip-track]');
+  const bar = root.querySelector<HTMLElement>('[data-clip-bar]');
+  const label = root.querySelector<HTMLElement>('[data-clip-label]');
+  const next = root.querySelector<HTMLElement>('[data-next]');
+  if (!clip) {
+    if (track) track.style.opacity = '0';
+    if (label) label.style.visibility = 'hidden';
+    next?.setAttribute('data-done', '0');
+    return;
+  }
+  if (track) track.style.opacity = '1';
+  if (bar) {
+    bar.style.width = `${(clip.done && !clip.loop ? 1 : clip.p) * 100}%`;
+    bar.style.background = clip.done ? '#16a34a' : '';
+  }
+  if (label) {
+    label.style.visibility = 'visible';
+    const text = clip.done ? (clip.loop ? '✓ 見終わり ↻ くり返し中' : '✓ 見終わり ↻ もう一度') : `▶ 再生中 ${Math.round(clip.p * 100)}%`;
+    if (label.textContent !== text) label.textContent = text;
+    label.dataset.done = clip.done ? '1' : '0';
+  }
+  next?.setAttribute('data-done', clip.done ? '1' : '0');
+}
+
+/** 映像の上端の、場面の動きの進み具合のバー(映像の枠の中に置く) */
+export function ClipBar() {
+  return (
+    <div data-clip-track className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-studio-700/60 transition-opacity" style={{ opacity: 0 }} aria-hidden>
+      <div data-clip-bar className="h-full bg-comp" style={{ width: '0%' }} />
+    </div>
+  );
+}
+
+/** テロップの右に出す札。押すとその場面を最初から再生する */
+export function ClipLabel({ onReplay }: { onReplay?: () => void }) {
+  return (
+    <button
+      type="button"
+      data-clip-label
+      onClick={onReplay}
+      className="pointer-events-auto shrink-0 rounded-full border border-studio-600 bg-white/90 px-2 py-0.5 text-[11px] font-bold tracking-normal text-ink-dim data-[done=1]:border-green-600 data-[done=1]:text-green-700"
+      style={{ visibility: 'hidden' }}
+    />
+  );
+}
+
 export interface SceneText {
   kicker: string;
   head: string;
@@ -45,10 +99,16 @@ export function useShow<T extends ShowBase>(make: (c: HTMLCanvasElement) => T, o
         el.style.opacity = s.caption ? '1' : '0';
       }
       cb.current?.(s);
+      updateClip(canvasRef.current?.closest('[data-shell]') ?? null, s.clip());
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
+    const onReplay = () => {
+      s.clock = 0;
+    };
+    window.addEventListener('replay-scene', onReplay);
     return () => {
+      window.removeEventListener('replay-scene', onReplay);
       cancelAnimationFrame(raf);
       s.dispose();
       show.current = null;
@@ -82,18 +142,18 @@ export function StoryShell(props: {
   const isLab = scene === total - 1;
   const labRef = useRef<HTMLDivElement>(null);
   const frac = (scene + 1) / total;
+  // 場面の札を押したら、その場面を最初から再生する(ShowBase の時計を 0 に戻す)
+  const replay = () => window.dispatchEvent(new CustomEvent('replay-scene'));
   // 進み具合を App に知らせる(ナビのメーターと「映像に戻る」の表示に使う)
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('scene-change', { detail: { scene, total } }));
   }, [scene, total]);
   return (
-    <div className="mt-1">
+    <div className="mt-1" data-shell>
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-3">
         <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
           <canvas ref={props.canvasRef} className="block h-[44dvh] min-h-[300px] w-full lg:h-[72dvh]" />
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-studio-700/60" aria-hidden>
-            <div className="h-full bg-comp transition-all duration-500" style={{ width: `${frac * 100}%` }} />
-          </div>
+          <ClipBar />
           <p
             ref={props.capRef}
             className="pointer-events-none absolute inset-x-3 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
@@ -105,9 +165,12 @@ export function StoryShell(props: {
             className="telop pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-studio-950 via-studio-950/85 to-transparent px-3 pb-2.5 pt-10 sm:px-5 sm:pb-4"
             aria-live="polite"
           >
-            <p className="text-[11px] font-bold tracking-[0.25em] text-comp sm:text-xs">
-              {String(scene + 1).padStart(2, '0')}
-              <span className="opacity-60"> / {String(total).padStart(2, '0')}</span> — {text.kicker}
+            <p className="flex items-center justify-between gap-2 text-[11px] font-bold tracking-[0.25em] text-comp sm:text-xs">
+              <span className="min-w-0 truncate">
+                {String(scene + 1).padStart(2, '0')}
+                <span className="opacity-60"> / {String(total).padStart(2, '0')}</span> — {text.kicker}
+              </span>
+              <ClipLabel onReplay={replay} />
             </p>
             <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] sm:text-3xl">
               {text.head}
@@ -164,7 +227,7 @@ export function StoryShell(props: {
                 最初から見る
               </button>
             ) : (
-              <button onClick={() => props.onScene(scene + 1)} className="h-12 whitespace-nowrap rounded-xl bg-comp px-6 text-base font-bold text-studio-950">
+              <button data-next onClick={() => props.onScene(scene + 1)} className="h-12 whitespace-nowrap rounded-xl bg-comp px-6 text-base font-bold text-studio-950">
                 {scene === total - 2 ? (props.labLabel ?? '実験室へ ▶') : '次へ ▶'}
               </button>
             )}

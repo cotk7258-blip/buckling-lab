@@ -385,7 +385,7 @@ export class Stage6Show extends ShowBase {
     const still: BoxState = { Dx: 0, Al: 0, m: 4, mode: 'plate', load: 0 };
     if (s === 0) {
       this.show(this.gOne);
-      const t = c % 24;
+      const t = this.cyc(24, c);
       this.box.update(still);
       this.caption =
         t < 8
@@ -396,7 +396,7 @@ export class Stage6Show extends ShowBase {
       this.look(0, 2.3, 2.6, 3.4, 28 + Math.sin(c * 0.3) * 10, 12);
     } else if (s === 1) {
       this.show(this.gOne);
-      const t = c % 14;
+      const t = this.cyc(14, c);
       const p = ramp(t, 1, 5) * (1 - ramp(t, 13, 14));
       const D = 0.95 * ramp(t, 4.6, 6) * (1 - ramp(t, 13, 14));
       this.box.update({ ...still, Dx: D, load: p });
@@ -404,7 +404,7 @@ export class Stage6Show extends ShowBase {
       this.look(0.4, 2.3, 2.9, 3.4, 20, 8);
     } else if (s === 2) {
       this.show(this.gOne);
-      const t = c % 16;
+      const t = this.cyc(16, c);
       const p = ramp(t, 1, 5) * (1 - ramp(t, 15, 16));
       const A = 0.15 * ramp(t, 4.6, 6) * (1 - ramp(t, 15, 16));
       this.box.update({ ...still, Al: A, load: p });
@@ -417,7 +417,7 @@ export class Stage6Show extends ShowBase {
       this.look(0, 2.3, 2.4, 3.2, 34, 12);
     } else if (s === 4) {
       this.show(this.gPair);
-      const t = c % 30;
+      const t = this.cyc(30, c);
       const fade = 1 - ramp(t, 29, 30);
       const p = ramp(t, 2.5, 24) * fade;
       const Al = 0.075 * ramp(p, 0.3, 0.37) * fade;
@@ -445,7 +445,7 @@ export class Stage6Show extends ShowBase {
       this.show(this.gOne, 'lam');
       let R: number;
       if (s === 5) {
-        const t = Math.min(c, 40);
+        const t = Math.min(this.once(28, c), 40);
         R = t < 12 ? 0.6 : t < 22 ? 0.6 + 0.4 * ramp(t, 12, 14) : 1.0 + 0.4 * ramp(t, 22, 24);
         this.caption =
           t < 5
@@ -459,7 +459,7 @@ export class Stage6Show extends ShowBase {
       } else {
         // 軸力だけの照査と安全率: 例の柱(λ̄ = 0.8、R = 1.0)
         R = EX.R;
-        const t = Math.min(c, 30);
+        const t = Math.min(this.once(27, c), 30);
         const str = strengthGL(EX.lam, R);
         this.probe[0].visible = false;
         this.probe[1].visible = true;
@@ -500,7 +500,7 @@ export class Stage6Show extends ShowBase {
       let showSurf = true;
       if (s === 7) {
         // 余力を分け合う(増幅なし)
-        const t = c % 26;
+        const t = this.cyc(26, c);
         amp = 0;
         showSurf = false;
         n = EXB.n * ramp(t, 2, 5);
@@ -519,7 +519,7 @@ export class Stage6Show extends ShowBase {
                   : '3つの使用割合の和が 1 になる三角の面。その内側なら耐えられる';
       } else if (s === 8) {
         // 軸力が曲げを増幅する(弱軸ほど大きく)
-        const t = c % 26;
+        const t = this.cyc(26, c);
         amp = ramp(t, 12, 16);
         n = EXB.n * ramp(t, 2, 9);
         const ay = alpha(n, pey);
@@ -533,7 +533,7 @@ export class Stage6Show extends ShowBase {
                 ? '耐えられる範囲は、三角の面から内側へへこむ(紫の面)'
                 : '弱軸まわりは σe が小さく α が小さいので、弱軸の側ほど大きくへこむ';
       } else if (s === 9) {
-        const t = c % 22;
+        const t = this.cyc(22, c);
         showRay = t > 5;
         this.caption =
           t < 5
