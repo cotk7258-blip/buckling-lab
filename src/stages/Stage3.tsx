@@ -349,7 +349,7 @@ export default function Stage3() {
   const kicker = sc ? sc.kicker : '実験室';
 
   return (
-    <div className="mt-1" data-shell>
+    <div className="mt-1 pb-20 lg:pb-0" data-shell>
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-3">
         {/* 3D の舞台。見出しのテロップは映像に重ねる */}
         <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
@@ -380,7 +380,8 @@ export default function Stage3() {
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-2 lg:gap-3">
+        {/* PC では映像と同じ高さの欄にし、進行のボタンをその下端に固定する */}
+        <div className="flex min-w-0 flex-col gap-2 lg:h-[72dvh] lg:gap-3 lg:overflow-y-auto lg:pr-1">
           {/* 語り */}
           <p key={`b${scene}`} className="telop rounded-xl bg-studio-800/70 px-3 py-2 text-[14px] leading-relaxed text-ink sm:px-4 sm:py-3 sm:text-base lg:order-2">
             <Rich text={body} />
@@ -424,7 +425,7 @@ export default function Stage3() {
           </div>
 
           {/* 進行(スマホでは画面の下に固定) */}
-          <div className="sticky bottom-0 z-10 -mx-3 flex items-center gap-2 bg-studio-950/90 px-3 py-2 backdrop-blur lg:static lg:order-4 lg:mx-0 lg:bg-transparent lg:p-0">
+          <div className="fixed inset-x-0 bottom-0 z-20 mt-auto flex items-center gap-2 border-t border-studio-700 bg-studio-950/95 px-3 py-2 backdrop-blur lg:sticky lg:z-10 lg:border-t-0 lg:order-4 lg:mx-0 lg:px-0 lg:pt-2 lg:pb-0">
             <button
               onClick={() => go(scene - 1)}
               disabled={scene === 0}
