@@ -587,6 +587,8 @@ export function FigPerry({ n }: { n: string }) {
         yTicks={[0, 0.25, 0.5, 0.75, 1]}
         xLabel="細長比パラメータ λ"
         yLabel="σcr/σy"
+        xHint={['← 太く短い柱', '細く長い柱 →']}
+        yHint="耐えられる力(強さ)→"
         yFmt={(v) => v.toFixed(2)}
         series={[
           { f: idealColumn, color: C.orange, dash: '6 5', width: 2.2 },
@@ -674,6 +676,8 @@ export function FigBand({ n }: { n: string }) {
         yTicks={[0, 0.25, 0.5, 0.75, 1]}
         xLabel="細長比パラメータ λ"
         yLabel="σcr/σy"
+        xHint={['← 太く短い柱', '細く長い柱 →']}
+        yHint="耐えられる力(強さ)→"
         yFmt={(v) => v.toFixed(2)}
         series={[
           { f: idealColumn, color: C.orange, dash: '6 5', width: 2 },
@@ -726,6 +730,8 @@ export function FigPlate({ n }: { n: string }) {
         yTicks={[0, 0.25, 0.5, 0.75, 1]}
         xLabel="幅厚比パラメータ R"
         yLabel="σcr/σy"
+        xHint={['← 厚い板', '薄い板 →']}
+        yHint="耐えられる力(強さ)→"
         xFmt={(v) => (v === 0.7 ? '0.7' : String(v))}
         yFmt={(v) => v.toFixed(2)}
         bands={[
@@ -782,6 +788,8 @@ export function FigInteraction({ n, initial = 3, point }: { n: string; initial?:
         yTicks={[0, 0.25, 0.5, 0.75, 1]}
         xLabel="曲げ σbc/σy"
         yLabel="軸力 σc/σy"
+        xHint={['', '曲げが大きい →']}
+        yHint="押す力が大きい →"
         xFmt={(v) => v.toFixed(2)}
         yFmt={(v) => v.toFixed(2)}
         series={[
@@ -864,6 +872,8 @@ export function CurvesPair({ lam, R, n }: { lam?: number; R?: number; n?: string
         yTicks={[0, 0.5, 1]}
         xLabel={xl}
         yLabel="低減率"
+        xHint={xl.includes('R') ? ['← 厚い板', '薄い板 →'] : ['← 太く短い柱', '細く長い柱 →']}
+        yHint="使える割合 →"
         yFmt={(v) => v.toFixed(1)}
         height={250}
         series={[

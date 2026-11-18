@@ -3,7 +3,7 @@ import { dohshiOld } from '../physics/curves.ts';
 import { alpha, loadFactor2 } from '../physics/beamcolumn.ts';
 import { plateStrength } from '../physics/plate.ts';
 import { SurfGrid } from './stage5.ts';
-import { ShowBase, aimArrow, arrow, label, line, placeArrow, ramp, setLine, tube } from './kit.ts';
+import { ShowBase, aimArrow, arrow, label, line, placeArrow, ramp, setLine, tube, axisGuide } from './kit.ts';
 
 const DARK = () => new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
 
@@ -193,8 +193,8 @@ export class Stage6Show extends ShowBase {
     }
 
     // λ のグラフ
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 3.8), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }));
-    board.position.set(GX(1.05), GY(0.55), GZ - 0.1);
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 4.7), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }));
+    board.position.set(GX(1.05) - 0.35, GY(0.55) - 0.42, GZ - 0.1);
     this.gGraph.add(board);
     const axis = (x0: number, y0: number, x1: number, y1: number, c = '#64748b') => {
       const l = line(c);
@@ -214,7 +214,9 @@ export class Stage6Show extends ShowBase {
       axis(GX(0), y, GX(2.15), y, '#d5dce8');
     }
     put('σ/σy', GX(0) + 0.35, GY(1.33), '#1f2a44', 0.75, 2);
-    put('細長比パラメータ λ →', GX(1.55), GY(0) - 0.5, '#1f2a44', 0.75, 2);
+    this.gGraph.add(
+      axisGuide({ x0: GX(0), x1: GX(2.15), y0: GY(0), y1: GY(1.2), z: GZ, below: 0.62, left: 0.62, xLeft: '← 太く短い', xRight: '細く長い →', xName: '細長比パラメータ λ', yText: '耐えられる力 →', glyph: 'column', size: 0.75 }),
+    );
     this.cG = tube(curvePts(strengthG), 0.036, '#0284c7');
     this.gGraph.add(this.cG);
     for (const c of ['#0284c7', '#6d28d9']) {
@@ -285,6 +287,10 @@ export class Stage6Show extends ShowBase {
       this.tags3.push(s);
     }
     this.tags3[0].position.copy(P3(0.62, 0.62, 0.05));
+    // 3軸のグラフの読み方: 原点 = 力なし。原点から遠いほど力が大きく、面の内側なら耐えられる
+    const hint = tag('原点から遠いほど 力が大きい', '#475569', 0.7, 2.2);
+    hint.position.copy(P3(0.62, 1.12, 0));
+    this.g3.add(hint);
     this.tags3[1].position.copy(P3(0.55, 0.32, 0.55));
     this.setScene(0);
   }

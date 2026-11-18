@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { plateR, plateStrength, plateTheory, plateWinter } from '../physics/plate.ts';
 import { writeStressColor } from './common.ts';
-import { ShowBase, aimArrow, arrow, drawTube, label, line, placeArrow, ramp, setLine, tube } from './kit.ts';
+import { ShowBase, aimArrow, arrow, drawTube, label, line, placeArrow, ramp, setLine, tube, axisGuide } from './kit.ts';
 
 const STEEL = new THREE.Color('#8a98ae');
 const DARK = () => new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
@@ -297,7 +297,7 @@ class BoxCol {
 export const RS = [0.3, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.1];
 const N = RS.length;
 const X = (R: number) => (R - 1.2) * 3.4;
-const Y = (s: number) => 1.55 + s * 2.3;
+const Y = (s: number) => 1.95 + s * 2.3;
 const ZP = 0.6;
 const ZG = -0.5;
 /** 両縁支持(k = 4)、σy = 355、E = 2.0×10⁵、ν = 0.3 で R = 1 になる幅厚比 */
@@ -443,8 +443,8 @@ export class Stage5Show extends ShowBase {
     });
 
     // グラフの壁
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(9.4, 3.9), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }));
-    board.position.set(0, Y(0.6), ZG - 0.12);
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(10.3, 5.0), new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }));
+    board.position.set(-0.4, Y(0.6) - 0.55, ZG - 0.12);
     this.gWall.add(board);
     const ax = (x0: number, y0: number, x1: number, y1: number, c = '#64748b') => {
       const l = line(c);
@@ -469,7 +469,10 @@ export class Stage5Show extends ShowBase {
       put(s.toFixed(1), X(0) - 0.3, Y(s), '#1f2a44', 0.75);
     }
     put('σcr/σy', X(0) + 0.15, Y(1.33), INK, 0.8);
-    put('幅厚比パラメータ R →', X(2.4) - 0.9, Y(0) - 0.72, INK, 0.75, 2);
+    // 軸の意味: 右ほど薄い板、上ほど耐えられる応力が大きい
+    this.gWall.add(
+      axisGuide({ x0: X(0), x1: X(2.4), y0: Y(0), y1: Y(1.2), z: ZG, below: 0.95, left: 0.66, xLeft: '← 厚い板', xRight: '薄い板 →', xName: '幅厚比パラメータ R', yText: '耐えられる力(強さ)→', glyph: 'plate' }),
+    );
     this.cYield = curve(() => 1, 0, 2.4, 0.022, '#e11d48');
     this.cEl = curve(plateTheory, 0.89, 2.4, 0.02, '#6d28d9');
     this.cIdeal = curve((R) => Math.min(1, plateTheory(R)), 0.01, 2.4, 0.034, '#16a34a');
@@ -712,7 +715,7 @@ export class Stage5Show extends ShowBase {
       this.look(0.05, 0.8, 2.4, 1.6, 28, 12);
     } else if (s >= 6 && s <= 9) {
       this.show(this.gLine, this.gWall);
-      this.look(0, 2.2, 4.4, 2.55, 6, 8);
+      this.look(0, 2.05, 4.4, 3.3, 6, 8);
       const t = this.once([15, 14, 17, 15][s - 6], c);
       // 板ごとの押す力と、波の大きさ
       const loads = new Array(N).fill(0);
@@ -823,7 +826,7 @@ export class Stage5Show extends ShowBase {
     } else {
       // 実験室
       this.show(this.gWall, this.gLab);
-      this.look(0, 2.2, 4.4, 2.55, 6, 8);
+      this.look(0, 2.05, 4.4, 3.3, 6, 8);
       for (let i = 0; i < N; i++) {
         this.dotI[i].scale.setScalar(0.001);
         this.dotR[i].scale.setScalar(0.001);

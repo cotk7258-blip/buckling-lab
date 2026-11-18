@@ -3,7 +3,7 @@ import { solveColumn, viewAtDeflection, viewAtLoad } from '../physics/column.ts'
 import type { ColumnPath } from '../physics/column.ts';
 import { aij, aisc, dohshiOld, eurocode, idealCurve } from '../physics/curves.ts';
 import { HColumn } from './hcolumn.ts';
-import { ShowBase, arrow, drawTube, label, line, placeArrow, ramp, setArrow, setLine, tube } from './kit.ts';
+import { ShowBase, arrow, drawTube, label, line, placeArrow, ramp, setArrow, setLine, tube, axisGuide } from './kit.ts';
 
 const E_OVER_FY = 200000 / 355;
 export const LAMS = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0];
@@ -14,7 +14,7 @@ export const S4_FAT = 2.5;
 const ZC = 0.7; // 柱の列の奥行き位置
 const ZG = -0.4; // グラフの壁の奥行き位置
 const X = (lam: number) => (lam - 1.1) * 3.1;
-const Y = (s: number) => 3.75 + s * 2.5;
+const Y = (s: number) => 4.2 + s * 2.5;
 const HGT = (lam: number) => 1.45 * lam;
 /** 不整の大きさを変えた組(残留応力/σy、初期たわみ L/n) */
 const VARIANTS: [number, number][] = [
@@ -110,10 +110,10 @@ export class Stage4Show extends ShowBase {
 
     // グラフの壁
     const board = new THREE.Mesh(
-      new THREE.PlaneGeometry(8.3, 4.4),
+      new THREE.PlaneGeometry(9.3, 5.6),
       new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, fog: false }),
     );
-    board.position.set(-0.05, Y(0.56), ZG - 0.12);
+    board.position.set(-0.45, Y(0.56) - 0.6, ZG - 0.12);
     this.scene.add(board);
     const axis = (x0: number, y0: number, x1: number, y1: number, color = '#64748b') => {
       const l = line(color);
@@ -139,7 +139,10 @@ export class Stage4Show extends ShowBase {
       put(s.toFixed(1), X(0) - 0.32, Y(s), '#1f2a44', 0.85);
     }
     put('σcr/σy', X(0) + 0.1, Y(1.32), '#1f2a44', 0.8);
-    put('細長比パラメータ λ →', X(1.75), Y(0.13), '#1f2a44', 0.7, 2);
+    // 軸の意味: 右ほど細く長い柱、上ほど耐えられる力が大きい
+    this.scene.add(
+      axisGuide({ x0: X(0), x1: X(2.25), y0: Y(0), y1: Y(1.2), z: ZG, below: 0.98, left: 0.72, xLeft: '← 太く短い柱', xRight: '細く長い柱 →', xName: '細長比パラメータ λ', yText: '耐えられる力(強さ)→', glyph: 'column' }),
+    );
 
     this.cEuler = curveTube((l) => 1 / (l * l), 0.878, 2.25, 0.022, '#6d28d9');
     this.cYield = curveTube(() => 1, 0, 2.25, 0.022, '#e11d48');
@@ -241,7 +244,7 @@ export class Stage4Show extends ShowBase {
     let mark = false;
     const hold = (i: number) => 0.997 * (useReal ? this.real : this.ideal)[i].Pu;
     // 全体(柱の列+グラフ)と、グラフだけ。上は説明文、下はテロップの分をあける
-    const WHOLE: [number, number, number, number, number, number] = [0.05, 3.0, 4.3, 5.0, 8, 6];
+    const WHOLE: [number, number, number, number, number, number] = [0.05, 3.2, 4.3, 5.2, 8, 6];
     const GRAPH: [number, number, number, number, number, number] = [0.05, Y(0.5), 4.2, 2.9, 5, 3];
 
     if (s === 0) {

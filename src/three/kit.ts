@@ -266,3 +266,88 @@ export function aimArrow(g: THREE.Group, x: number, y: number, z: number, dx: nu
   shaft.position.y = sl / 2;
   head.position.y = sl + 0.13;
 }
+
+/**
+ * グラフの壁に付ける「軸の意味」の案内。
+ *  横: 目盛りの下に、左右の向きの矢印と言葉(例: ← 太く短い柱 ・ 細く長い柱 →)と、小さな形の絵
+ *  縦: 縦軸の左に、上向きの矢印と言葉(例: 耐えられる力 →。縦に書く)
+ * x0・x1・y0・y1 はグラフの左端・右端・下端・上端(絵の座標)、z は壁の手前の位置
+ */
+export function axisGuide(o: {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  z: number;
+  /** 横の案内の矢印を置く高さ(下端からの距離) */
+  below: number;
+  /** 縦の案内を置く位置(左端からの距離) */
+  left: number;
+  xLeft: string;
+  xRight: string;
+  yText: string;
+  /** 横の案内の真ん中に置く軸の名前 */
+  xName?: string;
+  /** 横の両端に置く形の絵: column = 太短い柱/細長い柱、plate = 厚い板/薄い板 */
+  glyph?: 'column' | 'plate';
+  size?: number;
+}): THREE.Group {
+  const g = new THREE.Group();
+  const sz = o.size ?? 1;
+  const col = '#475569';
+  const lineMat = new THREE.LineBasicMaterial({ color: '#94a3b8', toneMapped: false, fog: false });
+  const headMat = new THREE.MeshBasicMaterial({ color: '#94a3b8', toneMapped: false, fog: false });
+  const glyphMat = new THREE.MeshBasicMaterial({ color: '#8794a8', toneMapped: false, fog: false });
+  const yx = o.y0 - o.below;
+  const shaft = (x0: number, y0: number, x1: number, y1: number) => {
+    g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x0, y0, o.z), new THREE.Vector3(x1, y1, o.z)]), lineMat));
+  };
+  const head = (x: number, y: number, rotZ: number) => {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.06 * sz, 0.18 * sz, 12), headMat);
+    c.position.set(x, y, o.z);
+    c.rotation.z = rotZ;
+    g.add(c);
+  };
+  /** 文字。wide は札の横幅(文字数に合わせる) */
+  const t = (text: string, x: number, y: number, color: string, wide: number, rot = 0, k = 1) => {
+    const s = label(text, color, wide);
+    s.scale.multiplyScalar(sz * k);
+    s.position.set(x, y, o.z);
+    (s.material as THREE.SpriteMaterial).rotation = rot;
+    g.add(s);
+    return s;
+  };
+  const wOf = (text: string) => Math.max(1, (text.length * 76 + 40) / 512);
+  // 横: 両向きの矢印。左右の端に意味、真ん中に軸の名前
+  const gl = o.glyph ? 0.5 * sz : 0;
+  const xa = o.x0 + gl;
+  const xb = o.x1 - gl;
+  shaft(xa + 0.1, yx, xb - 0.1, yx);
+  head(xa + 0.04, yx, Math.PI / 2);
+  head(xb - 0.04, yx, -Math.PI / 2);
+  const half = (text: string) => (1.5 * sz * (text.length * 76)) / 512 / 2;
+  t(o.xLeft, xa + 0.05 + half(o.xLeft), yx + 0.25 * sz, col, wOf(o.xLeft));
+  t(o.xRight, xb - 0.05 - half(o.xRight), yx + 0.25 * sz, col, wOf(o.xRight));
+  if (o.xName) t(o.xName, (o.x0 + o.x1) / 2, yx - 0.26 * sz, '#1f2a44', wOf(o.xName), 0, 1.05);
+  // 両端の形の絵(太く短い柱/細く長い柱、厚い板/薄い板)
+  if (o.glyph) {
+    const box = (w: number, h: number, x: number) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w * sz, h * sz), glyphMat);
+      m.position.set(x, yx + ((h - 0.1) * sz) / 2, o.z);
+      g.add(m);
+    };
+    if (o.glyph === 'column') {
+      box(0.16, 0.22, o.x0 + 0.2 * sz);
+      box(0.05, 0.5, o.x1 - 0.2 * sz);
+    } else {
+      box(0.34, 0.12, o.x0 + 0.22 * sz);
+      box(0.34, 0.03, o.x1 - 0.22 * sz);
+    }
+  }
+  // 縦: 上向きの矢印と、縦書きの言葉(下から上へ読む)
+  const xv = o.x0 - o.left;
+  shaft(xv, o.y0 + 0.05, xv, o.y1);
+  head(xv, o.y1 + 0.06, 0);
+  t(o.yText, xv - 0.22 * sz, (o.y0 + o.y1) / 2, col, wOf(o.yText), Math.PI / 2);
+  return g;
+}

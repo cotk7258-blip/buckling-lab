@@ -24,6 +24,10 @@ export interface PlotProps {
   yTicks: number[];
   xLabel: string;
   yLabel: string;
+  /** 横軸の左右の意味(例: ['← 太く短い柱', '細く長い柱 →']) */
+  xHint?: [string, string];
+  /** 縦軸の意味(縦書き。例: '耐えられる力 →') */
+  yHint?: string;
   series: Series[];
   /** 点: [x, y, 色, 半径] */
   dots?: [number, number, string, number?][];
@@ -47,7 +51,7 @@ export function Plot(p: PlotProps) {
   const W = narrow ? 360 : 600;
   const H = p.height ?? (narrow ? 270 : 330);
   const fs = narrow ? 12 : 13;
-  const m = { l: narrow ? 42 : 52, r: 12, t: 18, b: narrow ? 40 : 44 };
+  const m = { l: (narrow ? 42 : 52) + (p.yHint ? 16 : 0), r: 12, t: 18, b: (narrow ? 40 : 44) + (p.xHint ? 18 : 0) };
   const X = (v: number) => m.l + ((v - p.x[0]) / (p.x[1] - p.x[0])) * (W - m.l - m.r);
   const Y = (v: number) => H - m.b - ((v - p.y[0]) / (p.y[1] - p.y[0])) * (H - m.t - m.b);
   const clipY = (v: number) => Math.max(p.y[0] - 0.02 * (p.y[1] - p.y[0]), Math.min(p.y[1] + 0.02 * (p.y[1] - p.y[0]), v));
@@ -104,9 +108,31 @@ export function Plot(p: PlotProps) {
       ))}
       <line x1={m.l} y1={H - m.b} x2={W - m.r} y2={H - m.b} stroke={C.axis} strokeWidth={1.2} />
       <line x1={m.l} y1={m.t - 6} x2={m.l} y2={H - m.b} stroke={C.axis} strokeWidth={1.2} />
-      <text x={(m.l + W - m.r) / 2} y={H - 6} fontSize={fs} textAnchor="middle" fill={C.ink} fontWeight={700}>
+      <text x={(m.l + W - m.r) / 2} y={H - 6 - (p.xHint ? 18 : 0)} fontSize={fs} textAnchor="middle" fill={C.ink} fontWeight={700}>
         {p.xLabel}
       </text>
+      {p.xHint && (
+        <g fontSize={fs - 1} fill={C.dim} fontWeight={700}>
+          <text x={m.l} y={H - 6}>{p.xHint[0]}</text>
+          <text x={W - m.r} y={H - 6} textAnchor="end">
+            {p.xHint[1]}
+          </text>
+          <line x1={m.l + 2} y1={H - 2} x2={W - m.r - 2} y2={H - 2} stroke={C.grid} strokeWidth={2} />
+        </g>
+      )}
+      {p.yHint && (
+        <text
+          x={12}
+          y={(m.t + H - m.b) / 2}
+          fontSize={fs - 1}
+          fill={C.dim}
+          fontWeight={700}
+          textAnchor="middle"
+          transform={`rotate(-90 12 ${(m.t + H - m.b) / 2})`}
+        >
+          {p.yHint}
+        </text>
+      )}
       <text x={m.l + 4} y={m.t - 6} fontSize={fs} fill={C.ink} fontWeight={700}>
         {p.yLabel}
       </text>
