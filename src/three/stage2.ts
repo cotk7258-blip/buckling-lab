@@ -172,6 +172,30 @@ function tag(text: string, color: string, size = 0.7, wide = 1) {
   return s;
 }
 
+/**
+ * 回す力(モーメント)の矢印: 点のまわりの、右側の円弧と矢じり。ccw = 左回り(右側では上向き)。
+ * 半径 1 で作り、scale で大きさを表す
+ */
+function curvedArrow(color: string, ccw: boolean) {
+  const g = new THREE.Group();
+  const a0 = -0.95;
+  const a1 = 0.95;
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 30; i++) {
+    const a = a0 + ((a1 - a0) * i) / 30;
+    pts.push(new THREE.Vector3(Math.cos(a), Math.sin(a), 0));
+  }
+  g.add(tube(pts, 0.05, color, 0.7));
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.32, 16), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6 }));
+  const end = ccw ? a1 : a0;
+  head.position.set(Math.cos(end), Math.sin(end), 0);
+  // 円の接線の向き(ccw なら角度が増える向き)
+  const dir = ccw ? new THREE.Vector3(-Math.sin(end), Math.cos(end), 0) : new THREE.Vector3(Math.sin(end), -Math.cos(end), 0);
+  head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  g.add(head);
+  return g;
+}
+
 function plot(f: (x: number) => number, color: string, H: number) {
   const pts: THREE.Vector3[] = [];
   for (let i = 0; i <= 60; i++) pts.push(new THREE.Vector3(f(i / 60), (i / 60) * H, 0));
@@ -196,6 +220,14 @@ export class Stage2Show extends ShowBase {
   private tOut: THREE.Sprite;
   private tBack: THREE.Sprite;
   private offLine: THREE.Line;
+  /** 場面「綱引き」: 真ん中の断面にかかる2つのモーメント(回す力)と、ずれ y、比べるゲージ、きっかけの指 */
+  private g1 = new THREE.Group();
+  private mBend: THREE.Group;
+  private mBack: THREE.Group;
+  private yArrow: THREE.Group;
+  private poke: THREE.Group;
+  private gauge: THREE.Mesh[] = [];
+  private t1: Record<string, THREE.Sprite> = {};
   private g2 = new THREE.Group(); // 長さ1倍と2倍
   private short: Bar;
   private long: Bar;
@@ -242,6 +274,35 @@ export class Stage2Show extends ShowBase {
     this.tBack = tag('戻す力', '#0284c7', 0.75);
     this.offLine = line('#6d28d9', true);
     this.g0.add(this.hOut, this.hBack, this.tOut, this.tBack, this.offLine);
+
+    // 綱引きの場面の部品
+    this.g0.add(this.g1);
+    this.mBend = curvedArrow('#ea580c', true);
+    this.mBack = curvedArrow('#0284c7', false);
+    this.yArrow = arrow('#1f2a44');
+    this.yArrow.scale.set(0.5, 1, 0.5);
+    this.poke = arrow('#64748b');
+    this.poke.scale.set(1.2, 1, 1.2);
+    this.g1.add(this.mBend, this.mBack, this.yArrow, this.poke);
+    for (const c of ['#ea580c', '#0284c7']) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 0.16, 0.05), new THREE.MeshBasicMaterial({ color: c, toneMapped: false, fog: false }));
+      this.gauge.push(m);
+      this.g1.add(m);
+    }
+    const mk = (k: string, text: string, color: string, size = 0.62) => {
+      const sp = tag(text, color, size, Math.max(1, (text.length * 76 + 60) / 512));
+      this.g1.add(sp);
+      this.t1[k] = sp;
+    };
+    mk('y', 'ずれ y(腕の長さ)', '#1f2a44');
+    mk('path', '押す力の通り道', '#6d28d9', 0.55);
+    mk('bend', '曲げるモーメント P × y', '#ea580c');
+    mk('back', '戻すモーメント EI × 1/R', '#0284c7');
+    mk('poke', '横から少し押す(きっかけ)', '#64748b');
+    mk('gb', '曲げる P × y', '#ea580c', 0.55);
+    mk('gk', '戻す EI × 1/R', '#0284c7', 0.55);
+    mk('gt', '真ん中の断面の回す力', '#1f2a44', 0.55);
+    this.g1.visible = false;
 
     this.short = new Bar('pp', 1.6, 0.4);
     this.short.group.position.x = -1.5;
@@ -318,6 +379,7 @@ export class Stage2Show extends ShowBase {
 
   private only(g: THREE.Group) {
     for (const x of [this.g0, this.g2, this.g3, this.g5, this.gLab]) x.visible = x === g;
+    this.g1.visible = false;
   }
 
   private forces(D: number, p: number, on: boolean) {
@@ -333,6 +395,67 @@ export class Stage2Show extends ShowBase {
     this.tBack.position.set(x - 0.12 - back - 0.6, y - 0.22, 0.3);
     this.offLine.visible = vis;
     setLine(this.offLine, 0, 0, 0, this.main.topY, 0.05);
+  }
+
+  /**
+   * 綱引きの場面: 真ん中の断面で、曲げるモーメント P·y(オレンジ、左回り)と戻すモーメント EI/R(青、右回り)を描く。
+   * p = P/Pe。両端ピンのサインカーブでは EI/R = Pe·y なので、2つの比は p だけで決まる(y によらない)
+   */
+  private tug(D: number, p: number, show: boolean, pokeLen: number) {
+    this.g1.visible = true;
+    const [x, y] = this.main.at(0.5);
+    const z = 0.25;
+    // 押す力の通り道(上下のピンを結ぶ点線)と、ずれ y: 通り道から真ん中までの横の距離
+    this.offLine.visible = show;
+    setLine(this.offLine, 0, -0.1, 0, this.main.topY + 0.1, 0.2);
+    this.t1.path.visible = show;
+    this.t1.path.position.set(-0.75, this.main.topY * 0.82, z);
+    placeArrow(this.yArrow, 0, y, z, x, 0);
+    this.yArrow.visible = show && x > 0.06;
+    this.t1.y.visible = this.yArrow.visible;
+    this.t1.y.position.set(x / 2 - 0.15, y - 0.28, z);
+    // 回す力の大きさ(絵の上): どちらも y に比例。曲げる方は p 倍
+    const kM = 2.2;
+    const mb = kM * p * D;
+    const mk = kM * D;
+    void mk;
+    const on = show && D > 0.03;
+    this.mBend.visible = on && mb > 0.02;
+    this.mBack.visible = on;
+    this.mBend.position.set(x, y, z);
+    this.mBack.position.set(x, y, z);
+    // 円弧の半径を回す力に比例させる。互角(p = 1)なら同じ円に重なり、矢じりだけが逆を向く
+    const rb = 0.12 + 1.7 * p * D;
+    const rk = 0.18 + 1.7 * D;
+    this.mBend.scale.setScalar(rb);
+    this.mBack.scale.setScalar(rk);
+    this.mBend.position.z = z + 0.04;
+    this.t1.bend.visible = this.mBend.visible;
+    this.t1.bend.position.set(x + rb * 0.6 + 0.95, y + rb * 0.85 + 0.15, z);
+    this.t1.back.visible = on;
+    this.t1.back.position.set(x + rk * 0.6 + 1.0, y - rk * 0.85 - 0.15, z);
+    // 比べるゲージ(左上)
+    const gx = -2.5;
+    const gy = 3.05;
+    const L = 1.5;
+    const set = (m: THREE.Mesh, len: number, yy: number) => {
+      m.visible = show && len > 0.01;
+      m.scale.x = Math.max(0.01, len);
+      m.position.set(gx + len / 2, yy, 0.1);
+    };
+    set(this.gauge[0], L * Math.min(1.4, (mb / kM) * 2), gy);
+    set(this.gauge[1], L * Math.min(1.4, (mk / kM) * 2), gy - 0.36);
+    this.t1.gt.visible = show;
+    this.t1.gt.position.set(gx + 0.7, gy + 0.36, 0.1);
+    this.t1.gb.visible = show;
+    this.t1.gb.position.set(gx - 0.55, gy, 0.1);
+    this.t1.gk.visible = show;
+    this.t1.gk.position.set(gx - 0.6, gy - 0.36, 0.1);
+    // きっかけの指(横から押す)
+    placeArrow(this.poke, x - 0.1 - pokeLen, y + 0.35, z, pokeLen, 0);
+    this.poke.visible = pokeLen > 0.05;
+    this.t1.poke.visible = this.poke.visible;
+    this.t1.poke.position.set(x - 0.4 - pokeLen, y + 0.7, z);
   }
 
   /** 柱の上の高さ ξ の点で、ずれ(矢印)・傾き(接線)・曲がり(ぴったり合う円)を描き、グラフの同じ高さに点を打つ */
@@ -439,29 +562,53 @@ export class Stage2Show extends ShowBase {
       this.look(0, 1.45, 2.4, 2.75, 12, 6);
     } else if (s === 1) {
       this.only(this.g0);
-      const t = this.cyc(30, c);
-      let p = 0.5;
+      const t = this.cyc(40, c);
+      // 押す力 p(座屈荷重 = 1)と、真ん中のずれ D。横からの指は「わずかに曲げるきっかけ」だけ
+      let p = 0.5 * ramp(t, 0.5, 2.5);
       let D = 0;
-      if (t < 7) {
-        // 小さい力: 突いても戻る
-        D = 0.42 * ramp(t, 1, 2.2) * (1 - ramp(t, 4.2, 6));
-        this.caption = t < 4.2 ? '押す力が小さいうち(50%)に、横から突いてみる' : '戻す力が勝って、元に戻る';
-      } else if (t < 14) {
-        D = 0.2 + 0.22 * ramp(t, 9, 10.5);
-        if (t < 8) D = 0.2 * ramp(t, 7, 8);
-        this.caption = 'ずれが2倍なら、曲げる力も戻す力も2倍。勝ち負けは変わらない';
-      } else if (t < 22) {
-        p = 0.5 + 0.5 * ramp(t, 14, 17);
-        D = 0.42 - 0.12 * ramp(t, 18.5, 20) * 0;
-        this.caption = t < 17 ? '押す力を増やすと、曲げる力だけが大きくなる' : 'ちょうど互角になる力 = 座屈荷重。どこで手を離しても止まったまま';
+      let poke = 0;
+      let show = false;
+      if (t < 3) {
+        this.caption = 'まっすぐな柱を、座屈荷重の半分(50%)の力で押しておく';
+      } else if (t < 12) {
+        poke = 0.7 * (ramp(t, 3, 3.6) - ramp(t, 5.4, 6));
+        D = 0.28 * ramp(t, 3.4, 5) * (1 - ramp(t, 10.2, 11.8));
+        show = t > 5.5;
+        this.caption =
+          t < 6
+            ? '横から指で少し押して、わずかに曲げる(きっかけ。指はすぐ離す)'
+            : t < 10.2
+              ? 'ずれ y が腕になって、押す力が真ん中を回す(オレンジ P × y)。曲がった柱は戻ろうとする(青 EI × 1/R)'
+              : '50% では、戻す方が2倍強い。だから元のまっすぐに戻る';
+      } else if (t < 19) {
+        poke = 0.9 * (ramp(t, 12, 12.6) - ramp(t, 14.2, 14.8));
+        D = 0.56 * ramp(t, 12.4, 14) * (1 - ramp(t, 17.2, 18.8));
+        show = t > 14.3;
+        this.caption = t < 17.2 ? 'もっと大きく曲げても、2つの回す力はどちらも2倍。勝ち負けは変わらない' : 'ずれが大きくても小さくても、50% なら必ず戻る';
+      } else if (t < 29) {
+        p = 0.5 + 0.5 * ramp(t, 20.5, 23.5);
+        poke = 0.7 * (ramp(t, 19, 19.6) - ramp(t, 20.2, 20.8));
+        D = 0.32 * ramp(t, 19.3, 20.6) + 0.2 * (ramp(t, 25.5, 26.5) - ramp(t, 27.5, 28.5));
+        show = t > 20.3;
+        this.caption =
+          t < 23.5
+            ? '押す力を上げていく。曲げる方(P × y)だけが大きくなる'
+            : t < 25.5
+              ? '100% = 座屈荷重。2つがちょうど互角で、指を離しても曲がったまま止まる'
+              : 'このとき互角は、ずれの大きさによらない。まっすぐと曲がった形の、分かれ道';
       } else {
-        p = 1.15;
-        D = Math.min(0.5, 0.42 * Math.exp((t - 22) * 0.05)) * (1 - ramp(t, 28.5, 30));
-        this.caption = 'それを超えると、曲げる力の勝ち。たわみが一気に大きくなる';
+        p = 1.1;
+        D = Math.min(0.55, 0.3 * Math.exp((t - 29) * 0.12)) * (1 - ramp(t, 38.5, 40));
+        show = t < 38.5;
+        this.caption =
+          t < 34
+            ? '座屈荷重を超えると、曲げる方が勝つ。ずれが増え、曲げる力がさらに増える'
+            : 'これが座屈。勝ち負けは、ずれではなく押す力だけで決まる(わずかな曲がりの範囲の話)';
       }
       this.main.update(D, p);
-      this.forces(D, p, true);
-      this.look(0, 1.45, 3.0, 2.75, 10, 6);
+      this.forces(0, 0, false);
+      this.tug(D, p, show, poke);
+      this.look(-0.2, 1.55, 3.4, 2.85, 10, 6);
     } else if (s === 2) {
       this.only(this.g2);
       const t = this.cyc(24, c);
