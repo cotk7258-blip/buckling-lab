@@ -75,6 +75,9 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
         <Eq tex={String.raw`kl=\pi\;\to\;k^2=\dfrac{\pi^2}{l^2}\;\to\;\dfrac{P}{EI}=\dfrac{\pi^2}{l^2}`} />
                   <Eq n="2" strong tex={String.raw`P_e=\dfrac{\pi^2EI}{l^2}`} note="オイラーの座屈荷重" />
                 n = 2 は半波が2つの形で、荷重は4倍。π は、座屈の形がサインカーブであることから来ています。
+        <P>
+          <b>言葉で言い直すと</b>: 曲げる側は P × y、戻す側は EI × 1/R = EI(π/l)² × y(サインカーブでは、曲がり具合 1/R がずれ y に比例し、その係数が (π/l)²)。どちらにも y が掛かっているので、y では勝負がつかない。比べるのは y の前の係数で、P は外力なので上げられ、EI(π/l)² は材料・断面・長さで決まって動かない。P が EI(π/l)² = π²EI/l² に追いついた所が座屈荷重です(映像2 の綱引き)。
+        </P>
       </Step>
 
       <FigModes />

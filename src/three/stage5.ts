@@ -623,23 +623,30 @@ export class Stage5Show extends ShowBase {
       this.look(0, 0.75, 1.6, 1.35, 32, 14);
     } else if (s === 2) {
       this.show(this.gOne);
-      const t = this.cyc(30, c);
+      // 映像2 の綱引きと同じ筋: 仮に波打たせて比べる → 波の高さでは勝負がつかない → 比べるのは σ と σel → 超えた瞬間に波打つ
+      const t = this.cyc(36, c);
       let p = 0.5;
       let A = 0;
-      if (t < 7) {
-        A = 0.16 * ramp(t, 1, 2.2) * (1 - ramp(t, 4.2, 6));
-        this.caption = t < 4.2 ? '弱い力(σel の 50%)で押しながら、横から波を作ってみる' : '戻す力が勝って、平らに戻る';
-      } else if (t < 14) {
-        A = t < 8 ? 0.08 * ramp(t, 7, 8) : 0.08 + 0.1 * ramp(t, 9, 10.5);
-        this.caption = '波が2倍なら、押し出す力も戻す力も2倍。勝ち負けは変わらない';
-      } else if (t < 22) {
-        p = 0.5 + 0.5 * ramp(t, 14, 17);
-        A = 0.18;
-        this.caption = t < 17 ? '押す力を増やすと、押し出す力だけが大きくなる' : 'ちょうど互角になる応力 = σel。どこで手を離しても、その形のまま';
+      if (t < 3) {
+        A = 0.08 * ramp(t, 1.5, 3);
+        this.caption = '板を σel の 50% の応力で押している。もし、わずかに波打ったら?';
+      } else if (t < 9) {
+        A = 0.08;
+        this.caption = '押し出す力(オレンジ)= 押す応力 × 波の高さ。戻す力(青)= 板の曲げにくさと縁の支え × 波の高さ';
+      } else if (t < 15) {
+        A = 0.08 + 0.12 * ramp(t, 9.5, 12.5);
+        this.caption = '波を大きくしても、2つは同じ割合で大きくなる。波の高さでは勝負がつかない';
+      } else if (t < 27) {
+        A = 0.2 - 0.08 * ramp(t, 15, 16);
+        p = 0.5 + 0.5 * ramp(t, 16, 24);
+        this.caption =
+          t < 24
+            ? `比べるのは波の高さの前の係数。押す応力は外力で上げられる(${Math.round(p * 100)}%)。戻す側は板の厚み・幅・支え方で決まり動かない`
+            : '押す応力が、板で決まる値に追いついた。それが σel(弾性局部座屈応力)';
       } else {
-        p = 1.15;
-        A = Math.min(0.24, 0.18 * Math.exp((t - 22) * 0.05)) * (1 - ramp(t, 28.5, 30));
-        this.caption = 'それを超えると、押し出す力の勝ち。波が一気に大きくなる';
+        p = 1.1;
+        A = Math.min(0.26, 0.12 * Math.exp((t - 27) * 0.12)) * (1 - ramp(t, 34.5, 36));
+        this.caption = '超えた瞬間、押し出す方が勝つ。波が大きくなり、止まらない(わずかに波打った範囲の話)';
       }
       const fb = 2.2 * A;
       this.one.update({ A, load: p, fOut: fb * p, fBack: fb, railGlow: 1, tags: true });
