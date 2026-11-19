@@ -196,12 +196,6 @@ function curvedArrow(color: string, ccw: boolean) {
   return g;
 }
 
-function plot(f: (x: number) => number, color: string, H: number) {
-  const pts: THREE.Vector3[] = [];
-  for (let i = 0; i <= 60; i++) pts.push(new THREE.Vector3(f(i / 60), (i / 60) * H, 0));
-  return tube(pts, 0.03, color, 0.8);
-}
-
 const ORDER: Support[] = ['cf', 'pp', 'fp', 'ff'];
 
 export interface Lab2 {
@@ -235,23 +229,6 @@ export class Stage2Show extends ShowBase {
   private short: Bar;
   private long: Bar;
   private tags2: THREE.Sprite[] = [];
-  private g3 = new THREE.Group(); // サインカーブと傾き・曲がり
-  private bar3: Bar;
-  private plots: THREE.Mesh[] = [];
-  private tags3: THREE.Sprite[] = [];
-  private axes3: THREE.Line[] = [];
-  /** 場面「式にする」: 柱の上の1点で、ずれ y・傾き y′・曲がり y″ を示す */
-  private gProbe = new THREE.Group();
-  private pY: THREE.Group;
-  private pTan: THREE.Mesh | null = null;
-  private pArc: THREE.Mesh | null = null;
-  private pDot: THREE.Mesh;
-  private pDots: THREE.Mesh[] = [];
-  private pLine: THREE.Line;
-  private pTags: THREE.Sprite[] = [];
-  private pKey = '';
-  private pOut: THREE.Group;
-  private pBack: THREE.Group;
   private g5 = new THREE.Group(); // 支え方4種
   private four: Bar[] = [];
   private tags5: THREE.Sprite[][] = [];
@@ -263,7 +240,7 @@ export class Stage2Show extends ShowBase {
 
   constructor(canvas: HTMLCanvasElement) {
     super(canvas);
-    this.scene.add(this.g0, this.g2, this.g3, this.g5, this.gLab);
+    this.scene.add(this.g0, this.g2, this.g5, this.gLab);
 
     this.main = new Bar('pp', 3.0, 0.5);
     this.main.tags = true;
@@ -309,12 +286,12 @@ export class Stage2Show extends ShowBase {
     this.ghost = new THREE.Line(new THREE.BufferGeometry().setFromPoints(gp), new THREE.LineDashedMaterial({ color: '#64748b', dashSize: 0.08, gapSize: 0.06 }));
     this.ghost.computeLineDistances();
     this.g1.add(this.ghost);
-    mk('bend', '曲げるモーメント P × y', '#ea580c');
-    mk('back', '戻すモーメント EI × 1/R', '#0284c7');
+    mk('bend', '曲げる力 P × y', '#ea580c');
+    mk('back', '戻す力 EI × 1/R', '#0284c7');
     mk('poke', '横から少し押す(きっかけ)', '#64748b');
-    mk('gb', '曲げる側 P(外力・変えられる)', '#ea580c', 0.55);
-    mk('gk', '戻す側 EI(π/l)²(柱で決まる・一定)', '#0284c7', 0.55);
-    mk('gt', 'y の前の係数を比べる', '#1f2a44', 0.55);
+    mk('gb', '曲げる側 P(押す力)', '#ea580c', 0.55);
+    mk('gk', '戻す側 π²EI/l²(柱で決まる)', '#0284c7', 0.55);
+    mk('gt', 'くらべる', '#1f2a44', 0.55);
     this.g1.visible = false;
 
     this.short = new Bar('pp', 1.6, 0.4);
@@ -328,50 +305,6 @@ export class Stage2Show extends ShowBase {
       this.g2.add(s);
       this.tags2.push(s);
     }
-
-    this.bar3 = new Bar('pp', 3.0, 0.5);
-    this.bar3.group.position.x = -2.9;
-    this.g3.add(this.bar3.group);
-    const defs: [(x: number) => number, string, string, number][] = [
-      [(x) => Math.sin(Math.PI * x), '#1f2a44', 'ずれ y', -1.2],
-      [(x) => Math.cos(Math.PI * x), '#0284c7', '傾き y′', 0.6],
-      [(x) => -Math.sin(Math.PI * x), '#6d28d9', '曲がり y″', 2.5],
-    ];
-    for (const [f, c, name, x] of defs) {
-      const p = plot(f, c, 3.0);
-      p.position.x = x;
-      const ax = line('#b4c0d2');
-      setLine(ax, x, 0, x, 3.0, -0.02);
-      const s = tag(name, c, 0.7, name.length > 4 ? 2 : 1);
-      s.position.set(x, -0.4, 0.2);
-      this.g3.add(p, ax, s);
-      this.axes3.push(ax);
-      this.plots.push(p);
-      this.tags3.push(s);
-    }
-    // 柱の上の1点と、その高さの横線・グラフ上の点
-    this.g3.add(this.gProbe);
-    this.pY = arrow('#1f2a44');
-    this.pY.scale.set(0.7, 1, 0.7);
-    const ball = (c: string, r = 0.07) => new THREE.Mesh(new THREE.SphereGeometry(r, 18, 12), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.6 }));
-    this.pDot = ball('#e11d48', 0.08);
-    for (const c of ['#1f2a44', '#0284c7', '#6d28d9']) {
-      const d = ball(c);
-      this.pDots.push(d);
-      this.gProbe.add(d);
-    }
-    this.pLine = line('#e11d48', true);
-    // 場面「式にする」: 赤い点での、曲げる力(外力による)と戻す力(回復力)
-    this.pOut = arrow('#ea580c');
-    this.pBack = arrow('#0284c7');
-    for (const a of [this.pOut, this.pBack]) a.scale.set(1.1, 1, 1.1);
-    this.gProbe.add(this.pY, this.pDot, this.pLine, this.pOut, this.pBack);
-    for (const [t, c] of [['ずれ y', '#1f2a44'], ['傾き y′(接線)', '#0284c7'], ['曲がり y″ = −1/R', '#6d28d9'], ['曲げる力 P × y', '#ea580c'], ['戻す力 EI × 1/R', '#0284c7']] as const) {
-      const s = tag(t, c, 0.62, Math.max(1.3, (t.length * 76 + 60) / 512));
-      this.gProbe.add(s);
-      this.pTags.push(s);
-    }
-    this.gProbe.visible = false;
 
     ORDER.forEach((sup, i) => {
       const b = new Bar(sup, 2.3, 0.36);
@@ -391,7 +324,7 @@ export class Stage2Show extends ShowBase {
   }
 
   private only(g: THREE.Group) {
-    for (const x of [this.g0, this.g2, this.g3, this.g5, this.gLab]) x.visible = x === g;
+    for (const x of [this.g0, this.g2, this.g5, this.gLab]) x.visible = x === g;
     this.g1.visible = false;
   }
 
@@ -524,92 +457,9 @@ export class Stage2Show extends ShowBase {
     this.t1.poke.position.set(x - 0.4 - pokeLen, y + 0.7, z);
   }
 
-  /** 柱の上の高さ ξ の点で、ずれ(矢印)・傾き(接線)・曲がり(ぴったり合う円)を描き、グラフの同じ高さに点を打つ */
-  private probe(D: number, t: number, s: number) {
-    // 赤い点の高さ: 説明の間は下から3割の所。途中で上下に動かし、最後は真ん中
-    const [a, b] = s === 3 ? [18, 24] : [21, 28];
-    const xi = t < a ? 0.3 : t < b ? 0.5 - 0.38 * Math.cos(((t - a) / (b - a)) * Math.PI * 2) : 0.5;
-    const H = this.bar3.H;
-    const bx = this.bar3.group.position.x;
-    const px = bx + D * Math.sin(Math.PI * xi);
-    const py = xi * H;
-    this.pDot.position.set(px, py, 0.12);
-    // ずれ: 元の線から点まで
-    placeArrow(this.pY, bx, py, 0.12, px - bx, 0);
-    this.pY.visible = px - bx > 0.06;
-    // 横の点線と、3本のグラフ上の点(ずれ sin、傾き cos、曲がり −sin。グラフの横幅は形を見せるための目盛り)
-    setLine(this.pLine, bx - 0.2, py, 3.4, py, 0.08);
-    const fs = [Math.sin(Math.PI * xi), Math.cos(Math.PI * xi), -Math.sin(Math.PI * xi)];
-    this.plots.forEach((p, i) => this.pDots[i].position.set(p.position.x + p.scale.x * fs[i], py, 0.1));
-    // 接線と、曲率の円(絵の上の値で計算)
-    const key = `${xi.toFixed(3)}|${D.toFixed(3)}`;
-    if (key !== this.pKey) {
-      this.pKey = key;
-      const d1 = (D * Math.PI * Math.cos(Math.PI * xi)) / H; // dx/dy
-      const d2 = (-D * Math.PI * Math.PI * Math.sin(Math.PI * xi)) / (H * H);
-      const n = Math.hypot(1, d1);
-      const tx = d1 / n;
-      const ty = 1 / n;
-      const tl = 1.0;
-      if (this.pTan) {
-        this.gProbe.remove(this.pTan);
-        this.pTan.geometry.dispose();
-      }
-      this.pTan = tube([new THREE.Vector3(px - tx * tl, py - ty * tl, 0.16), new THREE.Vector3(px + tx * tl, py + ty * tl, 0.16)], 0.035, '#0284c7', 0.9);
-      this.gProbe.add(this.pTan);
-      if (this.pArc) {
-        this.gProbe.remove(this.pArc);
-        this.pArc.geometry.dispose();
-        this.pArc = null;
-      }
-      const kap = Math.abs(d2) / n ** 3;
-      if (kap > 1e-3) {
-        const R = 1 / kap;
-        // 曲がりの内側(柱の元の線の側)に中心
-        const cx = px - ty * R;
-        const cy = py + tx * R;
-        const a0 = Math.atan2(py - cy, px - cx);
-        // 円の一部を長めに描き(柱から離れていくので円だと分かる)、点から中心へ向かう半径の線も添える
-        const half = Math.min(1.4, 1.5 / R);
-        const pts: THREE.Vector3[] = [];
-        for (let k = 0; k <= 40; k++) {
-          const a = a0 - half + (2 * half * k) / 40;
-          pts.push(new THREE.Vector3(cx + R * Math.cos(a), cy + R * Math.sin(a), 0.16));
-        }
-        this.pArc = tube(pts, 0.022, '#6d28d9', 0.8);
-        const rl = Math.min(R, 1.1);
-        const rad = tube([new THREE.Vector3(px, py, 0.16), new THREE.Vector3(px - ty * rl, py + tx * rl, 0.16)], 0.015, '#6d28d9', 0.8);
-        this.pArc.add(rad);
-        this.gProbe.add(this.pArc);
-      }
-    }
-    // 札は、説明している順に出す。
-    // 映像4(s = 3)は ずれ → 傾き → 曲がり、映像5(s = 4)は ずれと曲げる力 → 曲がり → 戻す力(傾きは使わない)
-    const show = s === 3 ? [true, t >= 6, t >= 12] : [true, false, t >= 7];
-    const yd = px - bx;
-    const fo = s === 4 ? 1.7 * yd : 0;
-    const fb = s === 4 && t >= 14 ? 1.7 * yd : 0;
-    placeArrow(this.pOut, px + 0.1, py + 0.15, 0.16, fo, 0);
-    placeArrow(this.pBack, px - 0.1, py - 0.32, 0.16, -fb, 0);
-    this.pTags[3].visible = fo > 0.05;
-    this.pTags[3].position.set(px + 0.1 + fo + 0.75, py + 0.3, 0.2);
-    this.pTags[4].visible = fb > 0.05;
-    this.pTags[4].position.set(px - 0.1 - fb - 0.2, py - 0.62, 0.2);
-    this.pDots[1].visible = s === 3 && t >= 6;
-    this.pDots[2].visible = s === 4 ? t >= 7 : t >= 12;
-    this.pTags[0].visible = show[0];
-    this.pTags[0].position.set((bx + px) / 2, s === 4 ? py + 0.24 : py - 0.22, 0.2);
-    this.pTags[1].visible = show[1];
-    this.pTags[1].position.set(px + 0.95, py + 0.62, 0.2);
-    this.pTags[2].visible = show[2];
-    this.pTags[2].position.set(px + 0.8, py - 0.45, 0.2);
-    if (this.pTan) this.pTan.visible = show[1];
-    if (this.pArc) this.pArc.visible = show[2];
-    this.pY.visible = this.pY.visible && show[0];
-  }
-
   protected tick(dt: number) {
-    const s = this.sceneIndex;
+    // 場面 3 以降は旧番号(サインカーブ・式にするの2場面を除いた。導出は「式と Q&A」)
+    const s = this.sceneIndex >= 3 ? this.sceneIndex + 2 : this.sceneIndex;
     const c = this.clock;
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     if (s === 0) {
@@ -639,32 +489,32 @@ export class Stage2Show extends ShowBase {
       let ghost = 0;
       let show = false;
       if (t < 3) {
-        this.caption = '柱を、座屈荷重の 50% の力で押している。もし、わずかに曲がったら(点線)?';
+        this.caption = '押している柱が、もし少し曲がったら?(点線)';
         ghost = 0.22 * ramp(t, 1.5, 3);
         show = t > 2;
       } else if (t < 9) {
         ghost = 0.22;
         show = true;
-        this.caption = '真ん中で比べる。曲げる回す力 = P × y(オレンジ)、戻す回す力 = EI × 1/R(青)。1/R は真ん中の曲がり具合(紫の円)';
+        this.caption = '曲げる力 P × y(オレンジ)と、戻す力 EI × 1/R(青)';
       } else if (t < 16) {
         ghost = 0.22 + 0.4 * ramp(t, 9.5, 13);
         show = true;
         this.caption =
           t < 13
-            ? '曲がりを大きくすると、同じ形のまま膨らむので、1/R も y に比例して大きくなる(紫の円が小さくなる)'
-            : 'P × y も y に比例。2つの回す力は一緒に大きくなるので、y では勝負がつかない';
+            ? '曲がりを大きくすると、2つとも同じ割合で増える'
+            : 'だから、曲がりの大きさでは勝負がつかない';
       } else if (t < 20) {
         ghost = 0.62 - 0.3 * ramp(t, 16, 17);
         show = true;
-        this.caption = '1/R = (π/l)² × y。係数 (π/l)² は形と長さで決まる一定の数。だから 戻す = EI(π/l)² × y、曲げる = P × y';
+        this.caption = '勝負を決めるのは、押す力 P と、柱で決まる π²EI/l²';
       } else if (t < 31) {
         p = 0.5 + 0.5 * ramp(t, 20.5, 28);
         ghost = 0.32;
         show = true;
         this.caption =
           t < 28
-            ? `比べるのは y の前の係数。P は外力で上げられる(${Math.round(p * 100)}%)。EI(π/l)² は鋼材・断面・長さで決まり動かない。まだ戻す方が強く、柱はまっすぐ`
-            : 'P が EI(π/l)² に追いついた。P = π²EI/l² = 座屈荷重。ここが境目';
+            ? `P を上げる(${Math.round(p * 100)}%)。まだ戻す方が強い`
+            : '追いついた。これが座屈荷重 π²EI/l²';
       } else {
         p = 1 + 0.1 * ramp(t, 31, 32);
         ghost = 0.32;
@@ -672,8 +522,8 @@ export class Stage2Show extends ShowBase {
         show = t < 40.5;
         this.caption =
           t < 35
-            ? '超えた瞬間、どんな小さなずれでも曲げる方が勝つ。柱が曲がり出す'
-            : '曲がるほど y が増え、曲げる回す力もさらに増える。止まらない = 座屈(わずかに曲がった範囲の話)';
+            ? '超えた瞬間、曲げる方が勝つ'
+            : '曲がり出して止まらない。これが座屈';
       }
       this.main.update(D, p);
       this.forces(0, 0, false);
@@ -699,49 +549,6 @@ export class Stage2Show extends ShowBase {
       this.tags2[2].visible = dS > 0.3;
       this.tags2[3].visible = dL > 0.3 && t >= 10;
       this.look(-0.2, 1.4, 3.0, 2.8, 10, 6);
-    } else if (s === 3 || s === 4) {
-      this.only(this.g3);
-      const t = this.cyc(s === 4 ? 36 : 30, c);
-      // 赤い点で値を読むので、形は止めておく
-      const D = 0.5;
-      this.bar3.update(D, 1);
-      // 映像4: グラフを ずれ → 傾き → 曲がり の順に出す。映像5: ずれと曲がりだけ(傾きは使わない)
-      const show = s === 4 ? [1, 0, ramp(t, 7, 8)] : [ramp(t, 1, 2), ramp(t, 6, 7), ramp(t, 12, 13)];
-      this.plots.forEach((p, i) => {
-        p.scale.x = (D / 0.5) * 0.6;
-        p.visible = show[i] > 0.01;
-        this.axes3[i].visible = s === 3 || i !== 1;
-        this.tags3[i].visible = show[i] > 0.5;
-      });
-      this.gProbe.visible = true;
-      this.probe(D, t, s);
-      if (s === 3)
-        this.caption =
-          t < 6
-            ? '座屈した棒の形は、サインカーブの半分'
-            : t < 12
-              ? '傾き: 両端でいちばん大きく、真ん中でゼロ'
-              : t < 18
-                ? '傾きの変わり方 = 曲がりのきつさ: 真ん中で最大。もとの形と同じ波で、向きが逆'
-                : t < 24
-                  ? 'これが映像1 の曲率 1/R。式では y″ と書き、山なりでは負なので 1/R = −y″'
-                  : '真ん中のきつさ = ずれ × (π/長さ)²。π は、波の形から来ている';
-      else {
-        // 釣合いから座屈荷重の式へ: 曲げる力 P·y と 戻す力 EI·(π/l)²·y を、赤い点で比べる
-        this.caption =
-          t < 7
-            ? '赤い点で比べる。曲げる力(オレンジ)= 押す力 P × ずれ y'
-            : t < 14
-              ? '曲がり具合 1/R = −y″ = (π/l)² × y。サインカーブでは、曲がりがずれに比例する(右の2本は同じ形)'
-              : t < 21
-                ? '戻す力(青)= 踏ん張り EI × 1/R = EI × (π/l)² × y'
-                : t < 28
-                  ? 'どの高さでも、2つの力はどちらも y に比例。比べた結果は、点をどこへ動かしても同じ'
-                  : t < 32
-                    ? 'P × y = EI × (π/l)² × y。両辺の y が消えて、P = π²EI/l²'
-                    : '互角になる P はひとつだけ。これがオイラーの座屈荷重 Pe';
-      }
-      this.look(0, 1.35, 3.9, 2.7, 6, 5);
     } else if (s === 5) {
       this.only(this.g5);
       const t = this.cyc(28, c);
