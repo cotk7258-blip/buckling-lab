@@ -228,6 +228,7 @@ export class Stage2Show extends ShowBase {
   private poke: THREE.Group;
   private gauge: THREE.Mesh[] = [];
   private t1: Record<string, THREE.Sprite> = {};
+  private ghost: THREE.Line;
   private g2 = new THREE.Group(); // 長さ1倍と2倍
   private short: Bar;
   private long: Bar;
@@ -296,12 +297,21 @@ export class Stage2Show extends ShowBase {
     };
     mk('y', 'ずれ y(腕の長さ)', '#1f2a44');
     mk('path', '押す力の通り道', '#6d28d9', 0.55);
+    mk('ghost', '試しに曲げた形(点線)', '#64748b', 0.55);
+    mk('pp', 'P = 50%', '#1f2a44', 0.7);
+    mk('even', '互角', '#e11d48', 0.75);
+    // 試しに曲げた形(点線のサインカーブ)。まっすぐのまま、もし曲げたらどうなるかを比べるのに使う
+    const gp: THREE.Vector3[] = [];
+    for (let i = 0; i <= 40; i++) gp.push(new THREE.Vector3(Math.sin((Math.PI * i) / 40), (3.0 * i) / 40, 0.2));
+    this.ghost = new THREE.Line(new THREE.BufferGeometry().setFromPoints(gp), new THREE.LineDashedMaterial({ color: '#64748b', dashSize: 0.08, gapSize: 0.06 }));
+    this.ghost.computeLineDistances();
+    this.g1.add(this.ghost);
     mk('bend', '曲げるモーメント P × y', '#ea580c');
     mk('back', '戻すモーメント EI × 1/R', '#0284c7');
     mk('poke', '横から少し押す(きっかけ)', '#64748b');
     mk('gb', '曲げる P × y', '#ea580c', 0.55);
     mk('gk', '戻す EI × 1/R', '#0284c7', 0.55);
-    mk('gt', '真ん中の断面の回す力', '#1f2a44', 0.55);
+    mk('gt', '回す力の比(戻す方を 1)', '#1f2a44', 0.55);
     this.g1.visible = false;
 
     this.short = new Bar('pp', 1.6, 0.4);
@@ -401,9 +411,32 @@ export class Stage2Show extends ShowBase {
    * 綱引きの場面: 真ん中の断面で、曲げるモーメント P·y(オレンジ、左回り)と戻すモーメント EI/R(青、右回り)を描く。
    * p = P/Pe。両端ピンのサインカーブでは EI/R = Pe·y なので、2つの比は p だけで決まる(y によらない)
    */
-  private tug(D: number, p: number, show: boolean, pokeLen: number) {
+  private tug(D: number, p: number, show: boolean, pokeLen: number, ghost = 0) {
     this.g1.visible = true;
-    const [x, y] = this.main.at(0.5);
+    // 回す力は、実際のずれ D か、試しに曲げた形のずれ ghost のどちらかで比べる
+    const useGhost = ghost > 0.01 && D < ghost;
+    const Dm = ghost > 0.01 ? Math.max(D, ghost) : D;
+    const [x0, y] = this.main.at(0.5);
+    const x = useGhost ? ghost : x0;
+    this.ghost.visible = useGhost;
+    this.ghost.scale.x = ghost;
+    this.t1.ghost.visible = useGhost;
+    this.t1.ghost.position.set(ghost + 0.95, 2.55, 0.25);
+    // 押す力の割合
+    const pText = `P = ${Math.round(p * 100)}%`;
+    if (this.t1.pp.userData.t !== pText) {
+      const sp = tag(pText, p >= 0.995 ? '#e11d48' : '#1f2a44', 0.7, 1.2);
+      sp.position.copy(this.t1.pp.position);
+      this.g1.remove(this.t1.pp);
+      const old = this.t1.pp.material as THREE.SpriteMaterial;
+      old.map?.dispose();
+      old.dispose();
+      this.t1.pp = sp;
+      sp.userData.t = pText;
+      this.g1.add(sp);
+    }
+    this.t1.pp.visible = true;
+    this.t1.pp.position.set(this.main.topX + 1.0, this.main.topY + 0.12, 0.25);
     const z = 0.25;
     // 押す力の通り道(上下のピンを結ぶ点線)と、ずれ y: 通り道から真ん中までの横の距離
     this.offLine.visible = show;
@@ -416,17 +449,16 @@ export class Stage2Show extends ShowBase {
     this.t1.y.position.set(x / 2 - 0.15, y - 0.28, z);
     // 回す力の大きさ(絵の上): どちらも y に比例。曲げる方は p 倍
     const kM = 2.2;
-    const mb = kM * p * D;
-    const mk = kM * D;
-    void mk;
-    const on = show && D > 0.03;
+    const mb = kM * p * Dm;
+    const mk = kM * Dm;
+    const on = show && Dm > 0.03;
     this.mBend.visible = on && mb > 0.02;
     this.mBack.visible = on;
     this.mBend.position.set(x, y, z);
     this.mBack.position.set(x, y, z);
     // 円弧の半径を回す力に比例させる。互角(p = 1)なら同じ円に重なり、矢じりだけが逆を向く
-    const rb = 0.12 + 1.7 * p * D;
-    const rk = 0.18 + 1.7 * D;
+    const rb = 0.12 + 1.7 * p * Dm;
+    const rk = 0.18 + 1.7 * Dm;
     this.mBend.scale.setScalar(rb);
     this.mBack.scale.setScalar(rk);
     this.mBend.position.z = z + 0.04;
@@ -443,14 +475,19 @@ export class Stage2Show extends ShowBase {
       m.scale.x = Math.max(0.01, len);
       m.position.set(gx + len / 2, yy, 0.1);
     };
-    set(this.gauge[0], L * Math.min(1.4, (mb / kM) * 2), gy);
-    set(this.gauge[1], L * Math.min(1.4, (mk / kM) * 2), gy - 0.36);
+    // ゲージは「戻す方を 1」とした比。曲げる方は P/Pe(ずれ y によらない)
+    void mb;
+    void mk;
+    set(this.gauge[0], L * Math.min(1.3, p) * (Dm > 0.03 ? 1 : 0), gy);
+    set(this.gauge[1], L * (Dm > 0.03 ? 1 : 0), gy - 0.36);
     this.t1.gt.visible = show;
     this.t1.gt.position.set(gx + 0.7, gy + 0.36, 0.1);
     this.t1.gb.visible = show;
     this.t1.gb.position.set(gx - 0.55, gy, 0.1);
     this.t1.gk.visible = show;
     this.t1.gk.position.set(gx - 0.6, gy - 0.36, 0.1);
+    this.t1.even.visible = show && Math.abs(p - 1) < 0.02 && Dm > 0.03;
+    this.t1.even.position.set(gx + L * 1.3 + 0.45, gy - 0.18, 0.1);
     // きっかけの指(横から押す)
     placeArrow(this.poke, x - 0.1 - pokeLen, y + 0.35, z, pokeLen, 0);
     this.poke.visible = pokeLen > 0.05;
@@ -562,52 +599,55 @@ export class Stage2Show extends ShowBase {
       this.look(0, 1.45, 2.4, 2.75, 12, 6);
     } else if (s === 1) {
       this.only(this.g0);
-      const t = this.cyc(40, c);
-      // 押す力 p(座屈荷重 = 1)と、真ん中のずれ D。横からの指は「わずかに曲げるきっかけ」だけ
-      let p = 0.5 * ramp(t, 0.5, 2.5);
+      // 1本の流れで見せる(行ったり来たりしない):
+      //  50% で試しに曲げる → 戻す方が2倍強い → ずれを2倍にしても比は同じ → 離すと戻る
+      //  → 押す力を上げると、試しの曲げで比べた曲げる力だけが伸びる → 100% で互角 → 超えた瞬間に曲がり出す
+      const t = this.cyc(42, c);
+      let p = 0.5;
       let D = 0;
+      let ghost = 0;
       let poke = 0;
       let show = false;
       if (t < 3) {
-        this.caption = 'まっすぐな柱を、座屈荷重の半分(50%)の力で押しておく';
-      } else if (t < 12) {
-        poke = 0.7 * (ramp(t, 3, 3.6) - ramp(t, 5.4, 6));
-        D = 0.28 * ramp(t, 3.4, 5) * (1 - ramp(t, 10.2, 11.8));
-        show = t > 5.5;
+        this.caption = '柱を、座屈荷重の 50% の力で押している。まっすぐのまま';
+      } else if (t < 15) {
+        poke = 0.7 * (ramp(t, 3, 3.6) - ramp(t, 5.2, 5.8)) + 0.9 * (ramp(t, 8.6, 9.2) - ramp(t, 10.6, 11.2));
+        D = 0.26 * ramp(t, 3.3, 5) + 0.26 * ramp(t, 8.9, 10.5);
+        D *= 1 - ramp(t, 12.4, 14.6);
+        show = t > 4.8;
         this.caption =
-          t < 6
-            ? '横から指で少し押して、わずかに曲げる(きっかけ。指はすぐ離す)'
-            : t < 10.2
-              ? 'ずれ y が腕になって、押す力が真ん中を回す(オレンジ P × y)。曲がった柱は戻ろうとする(青 EI × 1/R)'
-              : '50% では、戻す方が2倍強い。だから元のまっすぐに戻る';
-      } else if (t < 19) {
-        poke = 0.9 * (ramp(t, 12, 12.6) - ramp(t, 14.2, 14.8));
-        D = 0.56 * ramp(t, 12.4, 14) * (1 - ramp(t, 17.2, 18.8));
-        show = t > 14.3;
-        this.caption = t < 17.2 ? 'もっと大きく曲げても、2つの回す力はどちらも2倍。勝ち負けは変わらない' : 'ずれが大きくても小さくても、50% なら必ず戻る';
-      } else if (t < 29) {
-        p = 0.5 + 0.5 * ramp(t, 20.5, 23.5);
-        poke = 0.7 * (ramp(t, 19, 19.6) - ramp(t, 20.2, 20.8));
-        D = 0.32 * ramp(t, 19.3, 20.6) + 0.2 * (ramp(t, 25.5, 26.5) - ramp(t, 27.5, 28.5));
-        show = t > 20.3;
+          t < 5
+            ? '横から指で押して、試しに少し曲げてみる'
+            : t < 8.6
+              ? '真ん中の断面で比べる。曲げる回す力 P × y(オレンジ)より、戻す回す力 EI × 1/R(青)が2倍強い'
+              : t < 12.4
+                ? 'ずれを2倍にしても、両方とも2倍。比は変わらない(勝ち負けは、ずれでは決まらない)'
+                : '指を離すと、戻す方が勝って、まっすぐに戻る';
+      } else if (t < 27) {
+        // 柱はまっすぐのまま。点線の「試しに曲げた形」で、回す力を比べ続ける
+        p = 0.5 + 0.5 * ramp(t, 16, 25);
+        ghost = 0.32;
+        show = true;
         this.caption =
-          t < 23.5
-            ? '押す力を上げていく。曲げる方(P × y)だけが大きくなる'
-            : t < 25.5
-              ? '100% = 座屈荷重。2つがちょうど互角で、指を離しても曲がったまま止まる'
-              : 'このとき互角は、ずれの大きさによらない。まっすぐと曲がった形の、分かれ道';
+          t < 25
+            ? `押す力を上げていく(${Math.round(p * 100)}%)。試しに曲げたときの曲げる回す力(オレンジ)だけが伸びる。まだ戻す方が強いので、柱はまっすぐ`
+            : '100% = 座屈荷重。2つがちょうど互角。曲げても戻らない境目';
       } else {
-        p = 1.1;
-        D = Math.min(0.55, 0.3 * Math.exp((t - 29) * 0.12)) * (1 - ramp(t, 38.5, 40));
-        show = t < 38.5;
+        // わずかに超えた瞬間、曲げる方が勝ち、曲がりが止まらなくなる
+        p = 1 + 0.1 * ramp(t, 27, 28);
+        ghost = 0.32;
+        D = Math.min(0.62, 0.02 * Math.exp((t - 27.5) * 0.9)) * (1 - ramp(t, 40.5, 42));
+        show = t < 40.5;
         this.caption =
-          t < 34
-            ? '座屈荷重を超えると、曲げる方が勝つ。ずれが増え、曲げる力がさらに増える'
-            : 'これが座屈。勝ち負けは、ずれではなく押す力だけで決まる(わずかな曲がりの範囲の話)';
+          t < 31
+            ? '座屈荷重を超えた瞬間(110%)、曲げる方が勝つ。柱が曲がり出す'
+            : t < 36
+              ? '曲がるほどずれ y が増え、曲げる回す力 P × y もさらに増える。止まらない = 座屈'
+              : '座屈は、押す力が座屈荷重を超えた瞬間に起きる(ここでの話は、わずかに曲がった範囲)';
       }
       this.main.update(D, p);
       this.forces(0, 0, false);
-      this.tug(D, p, show, poke);
+      this.tug(D, p, show, poke, ghost);
       this.look(-0.2, 1.55, 3.4, 2.85, 10, 6);
     } else if (s === 2) {
       this.only(this.g2);
