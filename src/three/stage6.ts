@@ -546,7 +546,7 @@ export class Stage6Show extends ShowBase {
             ? '黒い点 = いまの軸力と、2方向の曲げ(点線で各軸の値)'
             : t < 12
               ? '3つを同じ割合で増やしていくと、紫の面にぶつかる'
-              : '面までの余裕が安全率 1/U';
+              : '面までの倍率は、安全率 1/U とほぼ同じ(少し小さい)';
       } else {
         showRay = true;
         this.caption = '';

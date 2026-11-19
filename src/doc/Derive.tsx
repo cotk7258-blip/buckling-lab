@@ -1,37 +1,84 @@
 import type { ReactNode } from 'react';
 import { FigColumnEq, FigLambdaRuler, FigModes, FigStrip } from './figs.tsx';
-import { Eq, MovieLink, P, Step, TabLink, Table } from './ui.tsx';
+import { Eq, MovieLink, P, Section, Step, TabLink, Table } from './ui.tsx';
+import { FitTex } from '../ui/Tex.tsx';
 
-function H({ children, id }: { children: ReactNode; id?: string }) {
-  return (
-    <h2 id={id} className="mt-10 scroll-mt-28 border-l-4 border-comp pl-3 text-[22px] font-bold leading-snug first:mt-6 sm:text-2xl">
-      {children}
-    </h2>
-  );
-}
 function Lead({ children }: { children: ReactNode }) {
   return <p className="mt-3 rounded-xl bg-ink px-4 py-3 text-[15px] font-bold leading-relaxed text-white sm:text-base">{children}</p>;
 }
 /* ---------- 式の導出 ---------- */
 
+/** 導出の地図: どの式をどの順に導くか。押すとその節へ */
+const MAP: { id: string; no: string; name: string; tex: string; from: string }[] = [
+  { id: 'd0', no: '0', name: '曲げの基本式', tex: String.raw`M=EI\times\dfrac{1}{R}`, from: '' },
+  { id: 'd1', no: '1', name: '座屈荷重', tex: String.raw`P_e=\dfrac{\pi^2EI}{l^2}`, from: '0' },
+  { id: 'd2', no: '2', name: '座屈応力・有効座屈長', tex: String.raw`\sigma_e=\dfrac{\pi^2E}{(l_e/r)^2}`, from: '1' },
+  { id: 'd3', no: '3', name: '板の座屈応力', tex: String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, from: '2' },
+  { id: 'd4', no: '4', name: '柱の物差し λ', tex: String.raw`\lambda=\sqrt{\sigma_y/\sigma_e}`, from: '2' },
+  { id: 'd5', no: '5', name: '板の物差し R', tex: String.raw`R=\sqrt{\sigma_y/\sigma_{el}}`, from: '3・4' },
+];
+function DeriveMap() {
+  return (
+    <div className="mt-4 rounded-2xl border border-studio-600 bg-studio-900 p-3">
+      <p className="text-sm font-bold">この章の地図: 6つの導出を、0 から順に積み上げる</p>
+      <p className="mt-0.5 text-xs text-ink-dim">各節の冒頭に「この節で導く式」と「使う式」を書いています。押すとその節へ。</p>
+      <ol className="mt-2 grid gap-1.5 sm:grid-cols-2">
+        {MAP.map((m) => (
+          <li key={m.id}>
+            <a href={`#${m.id}`} className="flex items-center gap-2 rounded-xl border border-studio-700 bg-studio-950 px-2 py-1.5">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-comp text-sm font-bold text-white">{m.no}</span>
+              <span className="w-24 shrink-0 text-xs font-bold leading-tight">
+                {m.name}
+                {m.from && <span className="block font-normal text-ink-dim">← 導出 {m.from}</span>}
+              </span>
+              <FitTex className="flex-1 text-[15px]">{m.tex}</FitTex>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export default function Derive({ onStage, go }: { onStage: (n: number) => void; go: (t: string) => void }) {
   return (
     <div>
-      <div className="mt-3 flex flex-wrap gap-2 text-sm">
-        {[
-          ['d1', '1 オイラー座屈'],
-          ['d2', '2 応力の形と端部条件'],
-          ['d3', '3 板の σel'],
-          ['d4', '4 λ'],
-          ['d5', '5 R'],
-        ].map(([id, t]) => (
-          <a key={id} href={`#${id}`} className="rounded-full border border-studio-600 bg-studio-900 px-3 py-1 font-bold text-comp">
-            {t}
-          </a>
-        ))}
-      </div>
+      <DeriveMap />
 
-      <H>導出の前に: 座屈は「釣合いの分かれ道」</H>
+      <Section
+        id="d0"
+        no="導出 0"
+        title="曲げの基本式: 曲げに抵抗する力 = EI × 曲がり具合"
+        goal={String.raw`M=EI\times\dfrac{1}{R}`}
+        needs={[]}
+      >
+        <P>映像1 で、バネの束とテコで見た話を式にします。ここから先の導出は、すべてこの式の上に立っています。</P>
+        <Step n={1} title="伸び縮みは、真ん中からの距離に比例する">
+          半径 R で曲げた棒の、中立軸から z だけ外側の線を考えます。中心角 θ の区間で、中立軸の長さは Rθ、外側の線は (R + z)θ。伸びの割合(ひずみ)は、その差を元の長さで割ったものです。
+          <Eq tex={String.raw`\varepsilon=\dfrac{(R+z)\theta-R\theta}{R\theta}=\dfrac{z}{R}`} note="内側(z が負)は縮む。真ん中(z = 0)は伸び縮みしない = 中立軸。" />
+        </Step>
+        <Step n={2} title="応力も、距離に比例する(バネの力)">
+          鋼は弾性の範囲では、応力 = ヤング係数 × ひずみ(フックの法則。バネ1本の硬さが E)。
+          <Eq tex={String.raw`\sigma=E\,\varepsilon=E\,\dfrac{z}{R}`} />
+        </Step>
+        <Step n={3} title="回す力は、力 × 腕。腕も距離なので、距離の2乗で効く">
+          面積 dA の部分が出す力は σ·dA、その腕は z。断面全体で足し合わせると、曲げに抵抗する回す力(曲げモーメント)になります。
+          <Eq tex={String.raw`M=\int\sigma\,z\,dA=\dfrac{E}{R}\int z^2\,dA`} />
+          <Eq n="0" strong tex={String.raw`M=EI\times\dfrac{1}{R},\qquad I=\int z^2\,dA`} note="I は断面二次モーメント(断面の形で決まる踏ん張りやすさ)。長方形なら I = 幅 × 高さ³ ÷ 12。" />
+          z² が「距離の2乗で効く」(映像1 のテコ)の正体です。長方形の高さを2倍にすると I は8倍になります。
+        </Step>
+        <MovieLink n={1} label="曲げとテコ(バネの束で見る M = EI/R)" onStage={onStage} />
+      </Section>
+
+      <Section
+        id="d1"
+        no="導出 1"
+        title="オイラー座屈: 曲がった柱の釣合いから、座屈荷重へ"
+        goal={String.raw`P_e=\dfrac{\pi^2EI}{l^2}`}
+        goalNote="途中で、曲がり具合が ずれ に比例すること(1/R = (π/l)² × y)も出てくる(手順6)。映像2 の綱引きを式にしたもの。"
+        needs={[['d0', '導出0 M = EI/R']]}
+      >
+      <p className="mt-4 text-[17px] font-bold">まず: 座屈は「釣合いの分かれ道」</p>
       <Lead>座屈は、「まっすぐ」と「曲がったまま」の両方で釣り合える荷重に達した瞬間に起こる</Lead>
       <Table
         head={['① 荷重が小さいうち', '② 座屈荷重に達する', '③ それを超えると']}
@@ -40,9 +87,8 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
       <P>
         導出の方針は、柱も板も同じです。「少しだけ曲がった状態」を考え、その状態で力が釣り合う条件を式にします。曲がったまま釣り合える荷重のうち、最も小さいものが座屈荷重です。前提は、柱が完全にまっすぐで、荷重は断面の中心にかかり、材料はどこまでも弾性(力と変形が比例)であること。
       </P>
-      <MovieLink n={2} label="オイラー座屈(曲げる力と戻す力の綱引き)" onStage={onStage} />
 
-      <H id="d1">1. オイラー座屈: 曲がった柱の釣合い</H>
+      <MovieLink n={2} label="オイラー座屈(曲げる力と戻す力の綱引き)" onStage={onStage} />
       <P>まず図2-1 のボタンを ① から順に押して、2つの「回す力」が逆向きに釣り合う様子を見てください。下の手順1〜3 は、それを式で書いたものです。</P>
       <FigColumnEq />
       <Step id="d1-m" n={1} title="外力が曲げようとする力(モーメント)">
@@ -50,13 +96,12 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
         <Eq tex={String.raw`M=P\times y`} />
       </Step>
       <Step id="d1-r" n={2} title="柱が曲げに抵抗する力">
-        映像1 で見た梁の基本式は「抵抗モーメント = EI × 曲がり具合 1/R」です(E は材料の硬さ、I は断面の曲げにくさ、R は曲がりの半径)。ここでは、この 1/R を、ずれ y の式で書き直します。
+        導出0 の基本式「抵抗モーメント = EI × 曲がり具合 1/R」を使います(E は材料の硬さ、I は断面の曲げにくさ、R は曲がりの半径)。ここでは、この 1/R を、ずれ y の式で書き直します。
         <Eq tex={String.raw`M_{\text{抵抗}}=EI\times\dfrac{1}{R}`} />
         <P>
           <b>1/R と y″ のつながり</b>: 曲がり具合とは「傾きが、進むにつれてどれだけ変わるか」です。傾きは y を1回微分した y′、その変わり方は2回微分した y″。半径 R の円の頂上付近は y ≒ −x²/(2R) と書けるので、y′ = −x/R、y″ = −1/R になります。つまり、たわみが小さい(傾きがわずかな)柱では、曲がり具合 1/R は y″ の大きさそのもので、山なり(上に凸)のカーブでは y″ が負なので 1/R = −y″ です。
         </P>
         <Eq tex={String.raw`\dfrac{1}{R}=-y''\quad\Longrightarrow\quad M_{\text{抵抗}}=-EI\,y''`} note="正確には 1/R = −y″ ÷ (1 + y′²) の 3/2 乗。柱のたわみは長さの数百分の1ほどで y′² はごく小さいので、分母を 1 とみなす。" />
-        <MovieLink n={1} label="曲げとテコ(なぜ M = EI × 曲率 か)" onStage={onStage} />
       </Step>
       <Step id="d1-eq" n={3} title="2つが釣り合う条件">
         外力は左回り、柱の踏ん張りは右回りに回そうとし、その大きさが等しい(図2-1 の④)。マイナスは、山なりのカーブで y″ が負になるのを、正の量(曲がり具合 1/R)に直すためのものです。移項すると、柱の釣合い式になります。
@@ -87,7 +132,15 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
 
       <FigModes />
 
-      <H id="d2">2. 応力の形と、端部条件</H>
+      </Section>
+
+      <Section
+        id="d2"
+        no="導出 2"
+        title="応力の形にする(σe)と、支え方(有効座屈長)"
+        goal={String.raw`\sigma_e=\dfrac{\pi^2E}{(l_e/r)^2}`}
+        needs={[['d1', '導出1 Pe']]}
+      >
       <Step id="d2-s" n={1} title="荷重を応力に直す">
         応力 = 荷重 ÷ 断面積。まず (2) を A で割ると σe = π²EI/(A·l²)。I と A が分かれば、この形のまま計算できます。次に、断面二次半径 r = √(I/A)(断面の踏ん張りやすさ I を面積あたりにして平方根をとった長さ)を使うと I = A·r² なので、A が消えて (3) になります。2つは同じ式で、同じ値になります。
         <Eq tex={String.raw`\sigma_e=\dfrac{P_e}{A}=\dfrac{\pi^2EI}{A\,l^2}=\dfrac{\pi^2E\,(A\,r^2)}{A\,l^2}`} note="例: H-300×300×10×16 の弱軸は I = 7,202 cm⁴、A = 122.8 cm² なので r = √(7,202 ÷ 122.8) ≒ 7.66 cm。鋼材表には r(表によっては i)が載っている。" />
@@ -107,7 +160,15 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
         />
       </Step>
 
-      <H id="d3">3. 柱から板へ: 弾性局部座屈応力 σel</H>
+      </Section>
+
+      <Section
+        id="d3"
+        no="導出 3"
+        title="柱から板へ: 弾性局部座屈応力 σel"
+        goal={String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`}
+        needs={[['d2', '導出2 σe']]}
+      >
       <Lead>長い板は「長さ b の帯(柱)」が並んだもの。オイラー式に2つの補正を掛けるだけで σel になる</Lead>
       <FigStrip />
       <Step n={0} title="出発点">
@@ -148,7 +209,15 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
       <P>片側が自由になるだけで k は約 1/9(0.425 ÷ 4)。同じ b/t でも σel は約 1/9 になります。</P>
       <MovieLink n={5} label="板の座屈(σel と R の導き方、設計式)" onStage={onStage} />
 
-      <H id="d4">4. λ(細長比パラメータ)の導出</H>
+      </Section>
+
+      <Section
+        id="d4"
+        no="導出 4"
+        title="柱の物差し: 細長比パラメータ λ"
+        goal={String.raw`\lambda=\sqrt{\dfrac{\sigma_y}{\sigma_e}}=\dfrac{1}{\pi}\sqrt{\dfrac{\sigma_y}{E}}\times\dfrac{l}{r}`}
+        needs={[['d2', '導出2 σe']]}
+      >
       <Lead>λ は「降伏応力 σy」と「オイラー座屈応力 σe」の比の平方根。σe の式を代入すると、照査で使う λ の式になる</Lead>
       <Step n={1} title="定義">
         降伏が先か、座屈が先かを測る物差しです。
@@ -169,8 +238,17 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
       </P>
 
       <FigLambdaRuler />
+      <MovieLink n={4} label="設計曲線(λ の物差しをグラフで作る)" onStage={onStage} />
 
-      <H id="d5">5. R(幅厚比パラメータ)の導出</H>
+      </Section>
+
+      <Section
+        id="d5"
+        no="導出 5"
+        title="板の物差し: 幅厚比パラメータ R"
+        goal={String.raw`R=\sqrt{\dfrac{\sigma_y}{\sigma_{el}}}=\dfrac{b}{t}\sqrt{\dfrac{12(1-\nu^2)\,\sigma_y}{k\pi^2E}}`}
+        needs={[['d3', '導出3 σel'], ['d4', '導出4 λ(作り方が同じ)']]}
+      >
       <Lead>R も λ と同じく「σy と σel の比」。σel の式を代入すると、照査で使う R の式になる</Lead>
       <Step n={1} title="定義">
         <Eq tex={String.raw`R=\sqrt{\dfrac{\sigma_y}{\sigma_{el}}}`} />
@@ -188,6 +266,8 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
       <P>
         <strong>読み方</strong>: R = 1 になる b/t が基準です(σy = 205、E = 2.06×10⁵ N/mm² のとき、自由突出板 k = 0.43 で約 19.8、両縁支持板 k = 4.0 で約 60)。R &gt; 1 なら降伏する前に弾性座屈。b/t だけでは鋼種や支え方の違う板を比べられませんが、R にすれば「R ≦ 0.7 なら低減なし」の1本の基準で判定できます。
       </P>
+
+      </Section>
 
       <div className="mt-8 rounded-xl border-2 border-comp bg-studio-900 p-4">
         <p className="text-lg font-bold">この先: 理論値から設計式へ</p>

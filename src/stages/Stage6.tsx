@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { terms2 } from '../physics/beamcolumn.ts';
+import { loadFactor2, terms2 } from '../physics/beamcolumn.ts';
 import { EX, EXB, Stage6Show, exbValues, strengthGL } from '../three/stage6.ts';
 import { Card, DeriveLink, Steps, StoryShell, openFormulas, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
@@ -11,6 +11,7 @@ const exStr = strengthGL(EX.lam, EX.R);
 const exb = exbValues();
 const exTerms = terms2(EXB.n, EXB.my, EXB.mz, exb.pu, exb.pey, exb.pez);
 const exU = exTerms[0] + exTerms[1] + exTerms[2];
+const exLF = loadFactor2(EXB.n, EXB.my, EXB.mz, exb.pu, exb.pey, exb.pez);
 
 const SCENES: SceneText[] = [
   {
@@ -56,7 +57,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '③ 複合座屈',
     head: '使用割合の合計 U と、安全率 1/U',
-    body: 'ここまでを1行にしたのが下の照査式です。合計 U が 1 以下なら OK、安全率は 1/U。黒い点がいまの柱、紫の面までの余裕が安全率にあたります。α が 0 以下になると、この式は使えません。',
+    body: 'ここまでを1行にしたのが下の照査式です。合計 U が 1 以下なら OK、安全率は 1/U。黒い点がいまの柱で、紫の面までの余裕の目安が 1/U です(α が軸力で変わるので、面までの倍率とは少し違います)。α が 0 以下になると、この式は使えません。',
   },
   {
     kicker: '計算へ',
@@ -101,7 +102,7 @@ export default function Stage6() {
             <FitTex block className="text-base">{String.raw`U=\dfrac{\sigma_c}{\sigma_{cz}}+\dfrac{\sigma_{bcy}}{\sigma_{bgy}\,\alpha_y}+\dfrac{\sigma_{bcz}}{\sigma_{b0}\,\alpha_z}\le 1`}</FitTex>
             <FitTex block className="text-base">{String.raw`\alpha_y=1-\dfrac{\sigma_c}{0.8\,\sigma_{ey}},\qquad \alpha_z=1-\dfrac{\sigma_c}{0.8\,\sigma_{ez}}`}</FitTex>
             <div className="flex justify-end">
-              <DeriveLink id="ds-b2" />
+              <DeriveLink id="ds-b1" />
             </div>
             <ul className="space-y-0.5 text-xs leading-relaxed">
               <li>
@@ -130,6 +131,7 @@ export default function Stage6() {
                   <span style={{ color: '#ea580c' }}>強軸 {exTerms[1].toFixed(2)}</span>
                   <span style={{ color: '#0284c7' }}>弱軸 {exTerms[2].toFixed(2)}</span>
                   <b>U = {exU.toFixed(2)}、安全率 1/U = {(1 / exU).toFixed(2)}</b>
+                  <span>面までの倍率 {exLF.toFixed(2)}</span>
                 </p>
                 <p className="text-ink-dim">
                   細長比パラメータ 強軸 {EXB.lamY}・弱軸 {EXB.lamZ}、板は厚い(R ≦ 0.7)。αy = {(1 - EXB.n / (0.8 * exb.pey)).toFixed(2)}、αz = {(1 - EXB.n / (0.8 * exb.pez)).toFixed(2)}

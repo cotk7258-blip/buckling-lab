@@ -101,7 +101,7 @@ export default function Stage1() {
           <div className="rounded-2xl border border-studio-600 bg-studio-900 p-3">
             <div className="flex items-center gap-2">
               <FitTex block className="flex-1 text-xl">{String.raw`M = E \times I \times \dfrac{1}{R}`}</FitTex>
-              <DeriveLink id="d1-r" />
+              <DeriveLink id="d0" />
             </div>
             <div className="mt-1 grid gap-2">
               {TERMS.map((t, i) => (

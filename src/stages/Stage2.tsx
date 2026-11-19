@@ -11,23 +11,23 @@ const SIDE2: Record<number, React.ReactNode> = {
       title="真ん中の綱引き"
       steps={[
         ['曲げる力', String.raw`P\times y`],
-        ['戻す力', String.raw`EI\times\dfrac{1}{R}=\dfrac{\pi^2EI}{l^2}\times y`, 'd1-k'],
+        ['戻す力', String.raw`EI\times\dfrac{1}{R}=\dfrac{\pi^2EI}{l^2}\times y`, 'd1'],
         ['くらべる', String.raw`P\quad\text{と}\quad \dfrac{\pi^2EI}{l^2}`],
-        ['座屈荷重', String.raw`P_e=\dfrac{\pi^2EI}{l^2}`, 'd1-pe'],
+        ['座屈荷重', String.raw`P_e=\dfrac{\pi^2EI}{l^2}`, 'd1'],
       ]}
       note="どちらにも y が掛かるので、y では勝負がつかない。式の横の「導き方」で、1/R が y に比例する理由と π の出どころを読めます。"
     />
   ),
-  2: <Steps title="長さの効き方" steps={[['座屈荷重', String.raw`P_e=\dfrac{\pi^2EI}{l^2}`, 'd1-pe'], ['長さ2倍なら', String.raw`\dfrac{1}{4}`]]} note="長さの2乗に反比例。3倍なら 1/9。" />,
+  2: <Steps title="長さの効き方" steps={[['座屈荷重', String.raw`P_e=\dfrac{\pi^2EI}{l^2}`, 'd1'], ['長さ2倍なら', String.raw`\dfrac{1}{4}`]]} note="長さの2乗に反比例。3倍なら 1/9。" />,
   3: (
     <Steps
       title="支え方 → 有効座屈長 le"
       steps={[
-        ['両端ピン', 'le = 1.0 l', 'd2-le'],
+        ['両端ピン', 'le = 1.0 l', 'd2'],
         ['片方固定・片方ピン', 'le ≒ 0.7 l'],
         ['両端固定', 'le = 0.5 l'],
         ['片持ち', 'le = 2.0 l'],
-        ['応力で書くと', String.raw`\sigma_e=\dfrac{\pi^2E}{(l_e/r)^2}`, 'd2-s'],
+        ['応力で書くと', String.raw`\sigma_e=\dfrac{\pi^2E}{(l_e/r)^2}`, 'd2'],
       ]}
       note="σe = Pe ÷ 断面積。r = √(I/A) は断面二次半径。"
     />
@@ -43,7 +43,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '綱引き',
     head: '曲げる力と、戻す力の綱引き',
-    body: '柱がもし少し曲がったら、真ん中に2つの力が生まれます。曲げる力 P × y と、戻す力 EI × 1/R。曲がりを大きくしても、2つは同じ割合で増えるので、勝負はつきません。決めるのは押す力 P。P を上げて、柱で決まる π²EI/l² に追いついた所が座屈荷重です。',
+    body: '柱がもし少し曲がったら、真ん中に2つの力が生まれます。曲げる力 P × y と、戻す力 EI × 1/R。曲がりを大きくしても、2つは同じ割合で増えるので、曲がりの大きさでは勝負が決まりません。決めるのは押す力 P。P を上げて、柱で決まる π²EI/l² に追いついた所が座屈荷重です。',
   },
   {
     kicker: '長さ',
@@ -53,7 +53,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '支え方',
     head: '支え方で、強さは16倍も変わる',
-    body: '端を固定すると、曲がる形が変わります。どの形にもサインカーブ半分の部分(赤い線)があり、その長さを「有効座屈長」と呼びます。この波が短いほど強い。両端固定は4倍、片持ちは4分の1です。',
+    body: '端を固定すると、曲がる形が変わります。どの形にもサインカーブ半分の部分(赤い線)があり、その長さを「有効座屈長」と呼びます。この波が短いほど強い。両端ピンに比べて、両端固定は4倍、片持ちは4分の1です。',
   },
   {
     kicker: '実験室',
@@ -170,8 +170,8 @@ export default function Stage2() {
             </dl>
             <p className={`mt-2 text-sm font-bold ${pe > PY ? 'text-yield' : 'text-ideal'}`} style={{ color: pe > PY ? undefined : '#16a34a' }}>
               {pe > PY
-                ? `オイラーの式が使えない長さです。計算上の座屈荷重は降伏荷重を超えますが、理想の柱でも降伏荷重 ${Math.round(PY).toLocaleString()} kN が上限。現実の柱は、さらに手前で座屈します(STAGE 3・4)。`
-                : '座屈荷重が降伏荷重より小さいので、理想の柱の強さは座屈で決まります。現実の柱は、これより少し手前で座屈します(STAGE 3・4)。'}
+                ? `オイラーの式が使えない長さです。計算上の座屈荷重は降伏荷重を超えますが、理想の柱でも降伏荷重 ${Math.round(PY).toLocaleString()} kN が上限。現実の柱は、さらに手前で座屈します(映像3・4)。`
+                : '座屈荷重が降伏荷重より小さいので、理想の柱の強さは座屈で決まります。現実の柱は、これより少し手前で座屈します(映像3・4)。'}
             </p>
             <p className="mt-2 text-xs leading-relaxed text-ink-dim">
               断面は H-300×300×10×16(弱軸まわり、I = {(I / 1e4).toLocaleString(undefined, { maximumFractionDigits: 0 })} cm⁴)、E = 2.0×10⁵ N/mm²、σy = 355 N/mm²。

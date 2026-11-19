@@ -22,7 +22,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '綱引き',
     head: '押し出す力と、戻す力の綱引き',
-    body: '板がもし少し波打ったら、押す応力が波を押し出し(オレンジ)、板の曲げにくさと縁の支えが戻そうとします(青)。波を大きくしても2つは同じ割合で増えるので、勝負はつきません。決めるのは押す応力 σ。板で決まる σel に追いついた所で波打ちます。',
+    body: '板がもし少し波打ったら、押す応力が波を押し出し(オレンジ)、板の曲げにくさと縁の支えが戻そうとします(青)。波を大きくしても2つは同じ割合で増えるので、波の大きさでは勝負が決まりません。決めるのは押す応力 σ。板で決まる σel に追いついた所で波打ちます。',
   },
   {
     kicker: '幅と厚み',
@@ -153,7 +153,7 @@ const SIDE: Record<number, React.ReactNode> = {
     <Steps
       title="縁に寄る応力と、有効幅"
       steps={[
-        ['有効幅', String.raw`\dfrac{b_{\text{有効}}}{b}=\dfrac{\sigma_{\text{平均}}}{\sigma_{\text{縁}}}`, 'ds-p0'],
+        ['有効幅', String.raw`\dfrac{b_{\text{有効}}}{b}=\dfrac{\sigma_{\text{平均}}}{\sigma_{\text{縁}}}`, 'ds-p2'],
         ['縁が σy で限界', String.raw`\dfrac{\sigma_u}{\sigma_y}\approx\dfrac{1}{R}\quad(\text{von Kármán})`],
         ['この板 R = 1.6', String.raw`\dfrac{1}{1.6}=0.63`],
       ]}

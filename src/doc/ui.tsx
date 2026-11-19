@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FitTex, Tex } from '../ui/Tex.tsx';
+import { openDerivation } from '../ui/Story.tsx';
 
 /** 色(画面全体と同じ意味で使う) */
 export const C = {
@@ -30,12 +31,49 @@ export function useNarrow(px = 640): boolean {
   return n;
 }
 
-/** 節。no は「柱1」などの番号 */
-export function Section(props: { id: string; no?: string; title: string; lead?: ReactNode; children: ReactNode }) {
+/** 前提の節へのボタン(同じタブでも別のタブでも、その節へ飛ぶ) */
+export function NeedChip({ id, label }: { id: string; label: string }) {
   return (
-    <section id={props.id} className="mt-10 scroll-mt-28 first:mt-6">
+    <button onClick={() => openDerivation(id)} className="rounded-full border border-comp/50 bg-studio-900 px-2.5 py-0.5 text-xs font-bold text-comp">
+      {label} ›
+    </button>
+  );
+}
+
+/**
+ * 節。no は「柱1」などの番号。
+ * goal = この節で導く式(冒頭に枠で示す)、needs = 先に読んでおく節 [id, 名前]。
+ * 映像の「導き方」リンクはこの節の頭へ飛ぶので、途中から読まなくて済むようにここで前提を示す。
+ */
+export function Section(props: {
+  id: string;
+  no?: string;
+  title: string;
+  lead?: ReactNode;
+  goal?: string;
+  goalNote?: string;
+  needs?: [string, string][];
+  children: ReactNode;
+}) {
+  return (
+    <section id={props.id} className="mt-12 scroll-mt-28 first:mt-6">
       {props.no && <p className="text-xs font-bold tracking-[0.2em] text-comp">{props.no}</p>}
       <h2 className="mt-0.5 border-l-4 border-comp pl-3 text-[22px] font-bold leading-snug sm:text-2xl">{props.title}</h2>
+      {(props.goal || props.needs) && (
+        <div className="mt-3 rounded-xl border-2 border-comp/60 bg-comp/5 px-3 py-2">
+          {props.goal && (
+            <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+              <span className="shrink-0 rounded bg-comp px-1.5 py-0.5 text-xs font-bold text-white">この節で導く式</span>
+              <FitTex className="w-full flex-1 text-[17px]">{props.goal}</FitTex>
+            </div>
+          )}
+          {props.goalNote && <p className="mt-1 text-[13px] leading-relaxed text-ink-dim">{props.goalNote}</p>}
+          <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-dim">
+            <span className="font-bold">使う式:</span>
+            {props.needs && props.needs.length ? props.needs.map(([id, l]) => <NeedChip key={id} id={id} label={l} />) : <span>なし(ここから読める)</span>}
+          </p>
+        </div>
+      )}
       {props.lead && <p className="mt-3 rounded-xl bg-ink px-4 py-3 text-[15px] font-bold leading-relaxed text-white sm:text-base">{props.lead}</p>}
       {props.children}
     </section>

@@ -50,7 +50,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
       </Section>
 
       {/* ---------------- 柱 ---------------- */}
-      <Section id="ds-c1" no="柱 ①" title="理想の柱の限界は、2本の線の低い方" lead="まっすぐで残留応力もない柱は、弾性座屈か降伏の、先に来た方で限界になる。">
+      <Section id="ds-c1" goal={String.raw`\sigma_{cr}=\min\left(\sigma_y,\ \sigma_e\right)`} needs={[['d2', '導出2 σe']]} no="柱 ①" title="理想の柱の限界は、2本の線の低い方" lead="まっすぐで残留応力もない柱は、弾性座屈か降伏の、先に来た方で限界になる。">
         <P>
           長い柱は、材料がまだ元気なうちに横へ曲がって逃げます。その応力が、オイラー座屈応力です(導き方は「式の導出」2節)。
         </P>
@@ -64,7 +64,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         </P>
       </Section>
 
-      <Section id="ds-c2" no="柱 ②" title="σy で割ると、鋼の種類によらない1本の線になる" lead="縦を σy で割り、横を λ にする。それだけで、どの鋼の柱も同じ線に乗る。">
+      <Section id="ds-c2" goal={String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{1}{\lambda^2}\right)`} needs={[['ds-c1', '柱①'], ['d4', '導出4 λ']]} no="柱 ②" title="σy で割ると、鋼の種類によらない1本の線になる" lead="縦を σy で割り、横を λ にする。それだけで、どの鋼の柱も同じ線に乗る。">
         <Step n={1} title="縦軸を σy で割る">
           <Eq tex={String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{\sigma_e}{\sigma_y}\right)`} />
         </Step>
@@ -81,7 +81,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         </Callout>
       </Section>
 
-      <Section id="ds-c3" no="柱 ③" title="現実の柱は、最初から少し曲がっている" lead="初期たわみがあると、軸力が曲げに化けて縁の応力が先に σy に届く。この条件から、強さの安全側の目安が計算できる。">
+      <Section id="ds-c3" goal={String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\dfrac{1}{\Phi+\sqrt{\Phi^2-\lambda^2}}`} needs={[['ds-c2', '柱②']]} no="柱 ③" title="現実の柱は、最初から少し曲がっている" lead="初期たわみがあると、軸力が曲げに化けて縁の応力が先に σy に届く。この条件から、強さの安全側の目安が計算できる。">
         <P>
           作られた柱は、目では分からない曲がり v₀ を持っています。L/1000(長さの 1000 分の 1)は、製作の許容差の上限としてよく使われる値です(実際の平均はもっと小さいことが多い)。この柱を押すと何が起きるかを、式の導出と同じ道具で追います。
         </P>
@@ -107,7 +107,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         </Callout>
       </Section>
 
-      <Section id="ds-c4" no="柱 ④" title="残留応力も同じ向きに効く。Eurocode 3 の式は (8) の形をしている" lead="残留応力は、縁が降伏し始める時期を早める。その効果も初期たわみに換算して η を大きくとれば、同じ形の式で表せる(等価な初期不整)。">
+      <Section id="ds-c4" goal={String.raw`\eta=\alpha\,(\lambda-0.2)`} needs={[['ds-c3', '柱③']]} no="柱 ④" title="残留応力も同じ向きに効く。Eurocode 3 の式は (8) の形をしている" lead="残留応力は、縁が降伏し始める時期を早める。その効果も初期たわみに換算して η を大きくとれば、同じ形の式で表せる(等価な初期不整)。">
         <P>
           溶接や圧延で生じた残留応力があると、縁にはもともと圧縮が入っているので、平均応力がまだ小さいうちに降伏が始まります(映像3)。効果は初期たわみと同じ向きで、(8) の η を大きくするのと似た働きをします。
         </P>
@@ -121,7 +121,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         <MovieLink n={3} label="理想と現実(残留応力と、先端の降伏)" onStage={onStage} />
       </Section>
 
-      <Section id="ds-c5" no="柱 ⑤" title="試験・解析の結果の下側に、設計式を引く" lead="現実の柱の強さは、不整の大きさで1本ずつばらつく。設計式は、その群れの下側を通るように決めた区分式。">
+      <Section id="ds-c5" goal={String.raw`\sigma_{cg}=\sigma_y\times\text{低減率}(\lambda)`} needs={[['ds-c2', '柱②'], ['ds-c3', '柱③']]} no="柱 ⑤" title="試験・解析の結果の下側に、設計式を引く" lead="現実の柱の強さは、不整の大きさで1本ずつばらつく。設計式は、その群れの下側を通るように決めた区分式。">
         <P>
           残留応力と初期たわみの大きさを変えて計算すると、強さは帯状にばらつきます(図3-3 の点)。道路橋示方書(平成24年版まで)の設計式は、次の3つの式をつないだものです。
         </P>
@@ -151,7 +151,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
 
       {/* ---------------- 板 ---------------- */}
       <Section
-        id="ds-p0"
+        id="ds-p0" needs={[['ds-c5', '柱⑤']]}
         no="板 ⓪"
         title="なぜ板にも低減率が要るのか"
         lead="柱と同じ2つの理由(理論の弱さ・現実の不整)に、板だけの理由(波打つと断面の一部が働かなくなる)が加わる。"
@@ -186,7 +186,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         </Callout>
       </Section>
 
-      <Section id="ds-p1" no="板 ①" title="板の理想と物差しは、柱とまったく同じ形" lead="弾性局部座屈応力 σel と降伏の低い方。σy で割り、R を作る。">
+      <Section id="ds-p1" goal={String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{1}{R^2}\right)`} needs={[['d3', '導出3 σel'], ['d5', '導出5 R'], ['ds-c2', '柱②']]} no="板 ①" title="板の理想と物差しは、柱とまったく同じ形" lead="弾性局部座屈応力 σel と降伏の低い方。σy で割り、R を作る。">
         <Table
           head={['', '柱(全体座屈)', '板(局部座屈)']}
           rows={[
@@ -201,7 +201,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         </P>
       </Section>
 
-      <Section id="ds-p2" no="板 ②" title="柱と違い、板は波打ってからも耐える" lead="柱は座屈したら終わり。板は、波打ったあとも支えられた縁で力を受け続ける。">
+      <Section id="ds-p2" goal={String.raw`\dfrac{\sigma_u}{\sigma_y}\approx\dfrac{R-0.22}{R^2}`} needs={[['ds-p1', '板①']]} no="板 ②" title="柱と違い、板は波打ってからも耐える" lead="柱は座屈したら終わり。板は、波打ったあとも支えられた縁で力を受け続ける。">
         <P>
           現実の板にも、初期のゆがみと残留応力があります。そのため R = 1 の付近では、柱と同じく、理想の線より下がります。ところが薄い板(R が大きい)では話が逆になります。波打った板は、ふくらんだ真ん中が力を受け流す一方、支えられてまっすぐなままの縁が、力を受け持ち続けます。
         </P>
@@ -220,7 +220,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         <MovieLink n={5} label="板の座屈(理想の板・現実の板・設計式)" onStage={onStage} />
       </Section>
 
-      <Section id="ds-p3" no="板 ③" title="設計式 0.5/R² は「波打ち始める応力の半分」" lead="R > 0.7 の設計式に R² = σy/σel を代入すると、σy が消えて 0.5σel が残る。">
+      <Section id="ds-p3" goal={String.raw`\sigma_{cl}=\sigma_y\times\dfrac{0.5}{R^2}\quad(R>0.7)`} needs={[['ds-p1', '板①'], ['ds-p2', '板②']]} no="板 ③" title="設計式 0.5/R² は「波打ち始める応力の半分」" lead="R > 0.7 の設計式に R² = σy/σel を代入すると、σy が消えて 0.5σel が残る。">
         <Eq
           n="14"
           strong
@@ -245,7 +245,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         </Step>
       </Section>
 
-      <Section id="ds-p4" no="板 ④" title="板の式に出てくる数値の根拠" lead="理論で決まる数値、式の形から決まる数値、試験から決めた数値を分けて見る。">
+      <Section id="ds-p4" needs={[['ds-p3', '板③']]} no="板 ④" title="板の式に出てくる数値の根拠" lead="理論で決まる数値、式の形から決まる数値、試験から決めた数値を分けて見る。">
         <Table
           head={['数値', '何の値か', '決まり方']}
           rows={[
@@ -266,7 +266,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
       </Section>
 
       {/* ---------------- 組合せ ---------------- */}
-      <Section id="ds-g1" no="柱 × 板" title="全体座屈の許容値に、局部座屈の割合を掛ける" lead="柱の耐力は2つの弱さで決まる。柱全体が曲がること(λ)と、板が先に波打つこと(σcl)。">
+      <Section id="ds-g1" goal={String.raw`\sigma_{cz}=\sigma_{cg}\times\dfrac{\sigma_{cl}}{\sigma_y}`} needs={[['ds-c5', '柱⑤ σcg'], ['ds-p3', '板③ σcl']]} no="柱 × 板" title="全体座屈の許容値に、局部座屈の割合を掛ける" lead="柱の耐力は2つの弱さで決まる。柱全体が曲がること(λ)と、板が先に波打つこと(σcl)。">
         <Eq n="17" strong tex={String.raw`\sigma_{cz}=\sigma_{cg}\times\dfrac{\sigma_{cl}}{\sigma_y}`} />
         <P>
           σcg は「降伏まで断面を使える」前提の値です。薄い板を含む断面は、局部座屈のために、断面に認められる応力が σcl までしかありません。これを「断面の一部 A有効 だけが σy まで働く」と読み替えると、σcl·A = σy·A有効 なので A有効/A = σcl/σy。その「使える断面の割合」を掛けて、2つ目の弱さを入れます。板が十分に厚ければ(R ≦ 0.7)σcl = σy なので、σcz = σcg です。
@@ -278,7 +278,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         <TabLink to="質問と回答" label="Q8 なぜ掛けるのか、を読む" go={go} />
       </Section>
 
-      <Section id="ds-b1" no="軸力 × 曲げ ①" title="理論の形: 縁の応力が降伏に達する条件" lead="柱③ の式に、横からの曲げを足す。初期たわみの曲げも、横からの曲げも、同じように軸力で増幅される。">
+      <Section id="ds-b1" goal={String.raw`\dfrac{\sigma_c}{\sigma_y}+\dfrac{\sigma_c\,\eta+\sigma_{bc}}{\sigma_y\left(1-\sigma_c/\sigma_e\right)}\le1`} needs={[['ds-c3', '柱③']]} no="軸力 × 曲げ ①" title="理論の形: 縁の応力が降伏に達する条件" lead="柱③ の式に、横からの曲げを足す。初期たわみの曲げも、横からの曲げも、同じように軸力で増幅される。">
         <P>
           柱に軸力と曲げ(地震・風・水圧などによる)が同時にかかると、縁の応力は、柱③ の (6) に、横からの曲げによる応力を足したものになります。どちらの曲げも、軸力で増幅されます。
         </P>
@@ -290,7 +290,7 @@ export default function Design({ go, onStage }: { go: (t: string) => void; onSta
         </P>
       </Section>
 
-      <Section id="ds-b2" no="軸力 × 曲げ ②" title="設計式へ: 3つの置き換え" lead="(19) の両端を、軸力だけ・曲げだけの照査の値に合わせて、許容値で書き直す。">
+      <Section id="ds-b2" goal={String.raw`U=\dfrac{\sigma_c}{\sigma_{cz}}+\dfrac{\sigma_{bcy}}{\sigma_{bgy}\,\alpha_y}+\dfrac{\sigma_{bcz}}{\sigma_{b0}\,\alpha_z}\le1`} needs={[['ds-b1', '軸力×曲げ①'], ['ds-g1', '柱×板 σcz']]} no="軸力 × 曲げ ②" title="設計式へ: 3つの置き換え" lead="(19) の両端を、軸力だけ・曲げだけの照査の値に合わせて、許容値で書き直す。">
         <Step n={1} title="第1項の分母を、全体座屈の許容値 σcz にする">
           (19) の軸力だけの端点は、全体座屈の強さでした。設計式では、初期たわみの項 σc·η を別に書かず、その効果を全体座屈の許容値 σcz(柱⑤の区分式に、柱×板 の低減を掛けたもの)にまとめて入れます。曲げがないとき、照査は「σc ≦ σcz」と一致します。
         </Step>
