@@ -8,7 +8,7 @@ const NEUTRAL = new THREE.Color('#8794a8');
 const DARK = () => new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
 
 /** 曲がる棒(中央が原点、両端が下がる向きに円弧で曲がる。上側が伸びる) */
-class BendBeam {
+export class BendBeam {
   group = new THREE.Group();
   mesh: THREE.Mesh;
   private base: Float32Array = new Float32Array(0);
@@ -66,11 +66,11 @@ class BendBeam {
     this.lines.geometry = lg;
   }
 
-  /** 断面を長方形の組み合わせにする(H形など)。parts: [幅(奥行き方向), 高さ, 中心の高さ]。表面の線は引かない */
-  setSection(parts: [number, number, number][]) {
-    const geos = parts.map(([w, h, yc]) => {
+  /** 断面を長方形の組み合わせにする(H形など)。parts: [幅(奥行き方向), 高さ, 中心の高さ, 奥行き方向の中心]。表面の線は引かない */
+  setSection(parts: ([number, number, number] | [number, number, number, number])[]) {
+    const geos = parts.map(([w, h, yc, zc = 0]) => {
       const g = new THREE.BoxGeometry(this.L, h, w, 48, 2, 1);
-      g.translate(0, yc, 0);
+      g.translate(0, yc, zc);
       return g;
     });
     const geo = mergeGeometries(geos)!;
@@ -82,9 +82,9 @@ class BendBeam {
     this.lines.visible = false;
     let top = 0;
     let wMax = 0;
-    for (const [w, h, yc] of parts) {
+    for (const [w, h, yc, zc = 0] of parts) {
       top = Math.max(top, yc + h / 2);
-      wMax = Math.max(wMax, w);
+      wMax = Math.max(wMax, 2 * Math.abs(zc) + w);
     }
     this.h = top * 2;
     this.w = wMax;
@@ -202,7 +202,7 @@ class Bank {
   }
 }
 
-function gauge(color: string) {
+export function gauge(color: string) {
   const m = new THREE.Mesh(
     new THREE.BoxGeometry(1, 0.16, 0.3),
     new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, roughness: 0.4 }),
@@ -210,23 +210,23 @@ function gauge(color: string) {
   return m;
 }
 /** 左端を x0 にそろえて長さ len の棒にする */
-function setGauge(m: THREE.Mesh, x0: number, y: number, len: number, z = 0) {
+export function setGauge(m: THREE.Mesh, x0: number, y: number, len: number, z = 0) {
   m.visible = len > 0.01;
   m.scale.x = Math.max(0.01, len);
   m.position.set(x0 + len / 2, y, z);
 }
-function tag(text: string, color: string, size = 0.7, wide = 1) {
+export function tag(text: string, color: string, size = 0.7, wide = 1) {
   const s = label(text, color, wide);
   s.scale.multiplyScalar(size);
   return s;
 }
 
 // H形(H-300×300×10×16、強軸まわり)と、同じ面積の長方形(幅100)
-const H = { b: 300, tf: 16, hw: 268, tw: 10 };
+export const H = { b: 300, tf: 16, hw: 268, tw: 10 };
 const AREA = 2 * H.b * H.tf + H.hw * H.tw;
 const RECT = { b: 100, h: AREA / 100 };
 const I_RECT = (RECT.b * RECT.h ** 3) / 12;
-const iOf = (bf: number, tf: number, hw: number, tw: number) => 2 * ((bf * tf ** 3) / 12 + bf * tf * ((hw + tf) / 2) ** 2) + (tw * hw ** 3) / 12;
+export const iOf = (bf: number, tf: number, hw: number, tw: number) => 2 * ((bf * tf ** 3) / 12 + bf * tf * ((hw + tf) / 2) ** 2) + (tw * hw ** 3) / 12;
 /** 同じ量の鉄を H形にしたとき、踏ん張り(断面二次モーメント)が長方形の何倍になるか */
 export const H_GAIN = iOf(H.b, H.tf, H.hw, H.tw) / I_RECT;
 
@@ -274,6 +274,9 @@ export class Stage1Show extends ShowBase {
   private bendH: BendBeam;
   private bendArrows: THREE.Group[] = [];
   private bendTags: THREE.Sprite[] = [];
+  private bendGauges: THREE.Mesh[] = [];
+  private bendGTags: THREE.Sprite[] = [];
+  private morphKey = -1;
   /** 式の場面で注目する記号(-1 で自動で順に) */
   focus = -1;
   lab: LabState = { b: 100, h: 150, k: 0.006 };
@@ -388,6 +391,16 @@ export class Stage1Show extends ShowBase {
       const s = tag(t, c, 1.0);
       this.gBend.add(s);
       this.bendTags.push(s);
+    }
+    for (let i = 0; i < 2; i++) {
+      const g = gauge('#6d28d9');
+      this.gBend.add(g);
+      this.bendGauges.push(g);
+    }
+    for (const t of ['踏ん張り 1', `踏ん張り 約${Math.round(H_GAIN)}倍`]) {
+      const s = tag(t, '#6d28d9', 0.95);
+      this.gBend.add(s);
+      this.bendGTags.push(s);
     }
     this.setScene(0);
   }
@@ -579,41 +592,80 @@ export class Stage1Show extends ShowBase {
     this.look(-0.4, 1.75, 3.9, 2.6, 16, 10);
   }
 
-  /** 同じ力で、長方形の棒と H形鋼を曲げる。t は場面の中の時刻(13〜30) */
+  /** 長い棒のまま、右(奥)の棒の断面を長方形から H形へ変える。p: 0〜1。戻り値は踏ん張りの倍率 */
+  private morphBend(p: number) {
+    const q = Math.round(p * 60) / 60;
+    const third = RECT.h / 3;
+    const lerp = (a: number, b: number) => a + (b - a) * q;
+    const tf = lerp(third, H.tf);
+    const bf = lerp(RECT.b, H.b);
+    const hw = lerp(third, H.hw);
+    const tw = lerp(RECT.b, H.tw);
+    if (q !== this.morphKey) {
+      this.morphKey = q;
+      const SB = 1 / 250;
+      this.bendH.setSection([
+        [bf * SB, tf * SB, ((hw + tf) / 2) * SB],
+        [tw * SB, hw * SB, 0],
+        [bf * SB, tf * SB, (-(hw + tf) / 2) * SB],
+      ]);
+    }
+    this.bendH.group.position.y = FUL_H + this.bendH.h / 2;
+    return iOf(bf, tf, hw, tw) / I_RECT;
+  }
+
+  /**
+   * 「だから H形」の場面(30 秒)。最初から長い棒2本を見せる:
+   * 0〜2.5 同じ量の鉄の長い棒 → 2.5〜8 奥の棒の断面を全長にわたって H形へ → 8〜13 踏ん張り約14倍 → 13〜 同じ力で曲げ比べ
+   */
   private tickBend(t: number) {
-    const grow = 0.04 + 0.96 * ramp(t, 13, 15);
-    const push = ramp(t, 16, 18.5) - ramp(t, 28, 29.5);
+    const gain = this.morphBend(ramp(t, 2.5, 7.5));
+    const push = ramp(t, 14, 16.5) - ramp(t, 28, 29.5);
     const kR = BEND_K * push;
     const kH = kR / H_GAIN;
     const beams: [BendBeam, number, number][] = [
       [this.bendRect, kR, BEND_Z.rect],
       [this.bendH, kH, BEND_Z.h],
     ];
+    // 踏ん張りのゲージ(棒の上に浮かべる)。曲げ始めたら消す
+    const gShow = t > 0.5 && t < 14;
+    const GK = 3.6 / H_GAIN;
     beams.forEach(([b, k, z], j) => {
-      b.group.scale.x = grow;
       b.update(k, () => 0, 0);
       for (let i = 0; i < 2; i++) {
         const [ex, ey] = b.end(k, i ? 1 : -1);
         const top = b.group.position.y + ey;
         // 同じ力 = 同じ長さの矢印
-        setArrow(this.bendArrows[j * 2 + i], ex * grow * 0.96, top + 0.08 + 0.8 * push, -0.8 * push, z);
+        setArrow(this.bendArrows[j * 2 + i], ex * 0.96, top + 0.08 + 0.8 * push, -0.8 * push, z);
+        this.bendArrows[j * 2 + i].visible = push > 0.02;
       }
       const [lx, ly] = b.end(k, -1);
       const ty = b.group.position.y + ly + 0.55 + 0.8 * push;
-      this.bendTags[j].position.set(lx * grow + 0.9, ty + 0.2, z);
-      this.bendTags[j].visible = grow > 0.9;
-      this.bendTags[j + 2].position.set(lx * grow + 0.9, ty - 0.22, z);
-      this.bendTags[j + 2].visible = t > 19.5 && t < 28;
+      this.bendTags[j].position.set(lx + 0.9, ty + 0.2, z);
+      // 奥の棒は、H形になってから名前を出す
+      this.bendTags[j].visible = j === 0 || t > 7.5;
+      this.bendTags[j + 2].position.set(lx + 0.9, ty - 0.22, z);
+      this.bendTags[j + 2].visible = t > 17.5 && t < 28;
+      const gy = FUL_H + 1.55;
+      setGauge(this.bendGauges[j], 0.3, gy, j === 0 ? GK : GK * gain, z);
+      this.bendGauges[j].visible = gShow;
+      this.bendGTags[j].position.set(1.4, gy + 0.42, z);
+      this.bendGTags[j].visible = gShow && (j === 0 || t > 8);
     });
     this.caption =
-      t < 15.5
-        ? 'それぞれの断面を、長い棒にする'
-        : t < 19.5
-          ? '両端を、同じ力で押し下げる'
-          : t < 24
-            ? `H形の曲がりは約1/${Math.round(H_GAIN)}(曲がりは誇張)`
-            : '鉄の量は同じ。違うのは、鉄の置き場所だけ';
-    this.look(-0.2, 1.1, 4.1, 2.4, 34, 18);
+      t < 2.5
+        ? '同じ量の鉄でできた、2本の長い棒'
+        : t < 8
+          ? '奥の棒の鉄を、全長にわたって上下の端へ移していく'
+          : t < 13.5
+            ? `同じ量の鉄で、踏ん張りは約${Math.round(H_GAIN)}倍`
+            : t < 17.5
+              ? '両端を、同じ力で押し下げる'
+              : t < 23
+                ? `H形の曲がりは約1/${Math.round(H_GAIN)}(曲がりは誇張)`
+                : '鉄の量は同じ。違うのは、鉄の置き場所だけ';
+    if (t < 13) this.look(0.4, 1.0, 3.6, 2.2, 52, 20);
+    else this.look(-0.2, 1.1, 4.1, 2.4, 34, 18);
   }
 
   protected tick() {
@@ -634,15 +686,10 @@ export class Stage1Show extends ShowBase {
       this.showOnly(this.gPair);
       this.tickPair(c);
     } else if (s === 5) {
-      // 断面の変形(0〜13 秒)→ 同じ力で曲げ比べ(13〜30 秒)
+      // 長い棒のまま断面を H形へ(0〜13 秒)→ 同じ力で曲げ比べ(13〜30 秒)
       const t = this.cyc(30, c);
-      if (t < 13) {
-        this.showOnly(this.gMorph);
-        this.tickMorph(t);
-      } else {
-        this.showOnly(this.gBend);
-        this.tickBend(t);
-      }
+      this.showOnly(this.gBend);
+      this.tickBend(t);
     } else if (s === 6) {
       this.cyc(18);
       // 式の記号を1つずつ絵で見せる

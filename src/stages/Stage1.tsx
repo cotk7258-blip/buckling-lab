@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { H_GAIN, Stage1Show } from '../three/stage1.ts';
 import type { LabState } from '../three/stage1.ts';
-import { Card, DeriveLink, LabSlider, StoryShell, useShow } from '../ui/Story.tsx';
+import { Card, DeriveLink, LabSlider, StoryShell, openDerivation, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
 import { FitTex, Tex } from '../ui/Tex.tsx';
 
@@ -125,6 +125,15 @@ export default function Stage1() {
             </div>
             <p className="mt-2 text-xs text-ink-dim">M は曲げモーメント(曲げに抵抗して踏ん張る力)。押さなければ、3つを順に映します。</p>
           </div>
+        ) : scene === 5 ? (
+          <button
+            onClick={() => openDerivation('ax')}
+            className="w-full rounded-2xl border-2 border-comp bg-studio-900 px-4 py-3 text-left"
+          >
+            <span className="block text-xs font-bold text-comp">補足ページへ</span>
+            <span className="mt-0.5 block text-[15px] font-bold leading-snug">なぜ H形鋼には「強軸」と「弱軸」があるの? ›</span>
+            <span className="mt-0.5 block text-xs text-ink-dim">同じ H形鋼でも、曲げる向きで踏ん張りが約3倍違う。バネの考え方で見る</span>
+          </button>
         ) : undefined
       }
       lab={

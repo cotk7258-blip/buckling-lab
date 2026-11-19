@@ -11,7 +11,15 @@ export function openFormulas(tab: string, id?: string) {
 
 /** 「式と Q&A」の節の id から、その節のあるタブを開いて節へ飛ぶ */
 export function openDerivation(id: string) {
-  const tab = id.startsWith('ds-') ? '理論から設計式へ' : id.startsWith('ov-') ? '3つの照査' : id.startsWith('q') ? '質問と回答' : '式の導出';
+  const tab = id.startsWith('ds-')
+    ? '理論から設計式へ'
+    : id.startsWith('ov-')
+      ? '3つの照査'
+      : id.startsWith('ax')
+        ? '強軸と弱軸'
+        : id.startsWith('q')
+          ? '質問と回答'
+          : '式の導出';
   openFormulas(tab, id);
 }
 

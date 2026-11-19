@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Axes from '../doc/Axes.tsx';
 import Calc from '../doc/Calc.tsx';
 import Derive from '../doc/Derive.tsx';
 import Design from '../doc/Design.tsx';
@@ -10,6 +11,7 @@ import Symbols from '../doc/Symbols.tsx';
 const TABS: { name: string; sub: string }[] = [
   { name: '3つの照査', sub: '手順と式' },
   { name: '式の導出', sub: '理論式はどこから' },
+  { name: '強軸と弱軸', sub: 'H形鋼の向き' },
   { name: '理論から設計式へ', sub: '理想 → 現実 → 設計' },
   { name: '質問と回答', sub: 'Q1〜Q11' },
   { name: '計算してみる', sub: '数字で確かめる' },
@@ -46,6 +48,7 @@ export default function Formulas({ onStage, initial }: { onStage: (n: number) =>
 
       {tab === '3つの照査' && <Overview go={go} onStage={onStage} />}
       {tab === '式の導出' && <Derive go={go} onStage={onStage} />}
+      {tab === '強軸と弱軸' && <Axes onStage={onStage} />}
       {tab === '理論から設計式へ' && <Design go={go} onStage={onStage} />}
       {tab === '質問と回答' && <QandA go={go} onStage={onStage} />}
       {tab === '計算してみる' && <Calc />}
