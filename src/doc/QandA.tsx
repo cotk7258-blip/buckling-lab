@@ -43,7 +43,8 @@ export default function QandA({ go, onStage }: { go: (t: string) => void; onStag
         <Sub>理由3 σy で割ると、鋼種によらず1本の曲線で整理できる</Sub>
         <UL items={['耐力を σcr/σy、細長さを R・λ(どちらも σy を含む)で表すと、試験結果が材料によらずまとまる。', '式が「σy × 低減率」の形をしているのはこのため。']} />
         <Sub>式の中の σy には2つの役割がある</Sub>
-        <Eq tex={String.raw`\text{① 掛ける側(耐力の天井): }\sigma_{cl}=\sigma_y\times\text{低減率}\qquad\text{② パラメータの中: }R=\sqrt{\sigma_y/\sigma_{el}},\;\lambda=\sqrt{\sigma_y/\sigma_e}`} />
+        <Eq tex={String.raw`\text{① 掛ける側(耐力の天井): }\sigma_{cl}=\sigma_y\times\text{低減率}`} />
+        <Eq tex={String.raw`\text{② パラメータの中: }R=\sqrt{\sigma_y/\sigma_{el}},\;\lambda=\sqrt{\sigma_y/\sigma_e}`} />
         <Sub>補足 「降伏の進み方は σy で決まる」とは</Sub>
         <P>座屈は「曲がりへの抵抗」を失う現象です。抵抗を奪うのが降伏で、降伏がいつ始まるかを決めるのが σy です。</P>
         <Eq tex={String.raw`\text{縁の応力}=\text{平均応力}+\text{残留応力}+\text{曲げによる付加応力}`} />

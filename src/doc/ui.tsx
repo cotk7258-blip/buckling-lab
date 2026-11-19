@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Tex } from '../ui/Tex.tsx';
+import { FitTex, Tex } from '../ui/Tex.tsx';
 
 /** 色(画面全体と同じ意味で使う) */
 export const C = {
@@ -42,8 +42,8 @@ export function Section(props: { id: string; no?: string; title: string; lead?: 
   );
 }
 
-export function P({ children }: { children: ReactNode }) {
-  return <p className="mt-3 text-[15px] leading-[1.9] sm:text-base">{children}</p>;
+export function P({ children, id }: { children: ReactNode; id?: string }) {
+  return <p id={id} className="mt-3 scroll-mt-28 text-[15px] leading-[1.9] sm:text-base">{children}</p>;
 }
 
 /** 番号付きの式 */
@@ -51,9 +51,7 @@ export function Eq(props: { n?: string; tex: string; note?: ReactNode; key?: str
   return (
     <div className={`mt-3 rounded-xl border-2 bg-studio-900 px-3 py-2 ${props.strong ? 'border-comp' : 'border-studio-700'}`}>
       <div className="flex items-center gap-2">
-        <div className="min-w-0 flex-1 overflow-x-auto py-1 text-[17px] sm:text-lg">
-          <Tex block>{props.tex}</Tex>
-        </div>
+        <FitTex block className="flex-1 text-[17px] sm:text-lg">{props.tex}</FitTex>
         {props.n && <span className="num shrink-0 text-xs font-bold text-ink-dim">({props.n})</span>}
       </div>
       {props.note && <p className="border-t border-studio-700 pt-1.5 text-[13px] leading-relaxed text-ink-dim">{props.note}</p>}
@@ -65,9 +63,9 @@ export function Eq(props: { n?: string; tex: string; note?: ReactNode; key?: str
 export const M = ({ children }: { children: string }) => <Tex>{children}</Tex>;
 
 /** 番号付きの段 */
-export function Step(props: { n: string | number; title: ReactNode; children: ReactNode }) {
+export function Step(props: { n: string | number; title: ReactNode; children: ReactNode; id?: string }) {
   return (
-    <div className="mt-5 flex gap-3">
+    <div id={props.id} className="mt-5 flex scroll-mt-28 gap-3">
       <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-comp text-sm font-bold text-white">{props.n}</span>
       <div className="min-w-0 flex-1">
         <p className="text-[17px] font-bold leading-snug">{props.title}</p>

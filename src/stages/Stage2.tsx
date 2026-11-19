@@ -11,25 +11,25 @@ const SIDE2: Record<number, React.ReactNode> = {
       title="真ん中の綱引き"
       steps={[
         ['曲げる力', String.raw`P\times y`],
-        ['戻す力', String.raw`EI\times\dfrac{1}{R}=\dfrac{\pi^2EI}{l^2}\times y`],
+        ['戻す力', String.raw`EI\times\dfrac{1}{R}=\dfrac{\pi^2EI}{l^2}\times y`, 'd1-k'],
         ['くらべる', String.raw`P\quad\text{と}\quad \dfrac{\pi^2EI}{l^2}`],
-        ['座屈荷重', String.raw`P_e=\dfrac{\pi^2EI}{l^2}`],
+        ['座屈荷重', String.raw`P_e=\dfrac{\pi^2EI}{l^2}`, 'd1-pe'],
       ]}
-      note="どちらにも y が掛かるので、勝負は y では決まらない。曲がり具合 1/R が y に比例する理由と、π の出どころは「式と Q&A」の導出で。"
+      note="どちらにも y が掛かるので、y では勝負がつかない。式の横の「導き方」で、1/R が y に比例する理由と π の出どころを読めます。"
     />
   ),
-  2: <Steps title="長さの効き方" steps={[['座屈荷重', String.raw`P_e=\dfrac{\pi^2EI}{l^2}`], ['長さ2倍なら', String.raw`\dfrac{1}{4}`]]} note="長さの2乗に反比例。3倍なら 1/9。" />,
+  2: <Steps title="長さの効き方" steps={[['座屈荷重', String.raw`P_e=\dfrac{\pi^2EI}{l^2}`, 'd1-pe'], ['長さ2倍なら', String.raw`\dfrac{1}{4}`]]} note="長さの2乗に反比例。3倍なら 1/9。" />,
   3: (
     <Steps
       title="支え方 → 有効座屈長 le"
       steps={[
-        ['両端ピン', 'le = 1.0 l'],
+        ['両端ピン', 'le = 1.0 l', 'd2-le'],
         ['片方固定・片方ピン', 'le ≒ 0.7 l'],
         ['両端固定', 'le = 0.5 l'],
         ['片持ち', 'le = 2.0 l'],
-        ['応力で書くと', String.raw`\sigma_e=\dfrac{\pi^2E}{(l_e/r)^2}`],
+        ['応力で書くと', String.raw`\sigma_e=\dfrac{\pi^2E}{(l_e/r)^2}`, 'd2-s'],
       ]}
-      note="σe = Pe ÷ 断面積。r = √(I/A) は断面二次半径。導き方は「式と Q&A」で。"
+      note="σe = Pe ÷ 断面積。r = √(I/A) は断面二次半径。"
     />
   ),
 };

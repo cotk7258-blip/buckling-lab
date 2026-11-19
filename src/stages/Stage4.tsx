@@ -3,9 +3,9 @@ import { solveColumn } from '../physics/column.ts';
 import { idealCurve } from '../physics/curves.ts';
 import { CURVES, S4_AMP, S4_FAT, Stage4Show } from '../three/stage4.ts';
 import type { CurveKey } from '../three/stage4.ts';
-import { Card, LabSlider, Steps, StoryShell, useShow } from '../ui/Story.tsx';
+import { Card, DeriveLink, LabSlider, Steps, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
-import { Tex } from '../ui/Tex.tsx';
+import { FitTex } from '../ui/Tex.tsx';
 import { Rich } from '../ui/glossary.tsx';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -15,7 +15,7 @@ const SIDE4: Record<number, React.ReactNode> = {
     <Steps
       title="オイラーの線を σy で割る"
       steps={[
-        ['オイラー座屈応力', String.raw`\sigma_e=\dfrac{\pi^2E}{(l/r)^2}`],
+        ['オイラー座屈応力', String.raw`\sigma_e=\dfrac{\pi^2E}{(l/r)^2}`, 'd2-s'],
         ['σy で割る', String.raw`\dfrac{\sigma_e}{\sigma_y}=\dfrac{1}{\lambda^2}\quad(\lambda\text{ は次の場面で})`],
       ]}
     />
@@ -24,10 +24,10 @@ const SIDE4: Record<number, React.ReactNode> = {
     <Steps
       title="λ の導出"
       steps={[
-        ['定義', String.raw`\lambda=\sqrt{\dfrac{\sigma_y}{\sigma_e}}`],
+        ['定義', String.raw`\lambda=\sqrt{\dfrac{\sigma_y}{\sigma_e}}`, 'd4'],
         ['σe を代入', String.raw`\dfrac{\sigma_y}{\sigma_e}=\dfrac{\sigma_y\,(l/r)^2}{\pi^2E}`],
         ['平方根', String.raw`\lambda=\dfrac{1}{\pi}\sqrt{\dfrac{\sigma_y}{E}}\cdot\dfrac{l}{r}`],
-        ['理想の柱', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{1}{\lambda^2}\right)`],
+        ['理想の柱', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{1}{\lambda^2}\right)`, 'ds-c2'],
       ]}
       note={`σy = 355、E = 2.0×10⁵ N/mm² なら λ = 1 は l/r = π√(E/σy) ≒ ${Math.round(Math.PI * Math.sqrt(200000 / 355))}。`}
     />
@@ -36,7 +36,7 @@ const SIDE4: Record<number, React.ReactNode> = {
     <Steps
       title="設計曲線(道路橋示方書・平成24年版まで)"
       steps={[
-        ['λ ≦ 0.2', String.raw`\sigma_{cg}/\sigma_y=1.0`],
+        ['λ ≦ 0.2', String.raw`\sigma_{cg}/\sigma_y=1.0`, 'ds-c5'],
         ['0.2 < λ ≦ 1.0', String.raw`1.109-0.545\lambda`],
         ['1.0 < λ', String.raw`1/(0.773+\lambda^2)`],
       ]}
@@ -48,42 +48,42 @@ const SCENES: SceneText[] = [
   {
     kicker: '実験',
     head: '長さだけが違う柱を、10本並べる',
-    body: 'STAGE 3 では1本の柱を押しました。今度は同じ H形鋼を、短いものから長いものまで10本。柱の強さは、長さでどう変わるのでしょう。奥の壁は、これから結果を書き込んでいくグラフです。',
+    body: '同じ H形鋼を、短いものから長いものまで10本並べました。強さは長さでどう変わるのか。奥の壁が、結果を書き込むグラフです。',
   },
   {
     kicker: 'ずんぐり',
     head: '短い柱は、つぶれる',
-    body: '短い柱は曲がりません。断面のどこも同じだけ縮み、全体が同時に限界(降伏)に達します。強さは材料の強さそのもの。グラフでは 100% の高さに点を打ちます。',
+    body: '短い柱は曲がりません。断面全体が同時に降伏します。強さは材料の強さそのもの、グラフの 100% です。',
   },
   {
     kicker: 'ひょろ長',
     head: '長い柱は、曲がって逃げる',
-    body: '長い柱は、材料の強さの4分の1しか使わないうちに、横へ曲がってしまいます。これが座屈です。どこも赤くなっていない(降伏していない)ので、材料は元気。力を抜けば元に戻ります。材料が壊れたのではなく、形として踏ん張れなくなっただけです。',
+    body: '長い柱は、材料の強さの4分の1で横へ曲がります。どこも降伏していないので、力を抜けば元に戻る。壊れたのではなく、形として踏ん張れなくなったのです。',
   },
   {
     kicker: 'オイラーの線',
     head: '長さが2倍なら、強さは4分の1',
-    body: '長い柱の点は、1本の曲線にきれいに乗ります。オイラー座屈応力 σe = π²E/(l/r)² の線です(映像2)。長さが2倍になると強さは4分の1。縦軸は σy で割った σcr/σy、横軸はこのあと作る物差し λ で描いているので、この線は 1/λ² になります。ところがこの線は、短い柱の側で空高く伸びていきます。短くすれば無限に強くなる、というのはおかしい。',
+    body: '長い柱の点は、オイラーの線 σe = π²E/(l/r)² に乗ります。長さ2倍で強さは4分の1。ただしこの線は、短い柱の側で空高く伸びていきます。',
   },
   {
     kicker: '天井',
     head: '理想の柱の強さは、2本の線の低い方',
-    body: 'どんなに短くても、材料の限界(降伏)は超えられません。これが天井 σcr/σy = 1 です。理想の柱の強さは、天井とオイラーの線の低い方。2本の線がぶつかるのは σe = σy の所です。そこで σy/σe の平方根を物差しにしたのが、細長比パラメータ λ = √(σy/σe)。σe の式を入れると λ = (1/π)√(σy/E) × l/r で、λ = 1 がちょうどぶつかる点。1 より小さければ降伏が先、大きければ座屈が先です。横軸の下の l/r は、σy = 355 N/mm² の鋼での値です。',
+    body: '材料の降伏は超えられません。これが天井です。理想の柱の強さは、天井とオイラーの線の低い方。2本がぶつかる所を 1 にした物差しが、細長比パラメータ λ です。1 より小さければ降伏が先、大きければ座屈が先。',
   },
   {
     kicker: '現実',
     head: '現実の柱は、理想の線に届かない',
-    body: '残留応力と初期たわみを持つ現実の柱で、同じ実験をします。紺色の点が、緑の線の下に落ちました。差がいちばん大きいのは境目(細長さ 1)のあたり。降伏と座屈の両方が近く、STAGE 3 で見たドミノ倒しがいちばん効く所です。',
+    body: '残留応力と初期たわみのある現実の柱では、点が緑の線より下に落ちます。いちばん下がるのは λ = 1 のあたり。降伏と座屈が重なる所です。',
   },
   {
     kicker: '設計曲線',
     head: '設計の線は、点の群れの下側に引く',
-    body: '現実の柱の不整は1本ずつ違います。残留応力と初期たわみの大きさを変えて計算すると、点は帯になって散らばります。設計で使う線(水色)は、この群れの下側を通るように決められています。短い柱で平ら、途中は直線で下がり、長い柱ではオイラーの線に寄り添う。あの形には、ここまでの話が全部入っています。なお、いちばん短い柱だけは、ここでの計算値(98%)が設計曲線(100%)をわずかに下回ります。この計算が、降伏後に鋼が少し強くなる性質を入れていないためです。',
+    body: '不整の大きさは柱ごとに違うので、点は帯に散らばります。設計の線(水色)は、その下側に引かれています。いちばん短い柱だけは、計算(98%)が線をわずかに下回ります。降伏後に鋼が少し強くなる性質を、この計算に入れていないためです。',
   },
   {
     kicker: '実験室',
     head: '細長さを変えて、線を見比べる',
-    body: '細長さを動かすと、その柱の理想・現実・設計の強さが出ます。各国の設計曲線も重ねられます。国によって線は少しずつ違いますが、どれも理想の線を超えず、形はよく似ています。',
+    body: '細長さを動かすと、理想・現実・設計の強さが出ます。各国の設計曲線も重ねられます。どの線も、理想の線は超えません。',
   },
 ];
 
@@ -176,8 +176,9 @@ export default function Stage4() {
                 </button>
               ))}
             </div>
-            <div className="mt-3 overflow-x-auto text-sm">
-              <Tex block>{String.raw`\bar{\lambda}=\sqrt{\dfrac{\sigma_y}{\sigma_e}}=\dfrac{1}{\pi}\sqrt{\dfrac{\sigma_y}{E}}\cdot\dfrac{l_e}{r}`}</Tex>
+            <div className="mt-3 flex items-center gap-2">
+            <FitTex block className="flex-1 text-sm">{String.raw`\bar{\lambda}=\sqrt{\dfrac{\sigma_y}{\sigma_e}}=\dfrac{1}{\pi}\sqrt{\dfrac{\sigma_y}{E}}\cdot\dfrac{l_e}{r}`}</FitTex>
+            <DeriveLink id="d4" />
             </div>
             <p className="text-xs leading-relaxed text-ink-dim">
               どの線も、安全率や抵抗係数を掛ける前の値(公称強度)にそろえています。日本建築学会の式は、不整の影響を安全率(1.5〜2.17)の側に含めているので、安全率を除くと長い柱では理想の線に重なります(甘いわけではありません)。道路橋示方書は平成24年版までの式(λ̄≦0.2 で 1.0、0.2〜1.0 で 1.109−0.545λ̄、1.0 より上で

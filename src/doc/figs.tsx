@@ -3,7 +3,7 @@ import { solveColumn } from '../physics/column.ts';
 import { dohshiOld, eurocode } from '../physics/curves.ts';
 import { plateStrength, plateWinter } from '../physics/plate.ts';
 import { edgeParts, edgeYieldMoment, etaFromImp, idealColumn, idealPlate, perry } from '../physics/theory.ts';
-import { Tex } from '../ui/Tex.tsx';
+import { FitTex } from '../ui/Tex.tsx';
 import { Legend, Plot } from './Plot.tsx';
 import { C, Fig, Knob, Seg, useNarrow } from './ui.tsx';
 
@@ -19,9 +19,7 @@ function Node(props: { k: string; tex?: string; tone?: 'in' | 'mid' | 'out' }) {
     <div className={`min-w-0 rounded-lg border-2 px-2 py-1.5 text-center ${cls}`}>
       <p className="text-[11px] font-bold leading-tight opacity-80">{props.k}</p>
       {props.tex && (
-        <div className="overflow-x-auto text-sm">
-          <Tex>{props.tex}</Tex>
-        </div>
+        <FitTex className="text-sm">{props.tex}</FitTex>
       )}
     </div>
   );

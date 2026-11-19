@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { terms2 } from '../physics/beamcolumn.ts';
 import { EX, EXB, Stage6Show, exbValues, strengthGL } from '../three/stage6.ts';
-import { Card, StoryShell, openFormulas, useShow } from '../ui/Story.tsx';
+import { Card, DeriveLink, Steps, StoryShell, openFormulas, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
-import { Tex } from '../ui/Tex.tsx';
+import { FitTex, Tex } from '../ui/Tex.tsx';
 import { Term } from '../ui/glossary.tsx';
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -16,54 +16,61 @@ const SCENES: SceneText[] = [
   {
     kicker: '地図',
     head: '座屈の照査は、3段でつながっている',
-    body: '設計では、柱が座屈しないことを計算で確かめます。これを照査と呼びます。①局部座屈(板が波打たないか。軸力のみ)。②全体座屈(柱ごと曲がらないか。軸力のみ)。③複合座屈(軸力と曲げを同時に受けても耐えられるか)。①の結果が②に、②の結果が③に入っていきます。柱は薄い板でできているので、柱ごと曲がる座屈(全体座屈)と、板が波打つ座屈(局部座屈)の両方を確かめます。',
+    body: '柱が座屈しないことを、計算で確かめる。これが照査です。① 局部座屈(板の波打ち)、② 全体座屈(柱ごと曲がる)、③ 複合座屈(軸力と曲げを同時に)。①の結果が②へ、②の結果が③へ入ります。',
   },
   {
     kicker: '② 全体座屈',
     head: '全体座屈。柱が、柱ごと曲がる',
-    body: '軸力だけを受ける柱で、いちばん大きな座屈です。柱全体が弓なりに曲がり、断面の形は変わりません。起きやすさを決めるのは、細長比パラメータ λ。λ から低減率を選び、局部座屈を考慮しない全体座屈応力 σcg = σy × 低減率 を出します(映像2〜4)。',
+    body: '柱全体が弓なりに曲がる座屈です。決め手は細長比パラメータ λ。λ から低減率を選び、全体座屈応力 σcg = σy × 低減率 を出します(映像2〜4)。',
   },
   {
     kicker: '① 局部座屈',
     head: '局部座屈。板だけが波打つ',
-    body: '同じく軸力だけを受ける柱で、柱はまっすぐ立ったまま、断面を作っている板が波打ちます。角は動かず、その間の板が波打ちます。起きやすさを決めるのは、幅厚比パラメータ R。R から低減率を選び、局部座屈の許容値 σcl = σy × 低減率 を出します(映像5)。',
+    body: '柱はまっすぐのまま、断面の板が波打つ座屈です。決め手は幅厚比パラメータ R。R から低減率を選び、局部座屈の許容値 σcl = σy × 低減率 を出します(映像5)。',
   },
   {
     kicker: '① と ②',
     head: '局部座屈と全体座屈は、影響し合う',
-    body: '板の薄い柱では、先に板が波打つことがあります。波打った板は応力の分布が偏り、板全体としての働きが落ちます(有効幅で評価します)。そのぶん柱の踏ん張りが落ち、柱ごとの座屈が早まります。局部座屈と全体座屈を別々に計算するだけでは、強さを過大に見積もることがあります。',
+    body: '板が先に波打つと、その板は力を受けにくくなり、柱の踏ん張りが落ちます。すると柱ごとの座屈も早まる。別々に計算するだけでは、強さを過大に見積もることがあります。',
   },
   {
     kicker: '② の許容値',
     head: 'σcz = σcg × σcl/σy',
-    body: '設計では、この影響を掛け算で見込みます。全体座屈応力 σcg に、局部座屈の分 σcl/σy(使える断面の割合)を掛けたものが、全体座屈の許容値 σcz です。R が 0.7 以下なら σcl = σy なので、掛ける数は 1 で σcz = σcg。これは設計上の低減の考え方で、局部座屈と全体座屈の連成を直接計算したものではありません。',
+    body: '設計では、この影響を掛け算で見込みます。σcg に、局部座屈で使える割合 σcl/σy を掛けたものが、全体座屈の許容値 σcz。連成を直接計算した値ではなく、設計上の低減の考え方です。',
   },
   {
     kicker: '軸力だけの安全率',
     head: '安全率 = 許容値 ÷ 発生応力',
-    body: `許容値が分かれば、照査は単純です。発生する圧縮応力 σc が、許容値より小さいことを確かめます。その余裕が安全率で、1.0 以上なら OK。この例の柱は、σcz が降伏の ${pct(exStr)}、σc が ${pct(EX.n)} なので、安全率は ${(exStr / EX.n).toFixed(1)}。軸力だけなら、局部座屈は σcl ÷ σc、全体座屈は σcz ÷ σc の割り算ひとつで済みます。`,
+    body: `発生する応力 σc が、許容値より小さいことを確かめます。その余裕が安全率で、1.0 以上なら OK。この例では σcz が降伏の ${pct(exStr)}、σc が ${pct(EX.n)} なので、安全率は ${(exStr / EX.n).toFixed(1)}。`,
   },
   {
     kicker: '③ 複合座屈',
     head: '曲げは2方向。軸力・強軸・弱軸で余力を分け合う',
-    body: '実際の柱は、上から押されるだけではありません。地震や風、水圧などで横からも力を受け、曲げられます。曲げる向きは2つあります。断面の広い向きへ曲げる「強軸まわりの曲げ」と、狭い向きへ曲げる「弱軸まわりの曲げ」です。軸力と2方向の曲げを同時に受ける照査が、複合座屈です。考え方は「使用割合」。軸力・強軸の曲げ・弱軸の曲げが、それぞれ許容値の何割を使うかを足して、合計が 1 以下なら OK。グラフは縦が軸力、横が強軸の曲げ、奥行きが弱軸の曲げで、どれもそれだけを受けるときの許容値を 1.0 としています。3つの和が 1 になる三角の面の内側が、耐えられる範囲です。',
+    body: '実際の柱は、横からの力で曲げられもします。向きは2つ。断面の広い向きの「強軸」と、狭い向きの「弱軸」です。軸力・強軸の曲げ・弱軸の曲げが、それぞれ許容値の何割を使うか(使用割合)を足し、合計 1 以下なら OK。三角の面の内側が、耐えられる範囲です。',
   },
   {
     kicker: '③ 複合座屈',
     head: '軸力は曲げを増幅する。弱軸まわりほど大きく',
-    body: 'ところが、足し算だけでは足りません。横から曲げられて少し曲がった柱を上から押すと、押す力が「曲げる力」に化けて、曲がりがさらに大きくなります。増幅の度合いは、その向きに曲がるときのオイラー座屈応力 σe で決まり、照査式では曲げの使用割合を α = 1 − σc ÷ (0.8σe) で割ります。強軸と弱軸では細長さが違い σe も違うので、α は向きごとに別々(αy、αz)です。弱軸まわりは σe が小さいので α が小さく、増幅が大きい。耐えられる範囲は、三角の面から内側へへこんだ面(紫)になり、弱軸の側ほど大きくへこみます。',
+    body: '曲がった柱を上から押すと、押す力が曲げる力に化け、曲がりが増えます。照査式では、曲げの使用割合を α = 1 − σc/(0.8σe) で割って見込みます。弱軸は σe が小さいので増幅が大きい。耐えられる範囲は内側へへこみ、弱軸の側ほど大きくへこみます。',
   },
   {
     kicker: '③ 複合座屈',
     head: '使用割合の合計 U と、安全率 1/U',
-    body: 'ここまでを1行にしたのが、下の照査式です。第1項は軸力の使用割合で、分母は②の許容値 σcz。第2項は強軸まわりの曲げを αy で割ったもの、第3項は弱軸まわりの曲げを αz で割ったもの。合計 U が 1 以下なら OK で、安全率は 1/U です。黒い点が、いま柱にかかっている軸力と2方向の曲げ。紫の面までの余裕が、安全率にあたります。αy・αz のどちらかが 0 以下(σc が 0.8σe 以上)になると、この式は使えません。',
+    body: 'ここまでを1行にしたのが下の照査式です。合計 U が 1 以下なら OK、安全率は 1/U。黒い点がいまの柱、紫の面までの余裕が安全率にあたります。α が 0 以下になると、この式は使えません。',
   },
   {
     kicker: '計算へ',
     head: '数字を入れて、3つの照査を通してみる',
-    body: 'ここまでの式に実際の数字を入れると、R・σcl・λ・σcg・σcz・α・U と安全率が順に出ます。「式と Q&A」の計算ツールで確かめてください。式がどこから来たのか(導出)と、よくある質問への回答も同じページにあります。',
+    body: '実際の数字を入れると、R・σcl・λ・σcg・σcz・α・U と安全率が順に出ます。「式と Q&A」の計算ツールで確かめてください。導出と、よくある質問への回答も同じページにあります。',
   },
 ];
+
+const SIDE6: Record<number, React.ReactNode> = {
+  1: <Steps title="② 全体座屈" steps={[['全体座屈応力', String.raw`\sigma_{cg}=\sigma_y\times\text{低減率}(\lambda)`, 'ds-c5']]} />,
+  2: <Steps title="① 局部座屈" steps={[['許容値', String.raw`\sigma_{cl}=\sigma_y\times\text{低減率}(R)`, 'ds-p3']]} />,
+  4: <Steps title="② の許容値" steps={[['掛け算', String.raw`\sigma_{cz}=\sigma_{cg}\times\dfrac{\sigma_{cl}}{\sigma_y}`, 'ds-g1']]} />,
+  5: <Steps title="軸力だけの照査" steps={[['安全率', String.raw`\dfrac{\sigma_{cz}}{\sigma_c}\ \ge\ 1.0`, 'ov-global']]} />,
+};
 
 export default function Stage6() {
   const [scene, setScene] = useState(0);
@@ -91,9 +98,10 @@ export default function Stage6() {
             <p className="text-xs font-bold text-ink-dim">
               <Term id="beamcol">複合座屈</Term>の<Term id="check">照査</Term>式(軸力 + 強軸・弱軸の2方向の曲げ)
             </p>
-            <div className="overflow-x-auto py-1 text-base">
-              <Tex block>{String.raw`U=\dfrac{\sigma_c}{\sigma_{cz}}+\dfrac{\sigma_{bcy}}{\sigma_{bgy}\,\alpha_y}+\dfrac{\sigma_{bcz}}{\sigma_{b0}\,\alpha_z}\le 1`}</Tex>
-              <Tex block>{String.raw`\alpha_y=1-\dfrac{\sigma_c}{0.8\,\sigma_{ey}},\qquad \alpha_z=1-\dfrac{\sigma_c}{0.8\,\sigma_{ez}}`}</Tex>
+            <FitTex block className="text-base">{String.raw`U=\dfrac{\sigma_c}{\sigma_{cz}}+\dfrac{\sigma_{bcy}}{\sigma_{bgy}\,\alpha_y}+\dfrac{\sigma_{bcz}}{\sigma_{b0}\,\alpha_z}\le 1`}</FitTex>
+            <FitTex block className="text-base">{String.raw`\alpha_y=1-\dfrac{\sigma_c}{0.8\,\sigma_{ey}},\qquad \alpha_z=1-\dfrac{\sigma_c}{0.8\,\sigma_{ez}}`}</FitTex>
+            <div className="flex justify-end">
+              <DeriveLink id="ds-b2" />
             </div>
             <ul className="space-y-0.5 text-xs leading-relaxed">
               <li>
@@ -138,6 +146,8 @@ export default function Stage6() {
             </p>
           </div>
         ) : (
+          <>
+          {SIDE6[scene]}
           <div className="rounded-xl border border-studio-700 bg-studio-900 px-3 py-2 text-sm">
             <p className="text-xs font-bold text-ink-dim">軸力だけを受ける柱の座屈(押すと説明)</p>
             <ul className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
@@ -161,6 +171,7 @@ export default function Stage6() {
               </p>
             )}
           </div>
+          </>
         )
       }
       lab={

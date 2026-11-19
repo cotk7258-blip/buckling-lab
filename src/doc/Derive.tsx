@@ -45,11 +45,11 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
       <H id="d1">1. オイラー座屈: 曲がった柱の釣合い</H>
       <P>まず図2-1 のボタンを ① から順に押して、2つの「回す力」が逆向きに釣り合う様子を見てください。下の手順1〜3 は、それを式で書いたものです。</P>
       <FigColumnEq />
-      <Step n={1} title="外力が曲げようとする力(モーメント)">
+      <Step id="d1-m" n={1} title="外力が曲げようとする力(モーメント)">
         位置 x で柱が y だけ横にずれると、軸力 P は「腕の長さ y」で柱を回そうとします。
         <Eq tex={String.raw`M=P\times y`} />
       </Step>
-      <Step n={2} title="柱が曲げに抵抗する力">
+      <Step id="d1-r" n={2} title="柱が曲げに抵抗する力">
         映像1 で見た梁の基本式は「抵抗モーメント = EI × 曲がり具合 1/R」です(E は材料の硬さ、I は断面の曲げにくさ、R は曲がりの半径)。ここでは、この 1/R を、ずれ y の式で書き直します。
         <Eq tex={String.raw`M_{\text{抵抗}}=EI\times\dfrac{1}{R}`} />
         <P>
@@ -58,23 +58,28 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
         <Eq tex={String.raw`\dfrac{1}{R}=-y''\quad\Longrightarrow\quad M_{\text{抵抗}}=-EI\,y''`} note="正確には 1/R = −y″ ÷ (1 + y′²) の 3/2 乗。柱のたわみは長さの数百分の1ほどで y′² はごく小さいので、分母を 1 とみなす。" />
         <MovieLink n={1} label="曲げとテコ(なぜ M = EI × 曲率 か)" onStage={onStage} />
       </Step>
-      <Step n={3} title="2つが釣り合う条件">
+      <Step id="d1-eq" n={3} title="2つが釣り合う条件">
         外力は左回り、柱の踏ん張りは右回りに回そうとし、その大きさが等しい(図2-1 の④)。マイナスは、山なりのカーブで y″ が負になるのを、正の量(曲がり具合 1/R)に直すためのものです。移項すると、柱の釣合い式になります。
                   <Eq n="1" strong tex={String.raw`P\,y=-EI\,y''\quad\Longrightarrow\quad EI\,y''+P\,y=0`} note="柱の釣合い式" />
               </Step>
       <Step n={4} title="式を整理して、解の形を見つける">
         両辺を EI で割り、k² = P/EI とおくと y″ + k²y = 0。これを y″ = −k²y と読むと、「曲がり具合は、ずれ y に比例して逆向き」。ずれが大きい所ほど強く元に戻る向きに曲がる形は、波(sin・cos)です。
-        <Eq tex={String.raw`y=A\sin kx+B\cos kx\qquad(\text{確かめ: }(\sin kx)''=-k^2\sin kx)`} />
+        <Eq tex={String.raw`y=A\sin kx+B\cos kx`} note="確かめ: (sin kx)″ = −k² sin kx。2回微分すると −k² 倍の自分に戻る。" />
       </Step>
       <Step n={5} title="両端の条件(両端ピン)を入れる">
         両端は横に動けないので、x = 0 と x = l で y = 0。
         <Eq tex={String.raw`x=0:\;B=0\qquad x=l:\;A\sin kl=0`} />
       </Step>
-      <Step n={6} title="分かれ道">
+      <Step id="d1-pe" n={6} title="分かれ道">
         A = 0 なら、まっすぐのまま(どんな荷重でも成り立つ)。A ≠ 0 で成り立つのは sin kl = 0、つまり kl = nπ(n = 1, 2, 3…)のときだけ。これが「曲がったまま釣り合える」荷重です。曲がりの大きさ A は決まらず、形だけが決まります。いちばん小さい n = 1 をとると、
         <Eq tex={String.raw`kl=\pi\;\to\;k^2=\dfrac{\pi^2}{l^2}\;\to\;\dfrac{P}{EI}=\dfrac{\pi^2}{l^2}`} />
                   <Eq n="2" strong tex={String.raw`P_e=\dfrac{\pi^2EI}{l^2}`} note="オイラーの座屈荷重" />
                 n = 2 は半波が2つの形で、荷重は4倍。π は、座屈の形がサインカーブであることから来ています。
+        <P id="d1-k">
+          <b>曲がり具合 1/R は、ずれ y に比例する</b>: 形 y = A sin(πx/l) を2回微分すると y″ = −(π/l)² × y。だから 1/R = −y″ = (π/l)² × y です。曲がりを大きくしても(A が増えても)形は同じまま膨らむので、どの高さでも曲がり具合はずれと同じ割合で増えます。係数 (π/l)² の π は、形がサインカーブであることから来ています。
+        </P>
+        <Eq tex={String.raw`y=A\sin\dfrac{\pi x}{l}\;\to\;\dfrac{1}{R}=-y''=\left(\dfrac{\pi}{l}\right)^2y`} />
+        <Eq tex={String.raw`\text{戻す力 }EI\times\dfrac{1}{R}=\dfrac{\pi^2EI}{l^2}\times y`} />
         <P>
           <b>言葉で言い直すと</b>: 曲げる側は P × y、戻す側は EI × 1/R = EI(π/l)² × y(サインカーブでは、曲がり具合 1/R がずれ y に比例し、その係数が (π/l)²)。どちらにも y が掛かっているので、y では勝負がつかない。比べるのは y の前の係数で、P は外力なので上げられ、EI(π/l)² は材料・断面・長さで決まって動かない。P が EI(π/l)² = π²EI/l² に追いついた所が座屈荷重です(映像2 の綱引き)。
         </P>
@@ -83,14 +88,13 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
       <FigModes />
 
       <H id="d2">2. 応力の形と、端部条件</H>
-      <Step n={1} title="荷重を応力に直す">
+      <Step id="d2-s" n={1} title="荷重を応力に直す">
         応力 = 荷重 ÷ 断面積。まず (2) を A で割ると σe = π²EI/(A·l²)。I と A が分かれば、この形のまま計算できます。次に、断面二次半径 r = √(I/A)(断面の踏ん張りやすさ I を面積あたりにして平方根をとった長さ)を使うと I = A·r² なので、A が消えて (3) になります。2つは同じ式で、同じ値になります。
         <Eq tex={String.raw`\sigma_e=\dfrac{P_e}{A}=\dfrac{\pi^2EI}{A\,l^2}=\dfrac{\pi^2E\,(A\,r^2)}{A\,l^2}`} note="例: H-300×300×10×16 の弱軸は I = 7,202 cm⁴、A = 122.8 cm² なので r = √(7,202 ÷ 122.8) ≒ 7.66 cm。鋼材表には r(表によっては i)が載っている。" />
-        <Eq tex={String.raw`\sigma_e=\dfrac{P_e}{A}=\dfrac{\pi^2E\,(A r^2)}{A\,l^2}`} />
                   <Eq n="3" strong tex={String.raw`\sigma_e=\dfrac{\pi^2E}{(l/r)^2}`} note="オイラー座屈応力" />
                 l/r が細長比。細長比が2倍になると σe は 1/4。E と形(l/r)だけで決まり、σy は入りません。設計基準は柱の細長さを l/r で整理する(λ の式も l/r で書く)ので、(3) の形がよく使われます。なお、断面二次半径の r(小文字)は、曲がりの半径 R や、板の幅厚比パラメータ R とは別の記号です。
       </Step>
-      <Step n={2} title="端部の拘束は「有効座屈長」で表す">
+      <Step id="d2-le" n={2} title="端部の拘束は「有効座屈長」で表す">
         l を le に置き換えるだけです。拘束が強いほど曲がる区間が短くなり、σe が上がります。板では、この「支え方の効果」が係数 k に入ります。
         <Table
           head={['端部の条件', 'le', 'σe(両端ピン比)']}

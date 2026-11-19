@@ -2,11 +2,26 @@ import { useEffect, useRef } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import type { ShowBase } from '../three/kit.ts';
 import { Rich, Term } from './glossary.tsx';
-import { Tex } from './Tex.tsx';
+import { FitTex } from './Tex.tsx';
 
 /** 「式と Q&A」のページを、指定のタブで開く(App が受け取る) */
-export function openFormulas(tab: string) {
-  window.dispatchEvent(new CustomEvent('open-formulas', { detail: tab }));
+export function openFormulas(tab: string, id?: string) {
+  window.dispatchEvent(new CustomEvent('open-formulas', { detail: { tab, id } }));
+}
+
+/** 「式と Q&A」の節の id から、その節のあるタブを開いて節へ飛ぶ */
+export function openDerivation(id: string) {
+  const tab = id.startsWith('ds-') ? '理論から設計式へ' : id.startsWith('ov-') ? '3つの照査' : id.startsWith('q') ? '質問と回答' : '式の導出';
+  openFormulas(tab, id);
+}
+
+/** 式の横に置く「導き方」へのリンク */
+export function DeriveLink({ id, label = '導き方' }: { id: string; label?: string }) {
+  return (
+    <button onClick={() => openDerivation(id)} className="shrink-0 rounded-md border border-comp/40 px-1.5 py-0.5 text-[11px] font-bold leading-none text-comp">
+      {label} ›
+    </button>
+  );
 }
 
 export type Clip = { p: number; done: boolean; loop: boolean } | null;
@@ -296,17 +311,17 @@ export function Card(props: { title?: string; children: ReactNode }) {
 }
 
 /** 映像の横に出す、式の積み上げ(導出の段) */
-export function Steps(props: { title: string; steps: [string, string][]; note?: string }) {
+/** 式の積み上げの札。各行の3つ目は「式と Q&A」の節の id(式の横に「導き方」のリンクを出す) */
+export function Steps(props: { title: string; steps: ([string, string] | [string, string, string])[]; note?: string }) {
   return (
     <div className="rounded-xl border border-studio-700 bg-studio-900 px-3 py-2">
       <p className="text-xs font-bold text-ink-dim">{props.title}</p>
       <ol className="mt-1 space-y-1">
-        {props.steps.map(([lab, tex], i) => (
+        {props.steps.map(([lab, tex, id], i) => (
           <li key={i} className="flex items-center gap-2">
             {lab && <span className="w-20 shrink-0 text-[11px] font-bold leading-tight text-comp">{lab}</span>}
-            <span className="min-w-0 flex-1 overflow-x-auto text-[15px]">
-              <Tex>{tex}</Tex>
-            </span>
+            <FitTex className="flex-1 text-[15px]">{tex}</FitTex>
+            {id && <DeriveLink id={id} />}
           </li>
         ))}
       </ol>

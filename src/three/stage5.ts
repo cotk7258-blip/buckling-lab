@@ -555,8 +555,8 @@ export class Stage5Show extends ShowBase {
         : t < 10
           ? 'さらに、溶接で縮んだ分、板はわずかに反っている(初期たわみ)'
           : t < 15
-            ? '押すと、σel に届く前から少しずつふくらむ(反りが 1/(1−σ/σel) 倍に)'
-            : '中央は残留圧縮が上乗せされ、早く降伏に近づく。だから R = 1 付近で理想より下がる';
+            ? '押すと、σel に届く前から反りがふくらむ'
+            : '中央は早く降伏に近づく。だから理想より下がる';
     this.look(0, 0.75, 1.6, 1.35, 30, 14);
   }
 
@@ -577,10 +577,10 @@ export class Stage5Show extends ShowBase {
     this.barEl.visible = true;
     this.caption =
       t < 7
-        ? `押していく(平均 ${Math.round(avg * 100)}%)。波打つまでは、幅のどこでも同じ応力で受ける`
+        ? `押していく(平均 ${Math.round(avg * 100)}%)。波打つまでは、どこも同じ応力`
         : t < 15
-          ? `σel を超えて波打った(平均 ${Math.round(avg * 100)}%)。ふくらんだ中央は逃げて、増えた力は縁が受ける`
-          : `縁が σy に届いた = この板の限界。平均すると σy の ${Math.round(ult * 100)}% しか受けられない`;
+          ? `波打った(平均 ${Math.round(avg * 100)}%)。増えた力は縁が受ける`
+          : `縁が σy に届いて限界。平均は σy の ${Math.round(ult * 100)}%`;
     this.look(0, 1.75, 1.6, 2.25, 18, 8);
   }
 
@@ -619,7 +619,7 @@ export class Stage5Show extends ShowBase {
       const A = 0.2 * (ramp(t, 8.9, 9.6) - ramp(t, 14.5, 16));
       this.one.update({ A, load: p, level: 0.5 * p, pattern: A > 0.02 ? 0.4 : 0, edge: 0.6, railGlow: ramp(t, 0.5, 2), tags: true });
       this.caption =
-        t < 2 ? '箱の壁を1枚取り出す。両側の縁は、隣の板に支えられている' : t < 8.9 ? `上から押し、下で受ける。押す力 ${Math.round(p * 100)}%。板は平らなまま` : 'ある応力で、突然波打った。その応力が σel(弾性局部座屈応力)';
+        t < 2 ? '箱の壁を1枚取り出す。両側の縁は、隣の板に支えられている' : t < 8.9 ? `押す力 ${Math.round(p * 100)}%。板は平らなまま` : '突然波打った。この応力が σel';
       this.look(0, 0.75, 1.6, 1.35, 32, 14);
     } else if (s === 2) {
       this.show(this.gOne);
@@ -629,24 +629,24 @@ export class Stage5Show extends ShowBase {
       let A = 0;
       if (t < 3) {
         A = 0.08 * ramp(t, 1.5, 3);
-        this.caption = '板を σel の 50% の応力で押している。もし、わずかに波打ったら?';
+        this.caption = '押している板が、もし少し波打ったら?';
       } else if (t < 9) {
         A = 0.08;
-        this.caption = '押し出す力(オレンジ)= 押す応力 × 波の高さ。戻す力(青)= 板の曲げにくさと縁の支え × 波の高さ';
+        this.caption = '押し出す力(オレンジ)と、戻す力(青)';
       } else if (t < 15) {
         A = 0.08 + 0.12 * ramp(t, 9.5, 12.5);
-        this.caption = '波を大きくしても、2つは同じ割合で大きくなる。波の高さでは勝負がつかない';
+        this.caption = '波を大きくしても、2つは同じ割合で増える';
       } else if (t < 27) {
         A = 0.2 - 0.08 * ramp(t, 15, 16);
         p = 0.5 + 0.5 * ramp(t, 16, 24);
         this.caption =
           t < 24
-            ? `比べるのは波の高さの前の係数。押す応力は外力で上げられる(${Math.round(p * 100)}%)。戻す側は板の厚み・幅・支え方で決まり動かない`
-            : '押す応力が、板で決まる値に追いついた。それが σel(弾性局部座屈応力)';
+            ? `押す応力を上げる(${Math.round(p * 100)}%)。まだ戻す方が強い`
+            : '追いついた。これが σel';
       } else {
         p = 1.1;
         A = Math.min(0.26, 0.12 * Math.exp((t - 27) * 0.12)) * (1 - ramp(t, 34.5, 36));
-        this.caption = '超えた瞬間、押し出す方が勝つ。波が大きくなり、止まらない(わずかに波打った範囲の話)';
+        this.caption = '超えた瞬間、波が大きくなって止まらない';
       }
       const fb = 2.2 * A;
       this.one.update({ A, load: p, fOut: fb * p, fBack: fb, railGlow: 1, tags: true });
@@ -668,9 +668,9 @@ export class Stage5Show extends ShowBase {
           : p < 1
             ? `同じ応力で押していく(σel の ${p.toFixed(1)} 倍)`
             : p < 4
-              ? `幅の広い板が波打った。狭い板はまだ平ら(${p.toFixed(1)} 倍)`
+              ? `広い板が波打った。狭い板はまだ平ら(${p.toFixed(1)} 倍)`
               : t < 18
-                ? '幅が半分なら、4倍の応力まで耐える。柱の「長さが半分で4倍」と同じ'
+                ? '幅が半分なら、4倍の応力まで耐える'
                 : '厚みを2倍にしても4倍。σel は (t/b)² に比例する';
       this.look(0.05, 0.8, 2.4, 1.6, 30, 12);
     } else if (s === 4) {
@@ -691,7 +691,7 @@ export class Stage5Show extends ShowBase {
       } else if (t < 15) {
         ghost = 1 - ramp(t, 10, 11);
         strip = 0.2 * (1 - ramp(t, 10, 11));
-        this.caption = '隣の帯とつながっていて、横向きに自由に変形できない → × 1/(1−ν²)(約 1.1 倍)';
+        this.caption = '隣とつながっているので少し硬い → × 1/(1−ν²)';
       } else {
         glow = ramp(t, 15, 16);
         p = Math.min(1, ramp(t, 16, 19));
@@ -715,9 +715,9 @@ export class Stage5Show extends ShowBase {
         t < 2
           ? '右の板は、片側の縁が自由(フランジの突き出した部分など)'
           : p < kr
-            ? `同じ応力で押していく(両縁支持の σel の ${p.toFixed(2)} 倍)`
+            ? `同じ応力で押していく(${p.toFixed(2)} 倍)`
             : p < 1
-              ? `自由な縁を持つ板が先に波打った(${p.toFixed(2)} 倍)。k = 0.43 は 4 の約 1/9`
+              ? `自由な縁のある板が先に波打った(${p.toFixed(2)} 倍)`
               : 'k は支え方の効果。柱の「有効座屈長」にあたる';
       this.look(0.05, 0.8, 2.4, 1.6, 28, 12);
     } else if (s >= 6 && s <= 9) {
@@ -770,7 +770,7 @@ export class Stage5Show extends ShowBase {
             ? '同じ幅で、厚みだけが違う板を10枚(左ほど厚い)'
             : t < 10
               ? '横軸は R = √(σy/σel)。R = 1 は、σel = σy になる板'
-              : '幅厚比で書くと R = b/t × √{12(1−ν²)σy/(kπ²E)}。両縁支持・σy = 355 なら R = 1 は b/t ≒ 45';
+              : '両縁支持・σy = 355 なら、R = 1 は b/t ≒ 45';
       } else if (s === 7) {
         for (let i = 0; i < N; i++) {
           const t0 = 1 + i * 0.75;
@@ -782,10 +782,10 @@ export class Stage5Show extends ShowBase {
         mark = t > 9;
         this.caption =
           t < 4.5
-            ? '厚い板(R < 1)は、波打つ前に全体が降伏する。天井 = 1.0'
+            ? '厚い板は、波打つ前に降伏する。天井 = 1.0'
             : t < 9
               ? '薄い板は σel で波打つ。σel/σy = 1/R²'
-              : '理想の板の強さ = min(1, 1/R²)。柱の min(1, 1/λ²) と同じ形';
+              : '理想の板 = min(1, 1/R²)。柱と同じ形';
       } else {
         for (let i = 0; i < N; i++) doneIdeal(i, 1);
         fy = 1;
@@ -804,7 +804,7 @@ export class Stage5Show extends ShowBase {
               ? '現実の板(初期のゆがみ・残留応力あり)で押す'
               : t < 13
                 ? 'R = 1 の付近は、理想の線より下がる(柱と同じ)'
-                : '薄い板は、波打ったあとも縁で耐える。理想の線より上(柱との違い)';
+                : '薄い板は、波打ったあとも縁で耐える';
         } else {
           for (let i = 0; i < N; i++) doneReal(i, 1);
           fr = 1;

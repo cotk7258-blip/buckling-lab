@@ -55,18 +55,23 @@ export default function App() {
     const y = same && viewRef.current === 'doc' ? scroll.current.movie : 0;
     requestAnimationFrame(() => window.scrollTo({ top: y }));
   };
-  const openDoc = (tabName?: string) => {
+  const openDoc = (tabName?: string, id?: string) => {
     if (viewRef.current === 'movie') scroll.current.movie = window.scrollY;
     if (tabName) setTab((t) => ({ name: tabName, n: t.n + 1 }));
     setView('doc');
     const y = tabName ? 0 : scroll.current.doc;
     requestAnimationFrame(() => window.scrollTo({ top: y }));
+    // 節を指定されたら、描き終わってからその節へ
+    if (id) setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }), 120);
   };
   const back = () => openStage(stageRef.current);
 
   // 映像のページから「式と Q&A」の指定のタブを開く
   useEffect(() => {
-    const on = (e: Event) => openDoc((e as CustomEvent<string>).detail);
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ tab: string; id?: string }>).detail;
+      openDoc(d.tab, d.id);
+    };
     window.addEventListener('open-formulas', on);
     return () => window.removeEventListener('open-formulas', on);
     // eslint-disable-next-line react-hooks/exhaustive-deps

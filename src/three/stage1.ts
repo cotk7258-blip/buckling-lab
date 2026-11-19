@@ -611,7 +611,7 @@ export class Stage1Show extends ShowBase {
         : t < 19.5
           ? '両端を、同じ力で押し下げる'
           : t < 24
-            ? `長方形はしなる。H形の曲がりは約1/${Math.round(H_GAIN)}(曲がりは誇張、比は正しい)`
+            ? `H形の曲がりは約1/${Math.round(H_GAIN)}(曲がりは誇張)`
             : '鉄の量は同じ。違うのは、鉄の置き場所だけ';
     this.look(-0.2, 1.1, 4.1, 2.4, 34, 18);
   }
