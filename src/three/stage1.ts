@@ -253,6 +253,10 @@ export class Stage1Show extends ShowBase {
   private blockTags: THREE.Sprite[] = [];
   private radius: THREE.Line;
   private gBank = new THREE.Group();
+  /** 太い棒から一切れを取り出して、バネの束に見立てる導入(場面3 の冒頭) */
+  private gSlice = new THREE.Group();
+  private stripes: THREE.Mesh[] = [];
+  private sliceBox: THREE.LineSegments;
   private bank7: Bank;
   private bars: THREE.Mesh[] = [];
   private barTags: THREE.Sprite[] = [];
@@ -285,7 +289,21 @@ export class Stage1Show extends ShowBase {
     super(canvas);
     this.addFloor(-0.05);
     const geo = springGeometry();
-    this.scene.add(this.gRuler, this.gBlock, this.gBank, this.gPair, this.gMorph, this.gBend);
+    this.scene.add(this.gRuler, this.gBlock, this.gBank, this.gPair, this.gMorph, this.gBend, this.gSlice);
+    // 一切れ: 鋼の細い筋7本(上ほど伸び = オレンジ、下ほど縮み = 青)と、切り取る所を示す紫の枠
+    for (let i = 0; i < 7; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshStandardMaterial({ metalness: 0.4, roughness: 0.45, transparent: true }),
+      );
+      this.gSlice.add(m);
+      this.stripes.push(m);
+    }
+    this.sliceBox = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(0.26, 1.14, 0.84)),
+      new THREE.LineBasicMaterial({ color: '#6d28d9', transparent: true }),
+    );
+    this.gSlice.add(this.sliceBox);
 
     // 定規
     // 幅 30 mm・厚み 2 mm の定規と同じ比率(15:1)
@@ -406,7 +424,8 @@ export class Stage1Show extends ShowBase {
   }
 
   private showOnly(...gs: THREE.Group[]) {
-    for (const g of [this.gRuler, this.gBlock, this.gBank, this.gPair, this.gMorph, this.gBend]) g.visible = gs.includes(g);
+    for (const g of [this.gRuler, this.gBlock, this.gBank, this.gPair, this.gMorph, this.gBend, this.gSlice]) g.visible = gs.includes(g);
+    if (!gs.includes(this.gSlice)) this.fadeBlock(1);
   }
 
   private tickRuler(c: number) {
@@ -473,6 +492,85 @@ export class Stage1Show extends ShowBase {
               ? '真ん中の線だけは、長さが変わらない'
               : '伸び縮みは、真ん中から離れるほど大きい';
     return k;
+  }
+
+  /** 太い棒の透明度(導入で一切れだけを残すとき) */
+  private fadeBlock(a: number) {
+    this.block.group.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (!m) return;
+      const tr = a < 0.999;
+      if (m.transparent !== tr) {
+        m.transparent = tr;
+        m.needsUpdate = true; // 透明の切り替えは描き方の作り直しが要る
+      }
+      m.opacity = a;
+      m.depthWrite = a > 0.5;
+    });
+  }
+
+  /**
+   * 場面3 の導入(8 秒): 映像の2番目と同じ太い棒を曲げる → 真ん中の一切れを紫の枠で囲んで寄る →
+   * 一切れを鋼の細い筋7本として取り出す → 筋1本ずつがバネの束の位置へ動いて、バネに置きかわる
+   */
+  private tickSliceIntro(t: number) {
+    this.showOnly(this.gBlock, this.gSlice);
+    this.block.setSize(1.0, 0.7);
+    const kMax = 0.25;
+    const k = kMax * ramp(t, 0.3, 2);
+    const hh = this.block.h / 2;
+    this.block.update(k, (y) => (-k * y) / (0.36 * hh) * 0.8, Math.min(1, (k / kMax) * 3));
+    for (const tg of this.blockTags) tg.visible = false;
+    this.radius.visible = false;
+    // 棒を薄くして、一切れだけを残す
+    this.fadeBlock(1 - 0.92 * ramp(t, 4, 5));
+    const y0 = this.block.group.position.y;
+    // 枠: 2.3 秒から出て、取り出し始めたら消える
+    (this.sliceBox.material as THREE.LineBasicMaterial).opacity = ramp(t, 2.3, 2.8) * (1 - ramp(t, 5.2, 5.8));
+    this.sliceBox.position.set(0, y0, 0);
+    this.sliceBox.visible = t > 2.2 && t < 5.8;
+    // 筋: 棒の中の位置 → バネの束の位置(同じ高さの順)。6.8〜8 秒で消えてバネが出る
+    const b = this.bank7;
+    const bx = b.group.position.x;
+    const by = b.group.position.y;
+    const p = ramp(t, 5, 6.8);
+    const ease = p * p * (3 - 2 * p);
+    const show = t > 4 && t < 8;
+    const col = new Float32Array(3);
+    this.stripes.forEach((m, i) => {
+      const yb = (3 - i) / 7; // 上から順に +3/7 … −3/7(棒の高さ 1.0 の中の位置)
+      const from = { x: 0, y: y0 + yb * this.block.h, w: 0.24, h: (this.block.h / 7) * 0.92, d: 0.7 };
+      const to = { x: bx + b.L0 / 2, y: by + b.rowY(i), w: b.L0, h: b.gap * 0.42, d: 0.42 };
+      const L = (a: number, z: number) => a + (z - a) * ease;
+      m.visible = show;
+      m.position.set(L(from.x, to.x), L(from.y, to.y), 0);
+      m.scale.set(L(from.w, to.w), L(from.h, to.h), L(from.d, to.d));
+      // 伸び縮みの色(上ほど伸び = オレンジ)
+      writeStressColor(col, 0, -yb * 1.4 * Math.min(1, k / kMax), 1, NEUTRAL);
+      const mat = m.material as THREE.MeshStandardMaterial;
+      mat.color.setRGB(col[0], col[1], col[2]);
+      mat.opacity = 1 - ramp(t, 6.8, 7.8);
+    });
+    // バネの束が、筋と入れかわりに出てくる
+    if (t > 6.8) {
+      this.gBank.visible = true;
+      b.update(0, 0);
+      for (const g of this.bars) g.visible = false;
+      for (const g of this.barTags) g.visible = false;
+      this.arm.visible = false;
+      this.armTag.visible = false;
+    }
+    this.caption =
+      t < 2.3
+        ? 'さっきの太い棒。曲げると、上は伸び、下は縮む'
+        : t < 4
+          ? '真ん中の、薄い一切れに注目'
+          : t < 5.2
+            ? '一切れを取り出す。中の鋼は、上ほど伸び、下ほど縮んでいる'
+            : '鋼の細い1本1本を、バネに見立てる';
+    if (t < 2.3) this.look(0, 1.35, 3.2, 2.4, 10, 8);
+    else if (t < 5) this.look(0, 1.5, 1.7, 1.35, 22, 10);
+    else this.look(-0.9, 1.6, 2.6, 2.4, 10, 8);
   }
 
   private tickBank(c: number, lever: boolean) {
@@ -679,9 +777,17 @@ export class Stage1Show extends ShowBase {
       this.block.setSize(1.0, 0.7);
       this.tickBlock(c);
       this.look(0, 1.35, 3.2, 2.4, 10, 8);
-    } else if (s === 2 || s === 3) {
+    } else if (s === 2) {
+      // 導入(太い棒から一切れを取り出してバネに見立てる 8 秒)→ バネの束の説明(15 秒)
+      const t = this.cyc(23, c);
+      if (t < 8) this.tickSliceIntro(t);
+      else {
+        this.showOnly(this.gBank);
+        this.tickBank(t - 8, false);
+      }
+    } else if (s === 3) {
       this.showOnly(this.gBank);
-      this.tickBank(c, s === 3);
+      this.tickBank(c, true);
     } else if (s === 4) {
       this.showOnly(this.gPair);
       this.tickPair(c);
