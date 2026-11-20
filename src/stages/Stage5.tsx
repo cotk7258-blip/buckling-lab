@@ -23,7 +23,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '綱引き',
     head: '押し出す力と、戻す力の綱引き',
-    body: '板がもし少し波打ったら、押す応力が波を押し出し(オレンジ)、板の曲げにくさと縁の支えが戻そうとします(青)。波を大きくしても2つは同じ割合で増えるので、波の大きさでは勝負が決まりません。決めるのは押す応力 σ。板で決まる σel に追いついた所で波打ちます。',
+    body: '板が少し波打ったとして、真ん中で切ってみます。断面は曲がった柱と同じ形で、ふくらみの高さ w が柱のずれ y にあたります。押す力 σt が w の腕で波を押し出し(オレンジ)、板の曲げにくさ D が戻そうとします(青)。どちらも w に比例するので、比べるのは w の前。σ が板で決まる σel に追いついた所で波打ちます。',
   },
   {
     kicker: '幅と厚み',
@@ -53,7 +53,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '現実の板 ①',
     head: '溶接のゆがみと残留応力で、早めに崩れる',
-    body: '板は溶接で組み立てるので、残留応力とわずかな反りが残ります。反りは押すと大きくなり、中央は早く降伏に近づく。だから R = 1 の付近で、理想の線より下がります。柱と同じしくみです。',
+    body: '板は溶接で組み立てるので、中央側には圧縮の残留応力と、わずかな反りが残ります。押すと、もともと押されている中央側が先に限界に近づいて反りがふくらみ、ふくらんだ中央は力を受けにくくなります。増えた力は縁側へ寄り、縁側が降伏した所が限界。だから R = 1 の付近で、理想の線より下がります。',
   },
   {
     kicker: '現実の板 ②',
@@ -81,16 +81,26 @@ const SIDE: Record<number, React.ReactNode> = {
   1: <Steps title="弾性局部座屈応力" steps={[['', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, 'd3']]} note="柱の σe にあたる値。" />,
   2: (
     <Steps
-      title="綱引き(どちらも波の高さ w に比例)"
+      title="綱引き(柱の P × y と EI × 1/R と同じ形)"
       steps={[
-        ['押し出す力', String.raw`\propto\ \sigma\,t\times w`],
-        ['戻す力', String.raw`\propto\ D\times\text{曲がり}\ \propto\ D\,w`],
-        ['くらべる', String.raw`\sigma\quad\text{と}\quad\sigma_{el}`, 'd3'],
+        ['押し出す力', String.raw`\sigma t\times w`],
+        ['戻す力', String.raw`D\times\dfrac{1}{R}=\dfrac{k\pi^2D}{b^2}\times w`],
+        ['くらべる', String.raw`\sigma t\quad\text{と}\quad\dfrac{k\pi^2D}{b^2}`],
+        ['t で割る', String.raw`\sigma_{el}=\dfrac{k\pi^2D}{t\,b^2}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, 'd3'],
       ]}
-      note="どちらにも w が掛かるので、波の高さでは勝負がつかない。σ が板で決まる σel に追いつけば波打つ。D は板の曲げにくさ。"
+      note="w = 波の高さ(柱の y)、σt = 幅1あたりの押す力(柱の P)、D = Et³/{12(1−ν²)} = 板の曲げにくさ(柱の EI にあたる)。わずかな波の範囲の話。D と k の出どころは「導き方」で。"
     />
   ),
-  3: <Steps title="幅と厚みの効き方" steps={[['', String.raw`\sigma_{el}\ \propto\ \left(\dfrac{t}{b}\right)^2`], ['柱では', String.raw`\sigma_e\ \propto\ \left(\dfrac{1}{l/r}\right)^2`]]} />,
+  3: (
+    <Steps
+      title="幅と厚みの効き方"
+      steps={[
+        ['板', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\times\left(\dfrac{t}{b}\right)^2`, 'd3'],
+        ['柱では', String.raw`\sigma_e=\pi^2E\times\left(\dfrac{1}{l/r}\right)^2`, 'd2'],
+      ]}
+      note="(t/b)² の前は、材料と支え方で決まる数。だから σel は (t/b)² に比例する(t/b が2倍なら4倍)。"
+    />
+  ),
   4: (
     <Steps
       title="σel の導出: 帯を柱とみなす"
@@ -169,33 +179,58 @@ const BOX = 'pointer-events-none absolute left-2 top-16 flex w-[44%] max-w-[290p
 const EL = (b = 'b', k = 'k') => String.raw`\sigma_{el}=\dfrac{${k}\,\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{${b}}\right)^2`;
 
 /**
- * 綱引きの場面で映像の左に重ねる式のカード(映像2 の綱引きと同じ筋)。
- *  0 もし波打ったら(波の高さ w)→ 1 押し出す力 ∝ σ × w、戻す力 ∝ σel × w → 2 w は両方に同じ → 3 σ と σel を比べる → 4 超えた
+ * 綱引きの場面で映像の左に重ねる式のカード(映像2 の綱引きと同じ筋。柱の P → σt、y → w、EI → D)。
+ *  0 w = 波の高さ → 1 押し出す力 = σt × w → 2 戻す力 = D × 1/R → 3 = kπ²D/b² × w → 4 w は両方に同じ
+ *  → 5 σt と kπ²D/b² を比べる(t で割ると σ と σel)→ 6 超えた
  */
 function PlateTugOverlay({ phase, pRef }: { phase: number; pRef: RefObject<HTMLSpanElement | null> }) {
-  if (phase < 1) return null;
-  const cut = phase >= 2;
-  const w = cut ? String.raw`\;\textcolor{#e11d48}{\cancel{\textcolor{#1b2740}{\times\, w}}}` : String.raw`\times w`;
+  if (phase < 0) return null;
+  const cut = phase >= 4;
+  const w = cut ? String.raw`\;\textcolor{#e11d48}{\cancel{\textcolor{#1b2740}{\times\, \textcolor{#6d28d9}{w}}}}` : String.raw`\times \textcolor{#6d28d9}{w}`;
+  const hide = phase >= 5 ? 'hidden sm:block' : '';
   return (
     <div className={BOX}>
-      <div className={`${CARD} border-orange-300 ${phase >= 3 ? 'hidden sm:block' : ''}`}>
-        <p className="text-[11px] font-bold" style={{ color: '#ea580c' }}>押し出す力(押す応力による)</p>
-        <FitTex className="text-[17px] sm:text-xl">{String.raw`\propto\ \sigma ${w}`}</FitTex>
-      </div>
-      <div className={`${CARD} border-sky-300 ${phase >= 3 ? 'hidden sm:block' : ''}`}>
-        <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>戻す力(板の曲げにくさ+縁の支え)</p>
-        <FitTex className="text-[17px] sm:text-xl">{String.raw`\propto\ \sigma_{el} ${w}`}</FitTex>
-      </div>
-      {phase === 2 && <p className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-bold text-rose-600">w は両方に同じだけ。大小には効かない</p>}
-      {phase >= 3 && (
+      {phase === 0 && (
+        <div className={`${CARD} border-violet-300`}>
+          <p className="text-[11px] font-bold" style={{ color: '#6d28d9' }}>w = 波の高さ</p>
+          <p className="text-[10px] leading-tight text-ink-dim">真ん中で切った断面のふくらみ。柱のずれ y にあたる</p>
+        </div>
+      )}
+      {phase >= 1 && (
+        <div className={`${CARD} border-orange-300 ${hide}`}>
+          <p className="text-[11px] font-bold" style={{ color: '#ea580c' }}>押し出す力</p>
+          <FitTex className="text-[17px] sm:text-xl">{String.raw`\sigma t ${w}`}</FitTex>
+          {phase <= 3 && <p className="text-[10px] leading-tight text-ink-dim">σt = 幅1あたりの押す力(柱の P)。w = 波の高さ(柱の y)</p>}
+        </div>
+      )}
+      {phase >= 2 && (
+        <div className={`${CARD} border-sky-300 ${hide}`}>
+          <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>戻す力</p>
+          {phase === 2 ? (
+            <>
+              <FitTex className="text-[17px] sm:text-xl">{String.raw`D \times \dfrac{1}{R}`}</FitTex>
+              <p className="text-[10px] leading-tight text-ink-dim">D = 板の曲げにくさ(柱の EI にあたる)。1/R = 曲がり具合</p>
+            </>
+          ) : (
+            <>
+              <FitTex className="text-[17px] sm:text-xl">{String.raw`\dfrac{k\pi^2 D}{b^2} ${w}`}</FitTex>
+              {phase === 3 && <p className="text-[10px] leading-tight text-ink-dim">曲がり具合は w に比例(同じ形のまま膨らむ)。k = 縁の支えの効果</p>}
+            </>
+          )}
+        </div>
+      )}
+      {phase === 4 && <p className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-bold text-rose-600">w は両方に同じだけ。大小には効かない</p>}
+      {phase >= 5 && (
         <div className={`${CARD} border-studio-600`}>
-          <p className="text-[11px] font-bold text-ink">くらべるのは σ と σel</p>
-          <FitTex className="text-[17px] sm:text-xl">{String.raw`\sigma\quad\text{と}\quad\sigma_{el}`}</FitTex>
-          <p className="text-[11px] font-bold leading-tight">
+          <p className="text-[11px] font-bold text-ink">くらべるのは w の前</p>
+          <FitTex className="text-[16px] sm:text-lg">{String.raw`\sigma t\quad\text{と}\quad\dfrac{k\pi^2D}{b^2}`}</FitTex>
+          <p className="text-[10px] leading-tight text-ink-dim">両方を t で割ると、σ と σel</p>
+          <FitTex className="text-[15px] sm:text-lg">{String.raw`\sigma_{el}=\dfrac{k\pi^2D}{t\,b^2}`}</FitTex>
+          <p className="mt-0.5 text-[11px] font-bold leading-tight">
             押す応力 σ = <span ref={pRef}>50%</span>(σel を 100%)
           </p>
-          <p className="text-[11px] font-bold leading-tight" style={{ color: phase >= 4 ? '#e11d48' : '#0284c7' }}>
-            {phase >= 4 ? 'σ が σel を超えた → 波打つ(局部座屈)' : 'σ < σel の間は、波打っても戻る'}
+          <p className="text-[11px] font-bold leading-tight" style={{ color: phase >= 6 ? '#e11d48' : '#0284c7' }}>
+            {phase >= 6 ? 'σ が σel を超えた → 波打つ(局部座屈)' : 'σ < σel の間は、波打っても戻る'}
           </p>
         </div>
       )}
@@ -324,7 +359,7 @@ export default function Stage5() {
       overlay={
         scene === 2 ? <PlateTugOverlay phase={phase} pRef={pRef} /> : scene === 3 ? <WidthOverlay phase={phase} /> : scene === 5 ? <KOverlay phase={phase} /> : undefined
       }
-      hint="板の厚みと波の高さは見やすく誇張しています・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
+      hint="板の厚みと波の高さは見やすく誇張しています(10枚並べた板の厚みは、どれも本当の 3 倍。厚みの比は正しい)・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
         <>
           {SIDE[scene]}
@@ -339,7 +374,8 @@ export default function Stage5() {
           )}
           {scene === 8 && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
-              <Chip color="#0284c7" text="圧縮(中央側の残留応力+押す力)" />
+              <Chip color="#0284c7" text="圧縮(残留応力+押す力)" />
+              <Chip color="#e11d48" text="降伏(縁側から)" />
               <Chip color="#ea580c" text="引張(溶接した縁の近く)" />
             </div>
           )}

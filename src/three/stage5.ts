@@ -75,7 +75,12 @@ export class Plate {
   private mesh: THREE.Mesh;
   private base: Float32Array;
   private grid: SurfGrid;
+  /** 裏面の格子(裏から見ても曲がりが分かるように) */
+  private gridB: SurfGrid;
   private mat: THREE.MeshStandardMaterial;
+  /** 板の縁の面(厚みが見えるよう濃い色) */
+  private edgeMat: THREE.MeshStandardMaterial;
+  private others: THREE.Material[] = [];
   private strip: THREE.Mesh;
   private stripBase: Float32Array;
   private railMat: THREE.MeshStandardMaterial;
@@ -94,12 +99,17 @@ export class Plate {
     const geo = new THREE.BoxGeometry(b, a, t, nx, ny, 1);
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3));
     this.base = new Float32Array(geo.attributes.position.array as Float32Array);
-    this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.3, roughness: 0.5, transparent: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-    this.mesh = new THREE.Mesh(geo, this.mat);
+    this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.3, roughness: 0.5, transparent: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, side: THREE.DoubleSide });
+    this.edgeMat = new THREE.MeshStandardMaterial({ color: '#2b3a55', metalness: 0.2, roughness: 0.6, transparent: true, side: THREE.DoubleSide });
+    // BoxGeometry の面の順: +x, −x, +y, −y(= 板の縁 4つ)、+z, −z(= 表と裏)
+    this.mesh = new THREE.Mesh(geo, [this.edgeMat, this.edgeMat, this.edgeMat, this.edgeMat, this.mat, this.mat]);
     this.mesh.position.y = a / 2;
     this.mesh.frustumCulled = false;
-    this.grid = new SurfGrid(b, a, Math.max(4, Math.round(b / 0.12)), Math.max(4, Math.round(a / 0.12)));
-    this.mesh.add(this.grid.lines);
+    const gu = Math.max(4, Math.round(b / 0.12));
+    const gv = Math.max(4, Math.round(a / 0.12));
+    this.grid = new SurfGrid(b, a, gu, gv);
+    this.gridB = new SurfGrid(b, a, gu, gv);
+    this.mesh.add(this.grid.lines, this.gridB.lines);
     this.group.add(this.mesh);
 
     const sg = new THREE.BoxGeometry(b / 8, a, t * 1.4, 1, 32, 1);
@@ -111,7 +121,8 @@ export class Plate {
     this.group.add(this.strip);
 
     const dark = DARK();
-    const d = Math.max(0.16, t * 3);
+    // 支え(縁の棒・上下の板)は、板の厚みに沿わせる(厚い板ほど厚く見える)
+    const d = t + 0.04;
     this.railMat = new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.4, roughness: 0.5, emissive: EDGE, emissiveIntensity: 0 });
     for (const side of o.free ? [-1] : [-1, 1]) {
       const r = new THREE.Mesh(new THREE.BoxGeometry(0.05, a, d), this.railMat);
@@ -123,6 +134,7 @@ export class Plate {
     this.top = new THREE.Mesh(new THREE.BoxGeometry(b + 0.12, 0.06, d), dark);
     this.top.position.y = a + 0.03;
     this.group.add(bot, this.top);
+    this.others.push(dark, this.railMat);
 
     const n = o.loads ?? 3;
     const sc = o.arrowScale ?? 0.7;
@@ -150,6 +162,13 @@ export class Plate {
     mk('out', '押し出す力', OUT);
     mk('back', '戻す力', BACK);
     mk('edge', '縁の支え', EDGE);
+  }
+
+  /** 切断面(ワールド座標の平面)。null で切らない。板・格子・支えを切る */
+  setClip(planes: THREE.Plane[] | null) {
+    for (const m of [this.mat, this.edgeMat, ...this.others, this.grid.lines.material as THREE.Material, this.gridB.lines.material as THREE.Material]) {
+      m.clippingPlanes = planes;
+    }
   }
 
   private shape(u: number, v: number, m: number) {
@@ -189,10 +208,14 @@ export class Plate {
     col.needsUpdate = true;
     this.mesh.geometry.computeVertexNormals();
     this.grid.update((u, v) => A * this.shape(u, v, m) + t / 2 + 0.004);
+    this.gridB.update((u, v) => A * this.shape(u, v, m) - t / 2 - 0.004);
     const ghost = o.ghost ?? 0;
     this.mat.opacity = 1 - 0.82 * ghost;
+    this.edgeMat.opacity = 1 - 0.82 * ghost;
     (this.grid.lines.material as THREE.LineBasicMaterial).opacity = 0.6 * (1 - 0.8 * ghost);
+    (this.gridB.lines.material as THREE.LineBasicMaterial).opacity = 0.6 * (1 - 0.8 * ghost);
     this.mat.depthWrite = ghost < 0.5;
+    this.edgeMat.depthWrite = ghost < 0.5;
 
     // 真ん中の帯(柱とみなす)
     this.strip.visible = o.strip !== undefined;
@@ -243,7 +266,9 @@ export class Plate {
 /** 薄い板4枚でできた箱形の柱。押すと板が交互に波打つ */
 class BoxCol {
   group = new THREE.Group();
-  private walls: { mesh: THREE.Mesh; base: Float32Array; grid: SurfGrid }[] = [];
+  private walls: { mesh: THREE.Mesh; base: Float32Array; grid: SurfGrid; gridB: SurfGrid }[] = [];
+  /** 壁の厚さ(絵)。厚みが見えるよう、縁の面は濃い色 */
+  private T = 0.06;
   private top: THREE.Mesh;
   private arrow: THREE.Group;
 
@@ -251,15 +276,19 @@ class BoxCol {
     for (let i = 0; i < 4; i++) {
       const g = new THREE.Group();
       g.rotation.y = (i * Math.PI) / 2;
-      const geo = new THREE.PlaneGeometry(b, a, 32, 64);
-      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#8a98ae', metalness: 0.35, roughness: 0.5, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+      // 隣の壁と角で重なるよう、厚み分だけ幅を広げる
+      const geo = new THREE.BoxGeometry(b + this.T, a, this.T, 32, 64, 1);
+      const face = new THREE.MeshStandardMaterial({ color: '#8a98ae', metalness: 0.35, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+      const edge = new THREE.MeshStandardMaterial({ color: '#2b3a55', metalness: 0.2, roughness: 0.6 });
+      const mesh = new THREE.Mesh(geo, [edge, edge, edge, edge, face, face]);
       mesh.position.set(0, a / 2, b / 2);
       mesh.frustumCulled = false;
       g.add(mesh);
       this.group.add(g);
       const grid = new SurfGrid(b, a, 6, 15);
-      mesh.add(grid.lines);
-      this.walls.push({ mesh, base: new Float32Array(geo.attributes.position.array as Float32Array), grid });
+      const gridB = new SurfGrid(b, a, 6, 15);
+      mesh.add(grid.lines, gridB.lines);
+      this.walls.push({ mesh, base: new Float32Array(geo.attributes.position.array as Float32Array), grid, gridB });
     }
     const dark = DARK();
     const bot = new THREE.Mesh(new THREE.BoxGeometry(b + 0.6, 0.18, b + 0.6), dark);
@@ -275,14 +304,16 @@ class BoxCol {
     this.walls.forEach((w, i) => {
       const p = w.mesh.geometry.attributes.position as THREE.BufferAttribute;
       const sgn = i % 2 ? -1 : 1;
+      const T = this.T;
       for (let k = 0; k < p.count; k++) {
-        const u = w.base[k * 3] / b + 0.5;
+        const u = Math.max(0, Math.min(1, w.base[k * 3] / b + 0.5));
         const v = w.base[k * 3 + 1] / a + 0.5;
-        p.setZ(k, sgn * A * Math.sin(m * Math.PI * v) * Math.sin(Math.PI * u));
+        p.setZ(k, w.base[k * 3 + 2] + sgn * A * Math.sin(m * Math.PI * v) * Math.sin(Math.PI * u));
       }
       p.needsUpdate = true;
       w.mesh.geometry.computeVertexNormals();
-      w.grid.update((u, v) => sgn * A * Math.sin(m * Math.PI * v) * Math.sin(Math.PI * u));
+      w.grid.update((u, v) => sgn * A * Math.sin(m * Math.PI * v) * Math.sin(Math.PI * u) + T / 2 + 0.004);
+      w.gridB.update((u, v) => sgn * A * Math.sin(m * Math.PI * v) * Math.sin(Math.PI * u) - T / 2 - 0.004);
     });
     this.top.position.y = a + 0.09;
     const len = 0.3 + 0.8 * Math.min(1.2, load);
@@ -309,7 +340,8 @@ const BAR0 = 2.0;
 const BARH = 0.9;
 const EDGE_EL = 1 / (1.6 * 1.6);
 const SHAPE = 1 - 2 / Math.PI;
-const thick = (R: number) => Math.max(0.035, 0.1 / R);
+/** 並べる板の厚み(絵): 本当の t/b(両縁支持・σy = 355 で b/t = BT1 × R)を、どの板も同じ 3 倍に誇張する。厚みの比は正しい */
+const thick = (R: number) => Math.max(0.012, (3 * PB) / (BT1 * R));
 
 function curve(f: (R: number) => number, r0: number, r1: number, rad: number, color: string) {
   const pts: THREE.Vector3[] = [];
@@ -352,6 +384,15 @@ export class Stage5Show extends ShowBase {
   private bDims: { g: THREE.Group; v: THREE.Mesh; t0: THREE.Mesh; t1: THREE.Mesh; tag: THREE.Sprite; W: number }[] = [];
   /** 幅・支え方の場面: 戻す力(青)の倍率の札 */
   private backTags: THREE.Sprite[] = [];
+  /** 綱引きの場面: 板を真ん中で切った断面(ふくらみの形・元の平らな面・波の高さ w) */
+  private cut = new THREE.Group();
+  private cutPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 10);
+  private cutRef: THREE.Line;
+  private cutProf: THREE.Mesh | null = null;
+  private cutKey = -1;
+  private wBar: THREE.Mesh;
+  private wTag: THREE.Sprite;
+  private cutTag: THREE.Sprite;
   /** 綱引き・幅・支え方の場面の段階と押す応力(Stage5.tsx が式のカードに使う)。-1 = ほかの場面 */
   info = { phase: -1, p: 0 };
   private gLine = new THREE.Group();
@@ -426,6 +467,16 @@ export class Stage5Show extends ShowBase {
       this.gPair.add(s);
       this.pairTags.push(s);
     }
+
+    // 綱引きの断面の絵(板 one の真ん中、x = 0 の面に描く)
+    this.cutRef = line('#1f2a44', true);
+    setLine(this.cutRef, 0.004, 0, 0.004, 1.4, 0);
+    this.wBar = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 1), new THREE.MeshBasicMaterial({ color: '#6d28d9', fog: false, toneMapped: false }));
+    this.wTag = tag('w(波の高さ)', '#6d28d9', 0.75, 1.4);
+    this.cutTag = tag('切った断面', '#6d28d9', 0.6, 1.2);
+    this.cut.add(this.cutRef, this.wBar, this.wTag, this.cutTag);
+    this.cut.visible = false;
+    this.gOne.add(this.cut);
 
     // 紫の寸法線(板の下)。σel の式の b = この幅
     for (const [pl, text] of [[this.wide, '幅 b'], [this.narrow, '幅 b/2']] as const) {
@@ -550,6 +601,8 @@ export class Stage5Show extends ShowBase {
   private show(...gs: THREE.Group[]) {
     for (const g of [this.gOne, this.gPair, this.gSup]) g.position.set(0, 0, 0);
     this.info.phase = -1;
+    this.cut.visible = false;
+    this.one.setClip(null);
     for (const g of [this.gBox, this.gOne, this.gPair, this.gSup, this.gLine, this.gWall, this.gLab, this.gBars]) g.visible = gs.includes(g);
   }
 
@@ -571,26 +624,37 @@ export class Stage5Show extends ShowBase {
 
   /** 溶接のゆがみと残留応力(現実の板が R = 1 付近で弱くなる理由) */
   private tickWeld(c: number) {
+    // 現実の板①(26 秒): 残留応力と初期たわみ → 押すと、残留圧縮のある中央側が先に σel 付近に達して反りがふくらむ
+    // → ふくらんだ中央は力を受けにくくなり、増えた力は縁側へ → 縁側が σy に届いて限界(理想の σy より早い)
     this.show(this.gOne);
-    const t = this.cyc(22, c);
-    const fade = 1 - ramp(t, 21, 22);
+    const t = this.cyc(26, c);
+    const fade = 1 - ramp(t, 25, 26);
     const res = ramp(t, 1, 3) * fade;
     const A0 = 0.035 * ramp(t, 6, 8) * fade;
-    // 押す応力 σ/σel(この板は σel ≒ σy の板、R ≒ 1 として描く)
-    const p = 0.9 * ramp(t, 10, 17) * fade;
-    // 初期たわみは、押すと 1/(1 − σ/σel) 倍に増える(柱の初期たわみと同じ)
-    const A = A0 / (1 - p);
-    // 残留応力: 溶接した縁の近くは引張、中央側は圧縮(幅で平均すると0)
-    const resid = (u: number) => res * (0.3 - 1.1 * Math.abs(Math.cos(Math.PI * u)) ** 8);
-    this.one.update({ A, load: p, stressAt: (u) => resid(u) * 0.8 + p * 0.85, railGlow: 0.6, tags: t > 10 });
+    // 押す応力 σ/σy(この板は R ≒ 1 = σel ≒ σy の板として描く)。限界は約 0.78(Winter の式の R = 1 の値)
+    const p = 0.78 * ramp(t, 10, 21) * fade;
+    // 初期たわみは、押すと 1/(1 − σ/σel) 倍に増える(柱の初期たわみと同じ)。絵では増えすぎないよう頭打ち
+    const A = Math.min(0.2, A0 / (1 - 0.9 * p));
+    // 反りがふくらむほど、押す力の受け持ちが縁側へ寄る(0 = 一様、1 = 縁に寄った分布)
+    const shift = ramp(p, 0.35, 0.78);
+    // 縁に寄った分布(幅で平均すると 1): 中央 0.3、縁 1.8 くらい
+    const share = (u: number) => {
+      const e = 1 - 0.85 * Math.sin(Math.PI * u);
+      return (1 - shift) + (shift * e) / (1 - (0.85 * 2) / Math.PI);
+    };
+    // 残留応力: 溶接した縁のごく近くは引張、中央側は圧縮(幅で平均すると0)
+    const resid = (u: number) => res * (0.25 - 1.0 * Math.abs(Math.cos(Math.PI * u)) ** 10);
+    this.one.update({ A, load: p, stressAt: (u) => resid(u) * 0.8 + p * share(u), railGlow: 0.6, tags: t > 10 });
     this.caption =
       t < 6
-        ? '溶接した縁の近くには引張(オレンジ)、中央側には圧縮(青)の残留応力が残る'
+        ? '溶接した縁のごく近くには引張(オレンジ)、中央側には圧縮(青)の残留応力が残る'
         : t < 10
           ? 'さらに、溶接で縮んだ分、板はわずかに反っている(初期たわみ)'
-          : t < 15
-            ? '押すと、σel に届く前から反りがふくらむ'
-            : '中央は早く降伏に近づく。だから理想より下がる';
+          : t < 14.5
+            ? '押すと、もともと押されている中央側が先に限界に近づき、反りがふくらむ'
+            : t < 19.5
+              ? 'ふくらんだ中央は力を受けにくくなり、増えた力は縁側へ寄る'
+              : '縁側が降伏(赤)して限界。理想(σy まで)より早い';
     this.look(0, 0.75, 1.6, 1.35, 30, 14);
   }
 
@@ -657,39 +721,75 @@ export class Stage5Show extends ShowBase {
       this.look(0, 0.75, 1.6, 1.35, 32, 14);
     } else if (s === 2) {
       this.show(this.gOne);
-      // 映像2 の綱引きと同じ筋: 仮に波打たせて比べる → 波の高さでは勝負がつかない → 比べるのは σ と σel → 超えた瞬間に波打つ
-      const t = this.cyc(36, c);
+      // 映像2 の綱引きと同じ筋(44 秒): もし波打ったら → 真ん中で切って w を見せる → 押し出す力 σt × w → 戻す力 D × 1/R = kπ²D/b² × w
+      // → w は両方に同じ → σt と kπ²D/b²(t で割ると σ と σel)を比べる → 超えた瞬間に波打つ
+      const t = this.cyc(44, c);
       let p = 0.5;
-      let A = 0;
-      // 式のカードの段階: 0 もし波打ったら → 1 2つの力 → 2 w は両方に同じ → 3 σ と σel を比べる → 4 超えた
-      this.info.phase = t < 3 ? 0 : t < 9 ? 1 : t < 15 ? 2 : t < 27 ? 3 : 4;
-      if (t < 3) {
-        A = 0.08 * ramp(t, 1.5, 3);
-        this.caption = '押している板が、もし少し波打ったら?';
-      } else if (t < 9) {
-        A = 0.08;
-        this.caption = '押し出す力(オレンジ)と、戻す力(青)';
-      } else if (t < 15) {
-        A = 0.08 + 0.12 * ramp(t, 9.5, 12.5);
-        this.caption = '波を大きくしても、2つは同じ割合で増える';
-      } else if (t < 27) {
-        A = 0.2 - 0.08 * ramp(t, 15, 16);
-        p = 0.5 + 0.5 * ramp(t, 16, 24);
-        this.caption =
-          t < 24
-            ? `押す応力を上げる(${Math.round(p * 100)}%)。まだ戻す方が強い`
-            : '追いついた。これが σel';
-      } else {
+      let A = 0.13;
+      if (t < 3) A = 0.13 * ramp(t, 1.2, 2.8);
+      else if (t >= 20 && t < 25) A = 0.13 + 0.09 * ramp(t, 20.5, 23);
+      else if (t >= 25 && t < 36) {
+        A = 0.22 - 0.09 * ramp(t, 25, 26);
+        p = 0.5 + 0.5 * ramp(t, 26.5, 34);
+      } else if (t >= 36) {
         p = 1.1;
-        A = Math.min(0.26, 0.12 * Math.exp((t - 27) * 0.12)) * (1 - ramp(t, 34.5, 36));
-        this.caption = '超えた瞬間、波が大きくなって止まらない';
+        A = Math.min(0.3, 0.13 * Math.exp((t - 36) * 0.15)) * (1 - ramp(t, 42.5, 44));
       }
+      this.info.phase = t < 7 ? 0 : t < 13 ? 1 : t < 16.5 ? 2 : t < 20 ? 3 : t < 25 ? 4 : t < 36 ? 5 : 6;
       this.info.p = p;
-      const fb = 2.2 * A;
-      this.one.update({ A, load: p, fOut: fb * p, fBack: fb, railGlow: 1, tags: true });
+      this.caption =
+        t < 3
+          ? '押している板が、もし少し波打ったら?'
+          : t < 7
+            ? '真ん中で切ると、断面は曲がった柱と同じ形。ふくらみの高さが w'
+            : t < 13
+              ? '押す力 σt が、腕 w で波を押し出す(柱の P × y と同じ)'
+              : t < 20
+                ? '板の曲げにくさ D が、波を戻そうとする(柱の EI × 1/R と同じ)'
+                : t < 25
+                  ? '波を大きくしても、2つは同じ割合で増える'
+                  : t < 34
+                    ? `押す応力を上げる(σel の ${Math.round(p * 100)}%)。まだ戻す方が強い`
+                    : t < 36
+                      ? '追いついた。これが σel'
+                      : '超えた瞬間、波が大きくなって止まらない';
+      const fb = 1.6 * A;
+      this.one.update({ A, load: p, fOut: t >= 7 ? fb * p : 0, fBack: t >= 13 ? fb : 0, railGlow: 1, tags: true });
       // 左に式のカードを重ねるので、板は右寄せに
-      this.shiftRight(this.gOne, 1.0, 72);
-      this.look(0.15, 0.85, 1.9, 1.5, 72, 10);
+      this.shiftRight(this.gOne, 0.75, 72);
+      // 断面: 手前の半分(x > 0)を切り取る。3〜5.5 秒で切り進める
+      const cutP = ramp(t, 3, 5.5) * (1 - ramp(t, 42.5, 44));
+      const X0 = this.gOne.position.x;
+      if (cutP > 0.001) {
+        this.cutPlane.constant = X0 + 0.8 * (1 - cutP);
+        this.one.setClip([this.cutPlane]);
+      }
+      this.cut.visible = cutP > 0.98;
+      if (this.cut.visible) {
+        const a = this.one.a;
+        const key = Math.round(A * 400);
+        if (key !== this.cutKey) {
+          this.cutKey = key;
+          if (this.cutProf) {
+            this.cut.remove(this.cutProf);
+            this.cutProf.geometry.dispose();
+          }
+          const pts: THREE.Vector3[] = [];
+          for (let i = 0; i <= 40; i++) pts.push(new THREE.Vector3(0.01, (i / 40) * a, A * Math.sin((Math.PI * i) / 40) + 0.035));
+          this.cutProf = tube(pts, 0.014, '#6d28d9', 0.6);
+          this.cut.add(this.cutProf);
+        }
+        // 波の高さ w の寸法(元の平らな面 → ふくらみの頂上)。矢印はふくらみの外側に出るので、内側に引く
+        const yw = a * 0.5;
+        const wz = A + 0.03;
+        this.wBar.scale.z = Math.max(0.001, wz);
+        this.wBar.position.set(0.02, yw, wz / 2);
+        // 札は板の右側(カメラから見て奥 = −z)に置く
+        this.wTag.position.set(0.02, yw, -0.42);
+        this.cutTag.position.set(0.02, 0.12, -0.55);
+        this.cutTag.visible = t < 13;
+      }
+      this.look(0.15, 0.8, 1.45, 1.25, 72, 10);
     } else if (s === 3) {
       // 幅(36 秒): σel の式の b = 板の幅(紫の寸法線)→ 同じだけ波打たせて戻す力(青)を比べる → 同じ応力で押す
       this.show(this.gPair);
@@ -821,7 +921,8 @@ export class Stage5Show extends ShowBase {
       this.look(0.05, 0.8, 2.9, 1.75, az, 12);
     } else if (s >= 6 && s <= 9) {
       this.show(this.gLine, this.gWall);
-      this.look(0, 2.05, 4.4, 3.3, 6, 8);
+      // 板の厚み(濃い色の縁)が見えるよう、少し斜め上から
+      this.look(0, 2.05, 4.4, 3.3, 16, 15);
       const t = this.once([15, 14, 17, 15][s - 6], c);
       // 板ごとの押す力と、波の大きさ
       const loads = new Array(N).fill(0);
