@@ -231,6 +231,7 @@ export class Stage2Show extends ShowBase {
   private tags2: THREE.Sprite[] = [];
   /** 長さの場面: 柱の横の紫の寸法線(式の l がこの長さだと示す) */
   private dims: { g: THREE.Group; v: THREE.Mesh; t0: THREE.Mesh; t1: THREE.Mesh; tag: THREE.Sprite; H: number }[] = [];
+  private dims5: { g: THREE.Group; v: THREE.Mesh; t0: THREE.Mesh; t1: THREE.Mesh; tag: THREE.Sprite; H: number }[] = [];
   /** 長さの場面の段階(Stage2.tsx が式のカードに使う)。-1 = ほかの場面 */
   lenInfo = { phase: -1 };
   private g5 = new THREE.Group(); // 支え方4種
@@ -304,18 +305,7 @@ export class Stage2Show extends ShowBase {
     this.long.group.position.x = 1.0;
     this.g2.add(this.short.group, this.long.group);
     // 紫の寸法線(棒の左)。式の分母の l = この長さ
-    for (const [bar, text] of [[this.short, 'l'], [this.long, '2l']] as const) {
-      const g = new THREE.Group();
-      const mat = new THREE.MeshBasicMaterial({ color: '#6d28d9', fog: false, toneMapped: false });
-      const v = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1, 0.03), mat);
-      const t0 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.03), mat);
-      const t1 = t0.clone();
-      const tg = tag(text, '#6d28d9', 1.25);
-      g.add(v, t0, t1, tg);
-      g.position.set(bar.group.position.x - 0.42, 0, 0.2);
-      this.g2.add(g);
-      this.dims.push({ g, v, t0, t1, tag: tg, H: bar.H });
-    }
+    for (const [bar, text] of [[this.short, 'l'], [this.long, '2l']] as const) this.dims.push(this.dimLine(this.g2, bar, text, -0.42));
     for (const [t, x, y, c] of [['長さ l', -1.5, -0.75, '#1f2a44'], ['長さ 2l', 1.0, -0.75, '#1f2a44'], ['限界 100%', -0.35, 1.0, '#e11d48'], ['限界 25%', 2.35, 1.9, '#e11d48']] as const) {
       const s = tag(t, c, 0.75);
       s.position.set(x, y, 0.3);
@@ -332,12 +322,36 @@ export class Stage2Show extends ShowBase {
       const gain = info.gain < 1 ? '1/4 倍' : info.gain === 1 ? '1 倍(基準)' : `${info.gain < 3 ? '約 2' : '4'} 倍`;
       const t1 = tag(gain, '#6d28d9', 0.75);
       t1.position.set(b.group.position.x + 0.15, 3.55, 0.3);
-      const t2 = tag(`波の長さ ${info.le === 1 ? '1' : info.le < 0.6 ? '0.5' : info.le > 1.5 ? '2' : '0.7'}`, '#e11d48', 0.6);
+      const t2 = tag(`le ${info.le === 1 ? '= 1.0' : info.le < 0.6 ? '= 0.5' : info.le > 1.5 ? '= 2.0' : '≒ 0.7'} l`, '#e11d48', 0.72);
       t2.position.set(b.group.position.x + 0.15, 3.2, 0.3);
       this.g5.add(t1, t2);
       this.tags5.push([t1, t2]);
+      this.dims5.push(this.dimLine(this.g5, b, 'l', -0.36, 1.0));
     });
     this.setScene(0);
+  }
+
+  /** 棒の横の紫の寸法線(長さ l)。dx: 棒からの横の位置 */
+  private dimLine(parent: THREE.Group, bar: Bar, text: string, dx: number, size = 1.25) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color: '#6d28d9', fog: false, toneMapped: false });
+    const v = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1, 0.03), mat);
+    const t0 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.03), mat);
+    const t1 = t0.clone();
+    const tg = tag(text, '#6d28d9', size);
+    g.add(v, t0, t1, tg);
+    g.position.set(bar.group.position.x + dx, 0, 0.2);
+    parent.add(g);
+    return { g, v, t0, t1, tag: tg, H: bar.H };
+  }
+  /** 寸法線を grow(0〜1)まで伸ばす */
+  private growDim(d: { v: THREE.Mesh; t1: THREE.Mesh; tag: THREE.Sprite; H: number }, grow: number, tx = -0.3) {
+    const h = Math.max(0.001, d.H * grow);
+    d.v.scale.y = h;
+    d.v.position.y = h / 2;
+    d.t1.position.y = h;
+    d.tag.position.set(tx, h / 2, 0);
+    d.tag.visible = grow > 0.95;
   }
 
   private only(g: THREE.Group) {
@@ -583,10 +597,15 @@ export class Stage2Show extends ShowBase {
       // 左側に式のカードを重ねるので、棒は右寄せに
       this.look(-1.6, 1.45, 3.3, 2.8, 10, 6);
     } else if (s === 5) {
+      // 支え方(37 秒): 4本とも長さは l(紫の寸法線)→ 同じ力で押す → 赤い線 = 有効座屈長 le = K × l
       this.only(this.g5);
-      const t = this.cyc(28, c);
-      const p = 4.25 * ramp(t, 2, 19) * (1 - ramp(t, 27, 28));
-      const fade = 1 - ramp(t, 27, 28);
+      const T = this.cyc(37, c);
+      const t = Math.max(0, T - 4);
+      // 座屈した形(赤い線 = le)は、式のカードを読めるよう長めに残す
+      const p = T < 4 ? 0 : 4.25 * ramp(t, 2, 19) * (1 - ramp(t, 31, 32));
+      const fade = 1 - ramp(t, 31, 32);
+      const grow = ramp(T, 0.4, 2.2) * fade;
+      this.dims5.forEach((d) => this.growDim(d, grow, -0.24));
       let cap = '同じ棒が4本。違うのは、両端の支え方だけ';
       this.four.forEach((b, i) => {
         const g = SUPPORTS[b.sup].gain;
@@ -598,10 +617,13 @@ export class Stage2Show extends ShowBase {
         this.tags5[i][1].visible = on;
         if (p >= g) cap = `${SUPPORTS[b.sup].name}が座屈(基準の ${g < 1 ? '1/4' : g === 1 ? '1' : g < 3 ? '約2' : '4'} 倍の力)`;
       });
-      if (t > 21) cap = '赤い線 = サインカーブ半分。この波が短いほど、強い';
+      if (T < 4) cap = '4本とも長さは同じ l。違うのは、両端の支え方だけ';
+      else if (t > 21) cap = '赤い線 = 有効座屈長 le。式の l の代わりに使う';
       else if (t >= 2 && p < 0.25) cap = `4本を同じ力で押していく(基準の ${p.toFixed(2)} 倍)`;
+      this.lenInfo.phase = T < 4 ? 0 : t <= 21 ? 1 : 2;
       this.caption = cap;
-      this.look(0, 0.9, 3.9, 3.6, 8, 5);
+      // 左側に式のカードを重ねるので、棒は右寄せに
+      this.look(-1.9, 1.0, 4.6, 3.6, 8, 5);
     } else {
       this.only(this.gLab);
       const { sup, L, load } = this.lab;

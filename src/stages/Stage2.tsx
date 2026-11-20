@@ -36,6 +36,60 @@ const SIDE2: Record<number, React.ReactNode> = {
 };
 
 /**
+ * 支え方の場面で映像の左側に重ねる式のカード。l(紫)は柱の長さ、実際は支え方の係数を掛けた le(赤)で評価する。
+ *  0 両端ピンで導いた π²EI/l² → 1 実際は l の代わりに le = K × l → 2 Pe = π²EI/le² と K の表
+ */
+function LeOverlay({ phase }: { phase: number }) {
+  if (phase < 0) return null;
+  const card = 'rounded-xl border bg-white/92 px-2.5 py-1.5 shadow-sm backdrop-blur-sm';
+  const L = String.raw`\textcolor{#6d28d9}{l}`;
+  const LE = String.raw`\textcolor{#e11d48}{l_e}`;
+  const rows: [string, string][] = [
+    ['片持ち', '2.0'],
+    ['両端ピン', '1.0'],
+    ['片方固定・片方ピン', '0.7'],
+    ['両端固定', '0.5'],
+  ];
+  return (
+    <div className="pointer-events-none absolute left-2 top-16 flex w-[42%] max-w-[270px] flex-col gap-1.5 sm:left-4">
+      <div className={`${card} border-sky-300 ${phase >= 2 ? 'hidden sm:block' : ''}`}>
+        <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>
+          戻す力<span className="font-normal text-ink-dim">(両端ピンで導いた式)</span>
+        </p>
+        <FitTex className="text-[16px] sm:text-xl">{String.raw`\dfrac{\pi^2EI}{${L}^{\,2}} \times y`}</FitTex>
+        <p className="text-[11px] font-bold leading-tight" style={{ color: '#6d28d9' }}>l = 柱の長さ(紫の寸法)</p>
+      </div>
+      {phase >= 1 && (
+        <div className={`${card} border-rose-300 ${phase >= 2 ? 'hidden sm:block' : ''}`}>
+          <p className="text-[11px] font-bold" style={{ color: '#e11d48' }}>実際は、l の代わりに有効座屈長 le</p>
+          <FitTex className="text-[16px] sm:text-xl">{String.raw`${LE} = K \times ${L}`}</FitTex>
+          <p className="text-[10px] leading-tight text-ink-dim">le = 曲がった形のサインカーブ半分の長さ(赤い線)。K は端の固定のしかたで決まる係数(有効座屈長係数)</p>
+        </div>
+      )}
+      {phase >= 2 && (
+        <div className={`${card} border-studio-600`}>
+          <FitTex className="text-[16px] sm:text-xl">{String.raw`P_e=\dfrac{\pi^2EI}{${LE}^{\,2}}`}</FitTex>
+          <FitTex className="text-[14px] sm:hidden">{String.raw`${LE} = K \times ${L}`}</FitTex>
+          <table className="mt-0.5 w-full text-[10.5px] leading-snug">
+            <tbody>
+              {rows.map(([n, k]) => (
+                <tr key={n}>
+                  <td className="pr-1 text-ink-dim">{n}</td>
+                  <td className="whitespace-nowrap text-right font-bold" style={{ color: '#e11d48' }}>
+                    K = {k}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[10px] leading-tight text-ink-dim">le が半分なら Pe は4倍(両端固定)</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * 長さの場面で映像の左側に重ねる式のカード。分母の l(紫)が、図の紫の寸法線 = 柱の長さだと示す。
  *  0 戻す力 = π²EI/l² × y と「l = 柱の長さ」→ 1 長さ 2l なら 1/4 → 2 座屈荷重も 1/4
  */
@@ -160,7 +214,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '支え方',
     head: '支え方で、強さは16倍も変わる',
-    body: '端を固定すると、曲がる形が変わります。どの形にもサインカーブ半分の部分(赤い線)があり、その長さを「有効座屈長」と呼びます。この波が短いほど強い。両端ピンに比べて、両端固定は4倍、片持ちは4分の1です。',
+    body: '綱引きの式 π²EI/l² は、両端ピンの柱で導いたものです。端を固定すると曲がる形が変わり、サインカーブ半分の長さ(赤い線)が変わります。これが有効座屈長 le = K × l で、実際は式の l の代わりに le を使います。両端ピンに比べて、両端固定(le = 0.5 l)は4倍、片持ち(le = 2 l)は4分の1です。',
   },
   {
     kicker: '実験室',
@@ -232,7 +286,7 @@ export default function Stage2() {
       canvasRef={canvasRef}
       capRef={capRef}
       overlay={
-        scene === 1 ? <TugOverlay phase={phase} beamRef={beamRef} pRef={pRef} stateRef={stateRef} /> : scene === 2 ? <LenOverlay phase={lenPhase} /> : undefined
+        scene === 1 ? <TugOverlay phase={phase} beamRef={beamRef} pRef={pRef} stateRef={stateRef} /> : scene === 2 ? <LenOverlay phase={lenPhase} /> : scene === 3 ? <LeOverlay phase={lenPhase} /> : undefined
       }
       hint="曲がり方は見やすく誇張しています・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
