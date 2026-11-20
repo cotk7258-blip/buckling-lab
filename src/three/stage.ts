@@ -116,7 +116,7 @@ class Column3D {
       const a = (i / 40) * Math.PI * 2;
       ringPts.push(new THREE.Vector3(0, Math.cos(a) * 0.13, Math.sin(a) * 0.13));
     }
-    this.ringOrig = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), new THREE.LineDashedMaterial({ color: '#e11d48', dashSize: 0.05, gapSize: 0.04 }));
+    this.ringOrig = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), new THREE.LineDashedMaterial({ color: '#1e3a8a', dashSize: 0.05, gapSize: 0.04 }));
     this.ringOrig.computeLineDistances();
     this.ringNow = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), new THREE.LineBasicMaterial({ color: '#0369a1' }));
     this.group.add(this.glass, this.lost, this.ringOrig, this.ringNow);
@@ -135,7 +135,7 @@ class Column3D {
       ['曲げる力', '#ea580c'],
       ['戻す力', '#0284c7'],
       ['いまの上限', '#0369a1'],
-      ['柱が持つ本来の戻す力(上限)', '#be123c'],
+      ['柱が持つ本来の戻す力(上限)', '#1e3a8a'],
     ];
     for (const [t, c] of tags) {
       const sp = label(t, c, t.length > 12 ? 2.6 : t.length > 4 ? 1.6 : 1);
@@ -143,6 +143,14 @@ class Column3D {
       sp.visible = false;
       this.group.add(sp);
       this.ftags.push(sp);
+    }
+    // 札から指す先への引き出し線と、指す先の小さな点(札 1〜3 用)
+    for (const c of ['#0284c7', '#0369a1', '#1e3a8a']) {
+      const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)]), new THREE.LineBasicMaterial({ color: c }));
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.035, 14, 10), new THREE.MeshBasicMaterial({ color: c }));
+      l.visible = d.visible = false;
+      this.group.add(l, d);
+      this.leaders.push({ l, d });
     }
   }
   private real: boolean;
@@ -155,6 +163,21 @@ class Column3D {
   private frags: { m: THREE.Mesh; v: THREE.Vector3; life: number }[] = [];
   private lastCap = -1;
   private ftags: THREE.Sprite[] = [];
+  private leaders: { l: THREE.Line; d: THREE.Mesh }[] = [];
+
+  /** 札 i(1〜3)から点 (px, py) へ引き出し線。札の位置 (tx, ty) の、指す先に近い縁から引く */
+  private lead(i: number, show: boolean, tx: number, ty: number, px: number, py: number) {
+    const { l, d } = this.leaders[i - 1];
+    l.visible = d.visible = show;
+    if (!show) return;
+    const sy = ty + (py > ty ? 0.1 : -0.1);
+    const p = l.geometry.attributes.position as THREE.BufferAttribute;
+    p.setXYZ(0, tx, sy, 0.44);
+    p.setXYZ(1, px, py, 0.44);
+    p.needsUpdate = true;
+    l.geometry.computeBoundingSphere();
+    d.position.set(px, py, 0.44);
+  }
 
   private capPlate(y: number, machine: THREE.Material) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.07, 1.0), machine);
@@ -387,17 +410,30 @@ class Column3D {
     }
     const t = this.ftags;
     const eroded = lostLen > 0.12;
+    const R = 0.13; // 管の半径
     t[0].visible = on && this.real;
     t[0].position.set(xr + S * P + 0.45, fy + 0.22, 0.4);
-    // 現実の柱: 戻す力は根元側の上、いまの上限は管の先の下、本来の上限は輪の下(削られたらさらに下)。
-    // 理想の柱: 本来の上限を輪の上に(現実の柱の札と離す)
-    t[1].visible = on && this.real && exert > 0.15;
-    t[1].position.set(x0 - 0.35, fy + 0.3, 0.45);
-    t[2].visible = on && this.real && eroded;
-    t[2].position.set(x0 - lenCap, fy - 0.32, 0.45);
+    // 札は指す先から少し離して置き、引き出し線と点で場所を指す。
+    // 現実の柱: 戻す力 = 青の先(上から)、いまの上限 = 管の先(下から)、本来の上限 = 輪(さらに下から)。
+    // 理想の柱: 本来の上限 = 輪(上から)。現実の柱の札と離す
+    const tip = x0 - S * exert;
+    const sh1 = on && this.real && exert > 0.15;
+    t[1].visible = sh1;
+    t[1].position.set(tip + 0.25, fy + 0.55, 0.45);
+    this.lead(1, sh1, tip + 0.25, fy + 0.55, tip + 0.02, fy + 0.06);
+    const sh2 = on && this.real && eroded;
+    t[2].visible = sh2;
+    t[2].position.set(x0 - lenCap + 0.25, fy - 0.55, 0.45);
+    this.lead(2, sh2, x0 - lenCap + 0.25, fy - 0.55, x0 - lenCap, fy - R);
     t[3].visible = on;
-    if (this.real) t[3].position.set(x0 - lenOrig - 0.1, fy - (eroded ? 0.62 : 0.32), 0.45);
-    else t[3].position.set(x0 - lenOrig + 0.6, fy + 0.32, 0.45);
+    if (this.real) {
+      const ty = fy - (eroded ? 0.95 : 0.55);
+      t[3].position.set(x0 - lenOrig - 0.2, ty, 0.45);
+      this.lead(3, on, x0 - lenOrig - 0.2, ty, x0 - lenOrig, fy - R);
+    } else {
+      t[3].position.set(x0 - lenOrig + 0.5, fy + 0.55, 0.45);
+      this.lead(3, on, x0 - lenOrig + 0.5, fy + 0.55, x0 - lenOrig, fy + R);
+    }
   }
 }
 
@@ -427,6 +463,8 @@ export class Stage3D {
   private explainMode: ExplainMode | null = null;
   /** 説明用の場面の、いまの段階の文 */
   caption = '';
+  /** 試験機の場面で、画面に重ねる一言(Stage3 が場面の進み具合に合わせて入れる) */
+  note = '';
   private w = 1;
   private h = 1;
 
@@ -540,7 +578,7 @@ export class Stage3D {
       this.renderer.render(this.explain.scene, this.explain.camera);
       return;
     }
-    this.caption = '';
+    this.caption = this.note;
     this.glow.value = stressMix;
     views.forEach((v, i) => {
       this.cols[i].update(paths[i], v, stressMix, time, i === 1 && this.pose.focus === 'realMid' ? 1 : 0, dt);

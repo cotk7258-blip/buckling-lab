@@ -35,7 +35,12 @@ interface SceneDef {
   section: boolean;
   /** バネの束で説明する場面 */
   explain?: 'spring' | 'weld' | 'lever' | 'domino';
+  /** 右上の断面の応力図に出す柱(既定は現実の柱) */
+  sec?: SecMode;
+  /** 行き先まで押し終えて一言説明したあと、このカメラへ寄る */
+  zoomTo?: CameraPose;
 }
+type SecMode = 'ideal' | 'real' | 'both';
 
 const SCENES: SceneDef[] = [
   {
@@ -83,27 +88,31 @@ const SCENES: SceneDef[] = [
     speed: 0.2,
     pose: { az: 32, el: 10, focus: 'real' },
     section: true,
+    sec: 'both',
   },
   {
     kicker: '載荷',
     head: (c) => `降伏の ${pct(c.real.Pfy * 0.85)} まで押す`,
     body: () =>
-      '柱の中ほどの矢印は、曲げる力(橙)と、それと釣り合う戻す力(青)。赤い点線の輪が、柱が持つ本来の戻す力(上限)です。現実の柱は、先端だけ残留応力が上乗せされ、もう降伏のすぐ手前です。',
+      '理想の柱は、断面のどこも同じだけ押されています(右上の左)。現実の柱は、先端だけ残留応力が上乗せされ、もう降伏のすぐ手前です(右上の右)。柱の中ほどの矢印は、曲げる力(橙)と、それと釣り合う戻す力(青)。濃い青の点線の輪が、柱が持つ本来の戻す力(上限)です。',
     stress: true,
     target: (c) => c.real.Pfy * 0.85,
     speed: 0.12,
     pose: { az: 20, el: 8, focus: 'both' },
     section: true,
+    sec: 'both',
   },
   {
     kicker: '異変',
     head: (c) => `まだ ${pct(c.real.Pfy)}。なのに、先端が降伏した`,
     body: () =>
-      '平均ではまだ余裕があるのに、先端が降伏して赤くなりました。赤い部分は、もう押し返せません。降伏が広がると、やがて戻す力の上限が削られ始めます。',
+      'さらに押していくと、平均ではまだ余裕があるのに、現実の柱の先端が降伏して赤くなりました。ここから塑性化が始まります。輪切りにしてのぞくと、赤い部分はもう押し返せません。降伏が広がると、やがて戻す力の上限が削られ始めます。',
     stress: true,
     target: (c) => c.real.Pfy + 0.012,
-    speed: 0.05,
-    pose: { az: 40, el: 38, focus: 'realMid' },
+    speed: 0.03,
+    // 載荷と同じアングルで押していき、降伏が始まった所で一言説明してから、輪切りへ寄る
+    pose: { az: 20, el: 8, focus: 'both' },
+    zoomTo: { az: 40, el: 38, focus: 'realMid' },
     section: true,
   },
   {
@@ -156,7 +165,7 @@ const SCENES: SceneDef[] = [
     kicker: '理論値',
     head: (c) => `理想の柱は ${pct(c.ideal.Pu)} まで耐えた`,
     body: (c) =>
-      `理想の柱は管が削られず、戻す力が本来の上限(100%)に届いた瞬間に座屈しました。この長さでは、オイラーの座屈荷重(${pct(c.ideal.Pe)})より降伏が低いので、本来の上限は降伏で決まります。現実の柱は、管が削られた分だけ早く、理想の ${pct(
+      `右上は理想の柱の断面。残留応力がないので全体が均一に押され、先に降伏する所がありません。だから管が削られず、戻す力が本来の上限(100%。この長さではオイラーの ${pct(c.ideal.Pe)} より降伏が低い)に届いた瞬間に座屈しました。現実の柱は、管が削られた分だけ早く、理想の ${pct(
         c.real.Pu / c.ideal.Pu,
       )}。設計の線が理論より下にあるのは、この差のためです。`,
     stress: true,
@@ -164,6 +173,7 @@ const SCENES: SceneDef[] = [
     speed: 0.06,
     pose: { az: 24, el: 9, focus: 'both' },
     section: true,
+    sec: 'ideal',
   },
 ];
 const LAB = SCENES.length; // 最後は実験室
@@ -174,7 +184,8 @@ export default function Stage3() {
   const [stressOn, setStressOn] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [slow, setSlow] = useState(false);
-  const [focusReal, setFocusReal] = useState(true);
+  const [secMode, setSecMode] = useState<SecMode>('real');
+  const focusReal = secMode !== 'ideal';
   const [hud, setHud] = useState({ s: 0, ie: 1, limit: 1, yf: 0, pR: 0, pI: 0, cR: false, cI: false });
 
   const isLab = scene === LAB;
@@ -191,15 +202,30 @@ export default function Stage3() {
 
   const mainRef = useRef<HTMLCanvasElement>(null);
   const secRef = useRef<HTMLCanvasElement>(null);
+  const secRef2 = useRef<HTMLCanvasElement>(null);
   const labelRefs = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
   const capRef = useRef<HTMLParagraphElement>(null);
   const stageRef = useRef<Stage3D | null>(null);
   // 毎フレーム読む値(React の再描画を待たずに使う)
-  const live = useRef({ load: 0, from: 0, target: 0, speed: 0.1, mix: 0, mixTarget: 0, ctx, auto: true, playing, slow, focusReal });
+  const live = useRef({
+    load: 0,
+    from: 0,
+    target: 0,
+    speed: 0.1,
+    mix: 0,
+    mixTarget: 0,
+    ctx,
+    auto: true,
+    playing,
+    slow,
+    secMode,
+    // 押し終えてから寄る場面の進み具合(t: 押し終えてからの秒、after: 寄ってからの秒)
+    zoom: null as null | { to: CameraPose; t: number; done: boolean; after: number },
+  });
   live.current.ctx = ctx;
   live.current.playing = playing;
   live.current.slow = slow;
-  live.current.focusReal = focusReal;
+  live.current.secMode = secMode;
 
   // 場面が変わったら、行き先・カメラ・見え方を切り替える
   useEffect(() => {
@@ -216,6 +242,7 @@ export default function Stage3() {
       L.target = sc.target(ctx);
       L.speed = sc.speed;
       L.mixTarget = sc.stress ? 1 : 0;
+      L.zoom = sc.zoomTo ? { to: sc.zoomTo, t: 0, done: false, after: 0 } : null;
       stageRef.current?.setPose(sc.pose);
       stageRef.current?.setExplain(sc.explain ?? null);
     }
@@ -229,6 +256,7 @@ export default function Stage3() {
   useEffect(() => {
     const stage = new Stage3D(mainRef.current!);
     const section = new Section3D(secRef.current!);
+    const section2 = new Section3D(secRef2.current!);
     stageRef.current = stage;
     stage.setPaths([live.current.ctx.ideal, live.current.ctx.real]);
     stage.setPose(SCENES[0].pose);
@@ -258,10 +286,33 @@ export default function Stage3() {
       L.mix += (L.mixTarget - L.mix) * (1 - Math.exp(-dt * 3));
       const vI = viewAtLoad(c.ideal, L.load);
       const vR = viewAtLoad(c.real, L.load);
+      // 押し終えてから寄る場面: 降伏が始まった所で一言 → 少し置いて輪切りへ寄る
+      const Z = L.zoom;
+      let note = '';
+      if (L.auto && Z) {
+        const arrived = Math.abs(L.target - L.load) < 0.002;
+        if (!Z.done) {
+          if (arrived) Z.t += dt;
+          note = arrived ? '現実の柱の先端が降伏した(赤)。ここから塑性化が始まる' : 'さらに押していく。現実の柱の縁に注目';
+          if (Z.t > 3.2) {
+            Z.done = true;
+            stage.setPose(Z.to, false);
+          }
+        } else {
+          Z.after += dt;
+          if (Z.after < 3.5) note = '輪切りにして、中をのぞく';
+        }
+      }
+      stage.note = note;
       stage.update([c.ideal, c.real], [vI, vR], L.mix, t, dt);
-      const fp = L.focusReal ? c.real : c.ideal;
-      const fv = L.focusReal ? vR : vI;
-      section.update(fp, fv.step, t);
+      const real = L.secMode !== 'ideal';
+      const fp = real ? c.real : c.ideal;
+      const fv = real ? vR : vI;
+      // 両方を出すときは、左に理想・右に現実
+      if (L.secMode === 'both') {
+        section.update(c.ideal, vI.step, t);
+        section2.update(c.real, vR.step, t);
+      } else section.update(fp, fv.step, t);
       labelRefs.forEach((r, i) => {
         const p = stage.labelPos(i);
         const el = r.current;
@@ -283,7 +334,7 @@ export default function Stage3() {
         cR: vR.collapsed,
         cI: vI.collapsed,
       };
-      const key = `${h.s.toFixed(3)}|${h.ie.toFixed(3)}|${h.pR.toFixed(3)}|${h.pI.toFixed(3)}|${h.cR}|${h.cI}|${L.focusReal}`;
+      const key = `${h.s.toFixed(3)}|${h.ie.toFixed(3)}|${h.pR.toFixed(3)}|${h.pI.toFixed(3)}|${h.cR}|${h.cI}|${L.secMode}`;
       if (key !== lastHud) {
         lastHud = key;
         setHud(h);
@@ -297,6 +348,8 @@ export default function Stage3() {
         const span = Math.abs(L.target - L.from);
         const left = Math.abs(L.target - L.load);
         clip = span < 0.003 ? { p: 1, done: true, loop: false } : { p: Math.min(1, 1 - left / span), done: left < 0.003, loop: false };
+        // 寄る場面は、寄り終えるまで見終わりにしない
+        if (Z && !Z.done) clip = { p: Math.min(0.95, clip.p * 0.8 + (Z.t / 3.2) * 0.15), done: false, loop: false };
       }
       updateClip(mainRef.current?.closest('[data-shell]') ?? null, clip);
       raf = requestAnimationFrame(tick);
@@ -306,6 +359,7 @@ export default function Stage3() {
       cancelAnimationFrame(raf);
       stage.dispose();
       section.dispose();
+      section2.dispose();
       stageRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -317,6 +371,10 @@ export default function Stage3() {
     if (stageRef.current?.explainClip()) stageRef.current.replayExplain();
     else if (L.auto) {
       L.load = Math.max(0, L.from);
+      if (L.zoom) {
+        L.zoom = { ...L.zoom, t: 0, done: false, after: 0 };
+        if (!isLab) stageRef.current?.setPose(SCENES[scene].pose);
+      }
     }
   };
   useEffect(() => {
@@ -328,7 +386,7 @@ export default function Stage3() {
     if (next < LAB && params !== DEFAULTS) setParams(DEFAULTS);
     if (next === 0) live.current.load = 0;
     setPlaying(false);
-    setFocusReal(true);
+    setSecMode(next < LAB ? SCENES[next].sec ?? 'real' : 'real');
     setScene(next);
   };
   const setLoad = (v: number) => {
@@ -391,28 +449,50 @@ export default function Stage3() {
 
           {/* 断面 */}
           <div
-            className={`relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950 transition-opacity duration-700 lg:order-1 ${
+            className={`relative shrink-0 overflow-hidden rounded-2xl border border-studio-600 bg-studio-950 transition-opacity duration-700 lg:order-1 ${
               showSection ? 'opacity-100' : 'opacity-30'
             }`}
           >
-            <canvas ref={secRef} className="block h-[21dvh] min-h-[170px] w-full lg:h-[36dvh]" />
+            {/* 断面の応力図。両方を出すときは左に理想・右に現実 */}
+            <div className={`grid ${secMode === 'both' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div className="relative">
+                <canvas ref={secRef} className="block h-[21dvh] min-h-[170px] w-full lg:h-[36dvh]" />
+                {secMode === 'both' && <p className="pointer-events-none absolute bottom-1 left-2 text-xs font-bold" style={{ color: '#16a34a' }}>理想の柱</p>}
+              </div>
+              <div className={`relative border-l border-studio-700 ${secMode === 'both' ? '' : 'hidden'}`}>
+                <canvas ref={secRef2} className="block h-[21dvh] min-h-[170px] w-full lg:h-[36dvh]" />
+                <p className="pointer-events-none absolute bottom-1 left-2 text-xs font-bold">現実の柱</p>
+              </div>
+            </div>
             <div className="pointer-events-none absolute left-3 top-2">
               <p className="text-[11px] font-bold tracking-wider text-ink-dim">
                 <Term id="section">柱の中央を輪切り(図の見方)</Term>
               </p>
-              <p className="text-sm font-bold">{focusReal ? '現実の柱' : '理想の柱'}の断面の応力</p>
+              <p className="text-sm font-bold">{secMode === 'both' ? '2本' : secMode === 'real' ? '現実の柱' : '理想の柱'}の断面の応力</p>
             </div>
-            <p className="pointer-events-none absolute right-3 top-2 text-right text-xs font-bold text-yield">
-              <Term id="yield">赤い天井 = 降伏</Term>
-            </p>
-            {isLab && (
-              <button
-                onClick={() => setFocusReal((v) => !v)}
-                className="absolute right-2 top-8 rounded-lg border border-studio-600 bg-studio-900/90 px-3 py-1.5 text-xs font-bold"
-              >
-                {focusReal ? '理想の柱を見る' : '現実の柱を見る'}
-              </button>
-            )}
+            <div className="absolute right-2 top-2 flex flex-col items-end gap-1">
+              <p className="pointer-events-none text-right text-xs font-bold text-yield">
+                <Term id="yield">赤い天井 = 降伏</Term>
+              </p>
+              <div className="flex overflow-hidden rounded-lg border border-studio-600 text-xs font-bold" role="group" aria-label="断面図に出す柱">
+                {(
+                  [
+                    ['ideal', '理想'],
+                    ['real', '現実'],
+                    ['both', '両方'],
+                  ] as const
+                ).map(([m, t]) => (
+                  <button
+                    key={m}
+                    onClick={() => setSecMode(m)}
+                    aria-pressed={secMode === m}
+                    className={`px-2.5 py-1 ${secMode === m ? 'bg-comp text-white' : 'bg-studio-900/90 text-comp'}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3 border-t border-studio-700 bg-studio-900/60 px-3 py-2">
               <Meter label="押す力" term="load" value={focusReal ? hud.pR : hud.pI} color="#0284c7" marker={hud.limit} />
               <Meter label="残っている踏ん張り" term="ie" value={hud.ie} color={hud.ie < 0.999 ? '#e11d48' : '#16a34a'} />

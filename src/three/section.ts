@@ -131,7 +131,9 @@ export class Section3D {
   update(path: ColumnPath, st: ColumnStep, time: number) {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
-    if (w && h && (w !== this.w || h !== this.h)) {
+    // 隠れている(両方を出していない)ときは描かない
+    if (!w || !h) return;
+    if (w !== this.w || h !== this.h) {
       this.w = w;
       this.h = h;
       this.renderer.setSize(w, h, false);
