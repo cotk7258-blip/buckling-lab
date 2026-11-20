@@ -5,7 +5,7 @@ import { Stage3D, DEFL_AMP } from '../three/stage.ts';
 import type { CameraPose } from '../three/stage.ts';
 import { Section3D } from '../three/section.ts';
 import { FitTex, Tex } from '../ui/Tex.tsx';
-import { ClipBar, ClipLabel, ViewControls, isPaused, setPaused, updateClip } from '../ui/Story.tsx';
+import { ClipBar, ClipLabel, SceneDots, ViewControls, isPaused, setPaused, updateClip } from '../ui/Story.tsx';
 import { Rich, Term } from '../ui/glossary.tsx';
 
 const E_OVER_FY = 200000 / 355; // E = 2.0×10^5 N/mm²、σy = 355 N/mm²(SM490Y 相当)
@@ -551,14 +551,7 @@ export default function Stage3() {
               ◀ 戻る
             </button>
             <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
-              <div className="flex items-center justify-center gap-1" aria-hidden>
-                {Array.from({ length: LAB + 1 }, (_, i) => (
-                  <span
-                    key={i}
-                    className={`h-1.5 rounded-full transition-all ${i === scene ? 'w-4 bg-comp' : i < scene ? 'w-1.5 bg-comp/50' : 'w-1.5 bg-studio-600'}`}
-                  />
-                ))}
-              </div>
+              <SceneDots total={LAB + 1} scene={scene} onScene={go} lab="実" />
               <span className="num text-[11px] font-bold leading-none text-ink-dim">
                 {scene + 1} / {LAB + 1} ・ {Math.round(((scene + 1) / (LAB + 1)) * 100)}%
               </span>

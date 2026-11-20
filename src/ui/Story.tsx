@@ -130,6 +130,39 @@ export function seekScene(p: number) {
 }
 
 /**
+ * 場面の番号ボタン(戻る・次へ の間)。押すとその場面へ飛ぶ。
+ * いまの場面は塗りつぶし、見た場面は薄い色、まだの場面は枠だけ。lab を渡すと最後の場面をその字で(実験室は「実」、計算へは「計」)。
+ */
+export function SceneDots(props: { total: number; scene: number; onScene: (n: number) => void; lab?: string }) {
+  const { total, scene } = props;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-0.5 sm:gap-1">
+      {Array.from({ length: total }, (_, i) => {
+        const isLab = !!props.lab && i === total - 1;
+        const cls =
+          i === scene
+            ? 'border-comp bg-comp text-white'
+            : i < scene
+              ? 'border-comp/30 bg-comp/15 text-comp'
+              : 'border-studio-600 bg-studio-950 text-ink-dim';
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => props.onScene(i)}
+            aria-current={i === scene ? 'step' : undefined}
+            aria-label={isLab ? (props.lab === '計' ? '計算へ' : '実験室へ') : `場面 ${i + 1} へ`}
+            className={`num flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold leading-none sm:h-6 sm:w-6 sm:text-[11px] ${cls}`}
+          >
+            {isLab ? props.lab : i + 1}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * 映像の上端の、場面の動きの進み具合のバー(映像の枠の中に置く)。
  * 丸いつまみを押す = 一時停止と再生の切り替え。つまみをドラッグ = 再生位置を移して、離した所で一時停止。
  * バーのほかの所を押す = そこへ飛ぶ(再生・停止はそのまま)。
@@ -361,11 +394,7 @@ export function StoryShell(props: {
               ◀ 戻る
             </button>
             <div className="flex min-w-0 flex-1 flex-col items-center gap-1" aria-label={`場面 ${scene + 1} / ${total}(${Math.round(frac * 100)}%)`}>
-              <div className="flex items-center justify-center gap-1" aria-hidden>
-                {Array.from({ length: total }, (_, i) => (
-                  <span key={i} className={`h-1.5 rounded-full transition-all ${i === scene ? 'w-4 bg-comp' : i < scene ? 'w-1.5 bg-comp/50' : 'w-1.5 bg-studio-600'}`} />
-                ))}
-              </div>
+              <SceneDots total={total} scene={scene} onScene={props.onScene} lab={props.lab === undefined ? undefined : props.labLabel?.startsWith('計算') ? '計' : '実'} />
               <span className="num text-[11px] font-bold leading-none text-ink-dim">
                 {scene + 1} / {total} ・ {Math.round(frac * 100)}%
               </span>
