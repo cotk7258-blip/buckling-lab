@@ -13,12 +13,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '現象',
     head: '柱はまっすぐなのに、板が波打つ',
-    body: '薄い板でできた箱形の柱を押すと、柱はまっすぐなのに、板が波打ちます。これが局部座屈。柱の座屈と同じ順番で見ていきます。',
-  },
-  {
-    kicker: '突然',
-    head: '板も、ある応力で突然波打つ',
-    body: '箱の壁を1枚取り出します。両側の縁は隣の板が支えています(緑)。押していくと、ある応力で突然波打つ。その応力が、弾性局部座屈応力 σel です。',
+    body: '薄い板でできた箱形の柱を押すと、柱はまっすぐなのに、板が波打ちます。これが局部座屈。壁を1枚取り出して押すと、ある応力で突然波打つ。その応力が、弾性局部座屈応力 σel です。柱の座屈と同じ順番で見ていきます。',
   },
   {
     kicker: '綱引き',
@@ -31,11 +26,6 @@ const SCENES: SceneText[] = [
     body: 'σel の式の b は板の幅(紫の寸法)です。幅の狭い板ほど、きつく曲がらないと波打てないので、戻す力が強い。幅が半分なら (t/b)² が4倍で、戻す力も σel も4倍。厚みが2倍でも4倍です。柱の「長さ半分で4倍」と同じ形です。',
   },
   {
-    kicker: 'σel の導出',
-    head: '板は「細い柱の束」。オイラーの式に2つの補正',
-    body: '板を、押す向きの細い帯に分けます。帯1本は、長さ b・厚さ t の柱。そのオイラーの式に、隣とつながる効果 1/(1−ν²) と、縁の支え k を掛けると σel になります。',
-  },
-  {
     kicker: '支え方',
     head: '支え方の効果は、係数 k に入る',
     body: 'σel の式の k は、縁の支え方で決まる係数です。片側の縁が自由な板は支えが片側だけなので、同じだけ波打っても戻す力が弱く、ずっと低い応力で波打ちます。k は両縁支持の 4 に対して 0.43、約9分の1。柱の有効座屈長 le にあたるのが、板の k です。',
@@ -46,22 +36,37 @@ const SCENES: SceneText[] = [
     body: `厚みだけが違う板を10枚並べました。横軸は幅厚比パラメータ R = √(σy/σel)。柱の λ と同じ作り方で、R = 1 は σel がちょうど σy になる板です。両縁支持・σy = 355 なら、幅厚比 b/t ≒ ${BT}。`,
   },
   {
-    kicker: '理想の板',
-    head: '理想の板の強さは、2本の線の低い方',
-    body: '厚い板(R < 1)は、波打つ前に降伏します。薄い板(R > 1)は σel で波打ちます。理想の板の強さは min(1, 1/R²)。柱とまったく同じ形です。',
+    kicker: '厚い板',
+    head: '厚い板は、波打つ前につぶれる',
+    body: '厚い板(R < 1)は、σel が σy より高いので、波打つ前に板全体が降伏します。強さは σy で頭打ち。これが降伏の天井 1.0 です。柱の「短い柱はつぶれる」と同じです。',
   },
   {
-    kicker: '現実の板 ①',
+    kicker: '薄い板',
+    head: '薄い板は、σy より低い応力で波打つ',
+    body: '薄い板(R > 1)は、σy に届く前に σel で波打ちます。薄いほど、低い応力で波打つ。柱の「長い柱は曲がって逃げる」と同じです。',
+  },
+  {
+    kicker: 'σel の線',
+    head: '厚みが半分なら、σel は4分の1',
+    body: 'σel/σy = 1/R²。厚みが半分なら R は2倍、σel は4分の1です。柱のオイラーの線と同じ形の線になります。',
+  },
+  {
+    kicker: '理想の板',
+    head: '理想の板の強さは、2本の線の低い方',
+    body: '降伏の天井 1.0 と、σel の線 1/R²。理想の板の強さは、その低い方 min(1, 1/R²) です。柱とまったく同じ形です。',
+  },
+  {
+    kicker: '現実の板',
+    head: '現実の板: R = 1 付近で下がり、薄い板は余力がある',
+    body: '現実の板で押すと、R = 1 の付近では柱と同じく理想より下がります。ところが薄い板は逆で、波打ったあとも理想の線より上まで耐えます(深緑の点)。ここが柱との大きな違いです。理由を次の2つで見ます。',
+  },
+  {
+    kicker: 'なぜ下がる',
     head: '溶接のゆがみと残留応力で、早めに崩れる',
     body: '板は溶接で組み立てるので、中央側には圧縮の残留応力と、わずかな反りが残ります。押すと、もともと押されている中央側が先に限界に近づいて反りがふくらみ、ふくらんだ中央は力を受けにくくなります。増えた力は縁側へ寄り、縁側が降伏した所が限界。だから R = 1 の付近で、理想の線より下がります。',
   },
   {
-    kicker: '現実の板 ②',
-    head: '現実の板: R = 1 付近で下がり、薄い板は余力がある',
-    body: 'R = 1 の付近では、柱と同じく理想より下がります。ところが薄い板は逆。波打ったあとも、支えられた縁が力を受け持つので、理想の線より上まで耐えます(深緑の点)。ここが柱との大きな違いです。',
-  },
-  {
-    kicker: '板だけの理由',
+    kicker: 'なぜ σy まで使えない',
     head: '波打つと、中央が働かず、縁に力が寄る',
     body: '波打つと、ふくらんだ中央は力を受けなくなり、増えた力は縁に寄ります。縁が σy に届いた所が限界。平均すると σy に届かないので、板には「σy × 低減率」までしか認めません(応力の並びは簡単なモデルによる模式図)。',
   },
@@ -78,8 +83,8 @@ const SCENES: SceneText[] = [
 ];
 
 const SIDE: Record<number, React.ReactNode> = {
-  1: <Steps title="弾性局部座屈応力" steps={[['', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, 'd3']]} note="柱の σe にあたる値。" />,
-  2: (
+  0: <Steps title="弾性局部座屈応力" steps={[['', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, 'd3']]} note="柱の σe にあたる値。" />,
+  1: (
     <Steps
       title="綱引き(柱の P × y と EI × 1/R と同じ形)"
       steps={[
@@ -91,7 +96,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="w = 波の高さ(柱の y)、σt = 幅1あたりの押す力(柱の P)、D = Et³/{12(1−ν²)} = 板の曲げにくさ(柱の EI にあたる)。わずかな波の範囲の話。D と k の出どころは「導き方」で。"
     />
   ),
-  3: (
+  2: (
     <Steps
       title="幅と厚みの効き方"
       steps={[
@@ -101,20 +106,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="(t/b)² の前は、材料と支え方で決まる数。だから σel は (t/b)² に比例する(t/b が2倍なら4倍)。"
     />
   ),
-  4: (
-    <Steps
-      title="σel の導出: 帯を柱とみなす"
-      steps={[
-        ['出発点', String.raw`\sigma_e=\dfrac{\pi^2E}{(l/r)^2}`],
-        ['帯 = 柱', String.raw`l\to b,\ r=\dfrac{t}{\sqrt{12}}\ \Rightarrow\ \dfrac{\pi^2E}{12}\left(\dfrac{t}{b}\right)^2`],
-        ['横の変形を抑える', String.raw`\times\dfrac{1}{1-\nu^2}`],
-        ['縁の支え', String.raw`\times k`],
-        ['結果', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, 'd3'],
-      ]}
-      note="帯の断面は幅 1・厚さ t なので r = t/√12。"
-    />
-  ),
-  5: (
+  3: (
     <Steps
       title="支え方と k(長い板)"
       steps={[
@@ -125,7 +117,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="柱の有効座屈長にあたる。k が大きいほど強い。"
     />
   ),
-  6: (
+  4: (
     <Steps
       title="R の導出(λ と同じ作り方)"
       steps={[
@@ -137,30 +129,51 @@ const SIDE: Record<number, React.ReactNode> = {
       note={`両縁支持・σy = 355 N/mm² なら R = b/t ÷ ${BT}。`}
     />
   ),
-  7: <Steps title="理想の板" steps={[['', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{\sigma_{el}}{\sigma_y}\right)=\min\left(1,\ \dfrac{1}{R^2}\right)`, 'ds-p1']]} />,
-  9: <Steps title="現実の板の強さの目安(両縁支持)" steps={[['Winter', String.raw`\dfrac{\sigma_u}{\sigma_y}=\dfrac{R-0.22}{R^2}\quad(R>0.673)`, 'ds-p2']]} note="有効幅の考え方による目安(Eurocode 3 の両縁支持板と同じ形)。" />,
-  11: (
+  5: (
     <Steps
-      title="設計式(道路橋示方書・平成24年版まで)"
+      title="厚い板(R < 1)"
       steps={[
-        ['R ≦ 0.7', String.raw`\dfrac{\sigma_{cl}}{\sigma_y}=1.0`],
-        ['R > 0.7', String.raw`\dfrac{\sigma_{cl}}{\sigma_y}=\dfrac{0.5}{R^2}=0.5\,\dfrac{\sigma_{el}}{\sigma_y}`, 'ds-p3'],
+        ['σel と σy', String.raw`\sigma_{el}>\sigma_y\ \Rightarrow\ \text{波打つ前に降伏}`],
+        ['強さ', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=1.0`],
       ]}
-      note="0.7 は 0.5/R² が 1.0 になる √0.5 ≒ 0.707 を丸めた値。0.5 は試験・解析と安全余裕から決めた係数(根拠は基準の解説で要確認)。"
+      note="柱の「短い柱はつぶれる」にあたる。"
     />
   ),
-  8: (
+  6: (
+    <Steps
+      title="薄い板(R > 1)"
+      steps={[
+        ['σel と σy', String.raw`\sigma_{el}<\sigma_y\ \Rightarrow\ \text{降伏の前に波打つ}`],
+        ['強さ', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\dfrac{\sigma_{el}}{\sigma_y}`],
+      ]}
+      note="柱の「長い柱は曲がって逃げる」にあたる。"
+    />
+  ),
+  7: (
+    <Steps
+      title="σel の線"
+      steps={[
+        ['R の定義から', String.raw`\dfrac{\sigma_{el}}{\sigma_y}=\dfrac{1}{R^2}`, 'd5'],
+        ['厚みが半分', String.raw`R\times 2\ \Rightarrow\ \sigma_{el}\times\dfrac{1}{4}`],
+        ['柱では', String.raw`\dfrac{\sigma_e}{\sigma_y}=\dfrac{1}{\lambda^2}`],
+      ]}
+    />
+  ),
+  8: <Steps title="理想の板\" steps={[['', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{\sigma_{el}}{\sigma_y}\right)=\min\left(1,\ \dfrac{1}{R^2}\right)`, 'ds-p1']]} />,
+  9: <Steps title="現実の板の強さの目安(両縁支持)" steps={[['Winter', String.raw`\dfrac{\sigma_u}{\sigma_y}=\dfrac{R-0.22}{R^2}\quad(R>0.673)`, 'ds-p2']]} note="有効幅の考え方による目安(Eurocode 3 の両縁支持板と同じ形)。" />,
+  10: (
     <Steps
       title="初期たわみは、押すと増える(柱と同じ)"
       steps={[
         ['はじめの反り', String.raw`w_0`],
         ['押したとき', String.raw`w=\dfrac{w_0}{1-\sigma/\sigma_{el}}`, 'ds-c3'],
-        ['中央の応力', String.raw`\sigma+\sigma_{\text{残留}}+\text{反りによる曲げ}`],
+        ['ふくらんだ中央', String.raw`\text{力を受けにくい}\ \to\ \text{縁側へ寄る}`],
+        ['縁側が σy', String.raw`\text{限界}\ \approx 0.78\,\sigma_y\quad(R=1)`, 'ds-p2'],
       ]}
-      note="σ が σel に近いほど反りが増える。R = 1 付近では降伏とも重なり、理想より手前で限界に。"
+      note="中央側は残留応力でもともと押されているので、先に反りがふくらむ。0.78 は Winter の式の R = 1 の値(目安)。"
     />
   ),
-  10: (
+  11: (
     <Steps
       title="縁に寄る応力と、有効幅"
       steps={[
@@ -169,6 +182,16 @@ const SIDE: Record<number, React.ReactNode> = {
         ['この板 R = 1.6', String.raw`\dfrac{1}{1.6}=0.63`],
       ]}
       note="映像の応力の並びは、中央を σel で頭打ちにした簡単なモデル(限界の平均は 0.61σy)。"
+    />
+  ),
+  12: (
+    <Steps
+      title="設計式(道路橋示方書・平成24年版まで)"
+      steps={[
+        ['R ≦ 0.7', String.raw`\dfrac{\sigma_{cl}}{\sigma_y}=1.0`],
+        ['R > 0.7', String.raw`\dfrac{\sigma_{cl}}{\sigma_y}=\dfrac{0.5}{R^2}=0.5\,\dfrac{\sigma_{el}}{\sigma_y}`, 'ds-p3'],
+      ]}
+      note="0.7 は 0.5/R² が 1.0 になる √0.5 ≒ 0.707 を丸めた値。0.5 は試験・解析と安全余裕から決めた係数(根拠は基準の解説で要確認)。"
     />
   ),
 };
@@ -357,36 +380,36 @@ export default function Stage5() {
       canvasRef={canvasRef}
       capRef={capRef}
       overlay={
-        scene === 2 ? <PlateTugOverlay phase={phase} pRef={pRef} /> : scene === 3 ? <WidthOverlay phase={phase} /> : scene === 5 ? <KOverlay phase={phase} /> : undefined
+        scene === 1 ? <PlateTugOverlay phase={phase} pRef={pRef} /> : scene === 2 ? <WidthOverlay phase={phase} /> : scene === 3 ? <KOverlay phase={phase} /> : undefined
       }
       hint="板の厚みと波の高さは見やすく誇張しています(10枚並べた板の厚みは、どれも本当の 3 倍。厚みの比は正しい)・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
         <>
           {SIDE[scene]}
-          {(scene === 7 || scene === 9 || scene >= 11) && (
+          {((scene >= 5 && scene <= 9) || scene >= 12) && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip color="#e11d48" text="降伏の天井 1.0" />
-              <Chip color="#6d28d9" text="σel/σy = 1/R²" />
-              <Chip color="#16a34a" text="理想の板" />
+              {scene >= 7 && <Chip color="#6d28d9" text="σel/σy = 1/R²" />}
+              {scene >= 8 && <Chip color="#16a34a" text="理想の板" />}
               {scene >= 9 && <Chip color="#0f766e" text="現実の板(目安)" />}
-              {scene >= 11 && <Chip color="#0284c7" text="設計式" />}
+              {scene >= 12 && <Chip color="#0284c7" text="設計式" />}
             </div>
           )}
-          {scene === 8 && (
+          {scene === 10 && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip color="#0284c7" text="圧縮(残留応力+押す力)" />
               <Chip color="#e11d48" text="降伏(縁側から)" />
               <Chip color="#ea580c" text="引張(溶接した縁の近く)" />
             </div>
           )}
-          {scene === 10 && (
+          {scene === 11 && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip color="#0284c7" text="幅方向の応力(板の上の柱)" />
               <Chip color="#e11d48" text="σy に届いた所" />
               <Chip color="#6d28d9" text="σel(波打ち始める応力)" />
             </div>
           )}
-          {scene >= 1 && scene <= 5 && (
+          {scene <= 3 && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip color="#1f2a44" text="外力(押す力)" />
               <Chip color="#64748b" text="反力" />

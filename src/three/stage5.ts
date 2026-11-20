@@ -696,29 +696,36 @@ export class Stage5Show extends ShowBase {
   protected tick(dt: number) {
     const raw = this.sceneIndex;
     const c0 = this.clock;
-    // 場面 8 = 溶接のゆがみと残留応力、場面 10 = 縁に寄る応力。そのほかは元の番号に読み替える
-    if (raw === 8) return this.tickWeld(c0);
-    if (raw === 10) return this.tickEdge(c0);
-    const s = raw === 9 ? 8 : raw === 11 ? 9 : raw >= 12 ? 10 : raw;
+    // 場面の並び(柱の説明と同じ順): 0 現象 → 1 綱引き → 2 幅と厚み → 3 支え方 → 4 10枚並べる → 5 厚い板 → 6 薄い板
+    // → 7 σel の線 → 8 理想の板 → 9 現実の板(点)→ 10 なぜ下がる(溶接)→ 11 なぜ σy まで使えない(縁に寄る)→ 12 設計式 → 13 実験室
+    if (raw === 10) return this.tickWeld(c0);
+    if (raw === 11) return this.tickEdge(c0);
+    // 中で使う番号(0 現象・2 綱引き・3 幅・5 支え方・6 R・61 厚い板・62 薄い板・63 σel の線・7 理想・8 現実・9 設計・10 実験室)
+    const MAP = [0, 2, 3, 5, 6, 61, 62, 63, 7, 8, -1, -1, 9, 10];
+    const s = MAP[Math.min(raw, MAP.length - 1)];
     const c = this.clock;
     const k6 = 1 - Math.exp(-dt * 6);
     if (s === 0) {
-      this.show(this.gBox);
-      const t = this.cyc(16, c);
-      const p = ramp(t, 1, 6) * (1 - ramp(t, 15, 16));
-      const A = 0.2 * ramp(t, 5, 6.5) * (1 - ramp(t, 15, 16));
-      this.box.update(A, 3, p);
-      this.caption = t < 1 ? '薄い板でできた、箱形の柱を押す' : t < 5 ? '柱はまっすぐ立っている…' : t < 10.5 ? '柱はまっすぐなのに、板が波打った = 局部座屈' : '柱の座屈と同じ順番で、板の座屈を見ていく';
-      this.look(0, 1.75, 2.6, 3.0, 32, 14);
-    } else if (s === 1) {
-      this.show(this.gOne);
-      const t = this.cyc(16, c);
-      const p = Math.min(1, ramp(t, 2, 9)) * (1 - ramp(t, 14.5, 16));
-      const A = 0.2 * (ramp(t, 8.9, 9.6) - ramp(t, 14.5, 16));
-      this.one.update({ A, load: p, level: 0.5 * p, pattern: A > 0.02 ? 0.4 : 0, edge: 0.6, railGlow: ramp(t, 0.5, 2), tags: true });
-      this.caption =
-        t < 2 ? '箱の壁を1枚取り出す。両側の縁は、隣の板に支えられている' : t < 8.9 ? `押す力 ${Math.round(p * 100)}%。板は平らなまま` : '突然波打った。この応力が σel';
-      this.look(0, 0.75, 1.6, 1.35, 32, 14);
+      // 現象(28 秒): 箱形の柱の板が波打つ(0〜12 秒)→ 壁を1枚取り出して押す → 突然波打つ = σel(12〜28 秒)
+      const T = this.cyc(28, c);
+      if (T < 12) {
+        this.show(this.gBox);
+        const t = T;
+        const p = ramp(t, 1, 6);
+        const A = 0.2 * ramp(t, 5, 6.5);
+        this.box.update(A, 3, p);
+        this.caption = t < 1 ? '薄い板でできた、箱形の柱を押す' : t < 5 ? '柱はまっすぐ立っている…' : t < 10 ? '柱はまっすぐなのに、板が波打った = 局部座屈' : 'この壁を1枚取り出して、押してみる';
+        this.look(0, 1.75, 2.6, 3.0, 32, 14);
+      } else {
+        this.show(this.gOne);
+        const t = T - 12;
+        const p = Math.min(1, ramp(t, 2, 9)) * (1 - ramp(t, 14.5, 16));
+        const A = 0.2 * (ramp(t, 8.9, 9.6) - ramp(t, 14.5, 16));
+        this.one.update({ A, load: p, level: 0.5 * p, pattern: A > 0.02 ? 0.4 : 0, edge: 0.6, railGlow: ramp(t, 0.5, 2), tags: true });
+        this.caption =
+          t < 2 ? '箱の壁を1枚。両側の縁は、隣の板に支えられている(緑)' : t < 8.9 ? `押す力 ${Math.round(p * 100)}%。板は平らなまま` : '突然波打った。この応力が σel(弾性局部座屈応力)';
+        this.look(0, 0.75, 1.6, 1.35, 32, 14);
+      }
     } else if (s === 2) {
       this.show(this.gOne);
       // 映像2 の綱引きと同じ筋(44 秒): もし波打ったら → 真ん中で切って w を見せる → 押し出す力 σt × w → 戻す力 D × 1/R = kπ²D/b² × w
@@ -850,33 +857,6 @@ export class Stage5Show extends ShowBase {
       const az = T >= 3.5 && T < 10 ? 58 : 30;
       this.shiftRight(this.gPair, 0.95, az);
       this.look(0.05, 0.8, 2.9, 1.75, az, 12);
-    } else if (s === 4) {
-      this.show(this.gOne);
-      const t = this.cyc(24, c);
-      let ghost = 0;
-      let strip = 0;
-      let A = 0;
-      let glow = 0;
-      let p = 0;
-      if (t < 4) {
-        this.caption = '板を、押す向きに細い帯に分けて考える。帯1本は、長さ b の柱';
-      } else if (t < 10) {
-        ghost = ramp(t, 4, 5);
-        p = 0.25;
-        strip = 0.2 * ramp(t, 6, 7.5);
-        this.caption = t < 7.5 ? '帯1本だけで押すと…' : '帯は柱として座屈する。σ = π²E/12 × (t/b)²';
-      } else if (t < 15) {
-        ghost = 1 - ramp(t, 10, 11);
-        strip = 0.2 * (1 - ramp(t, 10, 11));
-        this.caption = '隣とつながっているので少し硬い → × 1/(1−ν²)';
-      } else {
-        glow = ramp(t, 15, 16);
-        p = Math.min(1, ramp(t, 16, 19));
-        A = 0.2 * ramp(t, 18.8, 19.6);
-        this.caption = t < 19 ? '両側の縁が支えて、波打ちを抑える → × k(両縁支持で 4)' : 'これで σel = kπ²E / {12(1−ν²)} × (t/b)²';
-      }
-      this.one.update({ A, load: p, ghost, strip: t >= 4 && t < 15 ? strip : undefined, railGlow: glow, tags: glow > 0.5 });
-      this.look(0, 0.75, 1.6, 1.35, 34, 12);
     } else if (s === 5) {
       // 支え方(32 秒): σel の式の k = 支え方の係数 → 同じだけ波打たせて戻す力(青)を比べる → 同じ応力で押す
       this.show(this.gSup);
@@ -919,11 +899,12 @@ export class Stage5Show extends ShowBase {
       const az = T >= 3 && T < 9.5 ? 58 : 28;
       this.shiftRight(this.gSup, 0.65, az);
       this.look(0.05, 0.8, 2.9, 1.75, az, 12);
-    } else if (s >= 6 && s <= 9) {
+    } else if ((s >= 6 && s <= 9) || s > 60) {
       this.show(this.gLine, this.gWall);
       // 板の厚み(濃い色の縁)が見えるよう、少し斜め上から
       this.look(0, 2.05, 4.4, 3.3, 16, 15);
-      const t = this.once([15, 14, 17, 15][s - 6], c);
+      const DUR: Record<number, number> = { 6: 15, 61: 12, 62: 14, 63: 12, 7: 9, 8: 17, 9: 15 };
+      const t = this.once(DUR[s], c);
       // 板ごとの押す力と、波の大きさ
       const loads = new Array(N).fill(0);
       const amps = new Array(N).fill(0);
@@ -971,21 +952,35 @@ export class Stage5Show extends ShowBase {
             : t < 10
               ? '横軸は R = √(σy/σel)。R = 1 は、σel = σy になる板'
               : '両縁支持・σy = 355 なら、R = 1 は b/t ≒ 45';
-      } else if (s === 7) {
+      } else if (s === 61) {
+        // 厚い板(R < 1)だけ押す: 波打つ前に降伏する
+        for (let i = 0; i < N; i++) if (RS[i] < 1) doneIdeal(i, ramp(t, 1.5 + i * 1.1, 2.8 + i * 1.1));
+        fy = ramp(t, 6.5, 8.5);
+        this.caption = t < 6 ? '厚い板(R < 1)を押す。波打たずに、全体が降伏する(赤)' : '強さは σy で頭打ち。これが降伏の天井 1.0';
+      } else if (s === 62) {
+        // 薄い板(R > 1)も押す: σy より低い σel で波打つ
         for (let i = 0; i < N; i++) {
-          const t0 = 1 + i * 0.75;
-          doneIdeal(i, ramp(t, t0, t0 + 0.6));
+          if (RS[i] < 1) doneIdeal(i, 1);
+          else {
+            const j = i - 4;
+            doneIdeal(i, ramp(t, 1 + j * 1.1, 2.2 + j * 1.1));
+          }
         }
-        fy = ramp(t, 1, 3);
-        fe = ramp(t, 5, 8.5);
-        fi = ramp(t, 9, 11.5);
-        mark = t > 9;
-        this.caption =
-          t < 4.5
-            ? '厚い板は、波打つ前に降伏する。天井 = 1.0'
-            : t < 9
-              ? '薄い板は σel で波打つ。σel/σy = 1/R²'
-              : '理想の板 = min(1, 1/R²)。柱と同じ形';
+        fy = 1;
+        this.caption = t < 8.5 ? '薄い板(R > 1)は、σy に届く前に σel で波打つ' : '薄いほど、低い応力で波打つ';
+      } else if (s === 63) {
+        for (let i = 0; i < N; i++) doneIdeal(i, 1);
+        fy = 1;
+        fe = ramp(t, 1, 5);
+        mark = t > 5;
+        this.caption = t < 6 ? '波打つ応力の線: σel/σy = 1/R²' : '厚みが半分なら R は2倍、σel は 1/4。柱のオイラーの線と同じ形';
+      } else if (s === 7) {
+        for (let i = 0; i < N; i++) doneIdeal(i, 1);
+        fy = 1;
+        fe = 1;
+        fi = ramp(t, 1, 4);
+        mark = true;
+        this.caption = t < 5 ? '理想の板の強さ = 2本の線の低い方' : '理想の板 = min(1, 1/R²)。柱と同じ形';
       } else {
         for (let i = 0; i < N; i++) doneIdeal(i, 1);
         fy = 1;
@@ -1001,10 +996,10 @@ export class Stage5Show extends ShowBase {
           fr = ramp(t, 8, 11);
           this.caption =
             t < 7.5
-              ? '現実の板(初期のゆがみ・残留応力あり)で押す'
+              ? '現実の板(溶接の残留応力・わずかな反りあり)で押す'
               : t < 13
                 ? 'R = 1 の付近は、理想の線より下がる(柱と同じ)'
-                : '薄い板は、波打ったあとも縁で耐える';
+                : '薄い板は逆に、理想の線より上まで耐える。理由は次の2つ';
         } else {
           for (let i = 0; i < N; i++) doneReal(i, 1);
           fr = 1;
@@ -1033,7 +1028,7 @@ export class Stage5Show extends ShowBase {
     } else {
       // 実験室
       this.show(this.gWall, this.gLab);
-      this.look(0, 2.05, 4.4, 3.3, 6, 8);
+      this.look(0, 2.05, 4.4, 3.3, 16, 15);
       for (let i = 0; i < N; i++) {
         this.dotI[i].scale.setScalar(0.001);
         this.dotR[i].scale.setScalar(0.001);
