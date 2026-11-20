@@ -561,6 +561,10 @@ export class Stage3D {
   replayExplain() {
     this.explain.reset();
   }
+  /** 説明用の場面の再生位置を移す */
+  seekExplain(p: number) {
+    if (this.explainMode) this.explain.seek(this.explainMode, p);
+  }
 
   /** 柱の上のラベルを置く画面上の位置(px)。映っていなければ null */
   labelPos(i: number): { x: number; y: number } | null {

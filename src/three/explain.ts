@@ -172,6 +172,13 @@ export class ExplainScene {
     this.clock = 0;
   }
 
+  /** 再生位置を p(0〜1)へ移す。見終えていれば見終わりのまま */
+  seek(mode: ExplainMode, p: number) {
+    const T = mode === 'spring' ? 17 : 23;
+    const q = Math.max(0, Math.min(0.999, p));
+    this.clock = (this.clock >= T ? T : 0) + q * T;
+  }
+
   /** 場面の動きの進み具合(1回分は spring が 17 秒、ほかは 23 秒でくり返す) */
   clip(mode: ExplainMode) {
     const T = mode === 'spring' ? 17 : 23;

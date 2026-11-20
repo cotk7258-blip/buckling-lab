@@ -221,6 +221,7 @@ export default function Stage3() {
     secMode,
     // 押し終えてから寄る場面の進み具合(t: 押し終えてからの秒、after: 寄ってからの秒)
     zoom: null as null | { to: CameraPose; t: number; done: boolean; after: number },
+    pose: null as null | CameraPose,
   });
   live.current.ctx = ctx;
   live.current.playing = playing;
@@ -243,6 +244,7 @@ export default function Stage3() {
       L.speed = sc.speed;
       L.mixTarget = sc.stress ? 1 : 0;
       L.zoom = sc.zoomTo ? { to: sc.zoomTo, t: 0, done: false, after: 0 } : null;
+      L.pose = sc.pose;
       stageRef.current?.setPose(sc.pose);
       stageRef.current?.setExplain(sc.explain ?? null);
     }
@@ -355,7 +357,25 @@ export default function Stage3() {
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
+    // 上端のバーのつまみで再生位置を移す: 説明用の場面は時計、試験機の場面は押す力の位置
+    const onSeek = (e: Event) => {
+      const p = (e as CustomEvent<number>).detail;
+      const L = live.current;
+      if (stage.explainClip()) {
+        stage.seekExplain(p);
+        return;
+      }
+      if (!L.auto) return;
+      L.load = L.from + p * (L.target - L.from);
+      // 寄る場面を手前に戻したら、寄る前のアングルからやり直す
+      if (L.zoom && p < 0.995) {
+        if (L.zoom.done && L.pose) stage.setPose(L.pose, false);
+        L.zoom = { ...L.zoom, t: 0, done: false, after: 0 };
+      }
+    };
+    window.addEventListener('seek-scene', onSeek);
     return () => {
+      window.removeEventListener('seek-scene', onSeek);
       cancelAnimationFrame(raf);
       stage.dispose();
       section.dispose();

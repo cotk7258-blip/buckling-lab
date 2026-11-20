@@ -186,6 +186,13 @@ export abstract class ShowBase {
     }
     return c;
   }
+  /** 場面の中の再生位置を p(0〜1)へ移す。くり返しの場面は、見終えていれば見終わりのまま */
+  seek(p: number) {
+    if (this.dur <= 0) return;
+    const q = Math.max(0, Math.min(this.loop ? 0.999 : 1, p));
+    this.clock = (this.loop && this.clock >= this.dur ? this.dur : 0) + q * this.dur;
+  }
+
   /** 場面の動きの進み具合: p = 1回分のうちどこまで(0〜1)、done = 1回分を見終えたか。長さがなければ null */
   clip(): { p: number; done: boolean; loop: boolean } | null {
     if (this.dur <= 0) return null;

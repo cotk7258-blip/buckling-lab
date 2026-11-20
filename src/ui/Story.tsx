@@ -78,16 +78,26 @@ export function updateClip(root: Element | null, clip: Clip) {
   const bar = root.querySelector<HTMLElement>('[data-clip-bar]');
   const label = root.querySelector<HTMLElement>('[data-clip-label]');
   const next = root.querySelector<HTMLElement>('[data-next]');
+  const knob = root.querySelector<HTMLElement>('[data-clip-knob]');
   if (!clip) {
     if (track) track.style.opacity = '0';
+    if (track) track.style.pointerEvents = 'none';
     if (label) label.style.visibility = 'hidden';
     next?.setAttribute('data-done', '0');
     return;
   }
-  if (track) track.style.opacity = '1';
+  if (track) {
+    track.style.opacity = '1';
+    track.style.pointerEvents = 'auto';
+  }
+  const w = `${(clip.done && !clip.loop ? 1 : clip.p) * 100}%`;
   if (bar) {
-    bar.style.width = `${(clip.done && !clip.loop ? 1 : clip.p) * 100}%`;
+    bar.style.width = w;
     bar.style.background = clip.done ? '#16a34a' : '';
+  }
+  if (knob) {
+    knob.style.left = w;
+    knob.style.borderColor = clip.done ? '#16a34a' : '';
   }
   if (label) {
     label.style.visibility = 'visible';
@@ -98,11 +108,47 @@ export function updateClip(root: Element | null, clip: Clip) {
   next?.setAttribute('data-done', clip.done ? '1' : '0');
 }
 
-/** 映像の上端の、場面の動きの進み具合のバー(映像の枠の中に置く) */
+/** 場面の中の再生位置を移す(p は 0〜1)。映像の部品(useShow・Stage3)が受け取る */
+export function seekScene(p: number) {
+  window.dispatchEvent(new CustomEvent('seek-scene', { detail: p }));
+}
+
+/**
+ * 映像の上端の、場面の動きの進み具合のバー(映像の枠の中に置く)。
+ * 先端の丸いつまみを左右にずらす(またはバーを押す)と、その場面の再生位置が移る。
+ */
 export function ClipBar() {
+  const drag = useRef(false);
+  const at = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e.clientX - r.left) / Math.max(1, r.width)));
+  };
   return (
-    <div data-clip-track className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-studio-700/60 transition-opacity" style={{ opacity: 0 }} aria-hidden>
-      <div data-clip-bar className="h-full bg-comp" style={{ width: '0%' }} />
+    <div
+      data-clip-track
+      role="slider"
+      aria-label="この場面の再生位置"
+      className="absolute inset-x-0 top-0 z-[5] h-5 cursor-pointer touch-none transition-opacity"
+      style={{ opacity: 0, pointerEvents: 'none' }}
+      onPointerDown={(e) => {
+        drag.current = true;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        seekScene(at(e));
+      }}
+      onPointerMove={(e) => {
+        if (drag.current) seekScene(at(e));
+      }}
+      onPointerUp={() => (drag.current = false)}
+      onPointerCancel={() => (drag.current = false)}
+    >
+      <div className="absolute inset-x-0 top-0 h-1.5 bg-studio-700/60">
+        <div data-clip-bar className="h-full bg-comp" style={{ width: '0%' }} />
+      </div>
+      <div
+        data-clip-knob
+        className="pointer-events-none absolute top-[3px] h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-comp bg-white shadow"
+        style={{ left: '0%' }}
+      />
     </div>
   );
 }
@@ -163,9 +209,15 @@ export function useShow<T extends ShowBase>(make: (c: HTMLCanvasElement) => T, o
     const onReplay = () => {
       s.clock = 0;
     };
+    const onSeek = (e: Event) => {
+      // 見えている映像だけ(補足ページの図などは動かさない)
+      if (canvasRef.current?.closest('[data-shell]')) s.seek((e as CustomEvent<number>).detail);
+    };
     window.addEventListener('replay-scene', onReplay);
+    window.addEventListener('seek-scene', onSeek);
     return () => {
       window.removeEventListener('replay-scene', onReplay);
+      window.removeEventListener('seek-scene', onSeek);
       cancelAnimationFrame(raf);
       s.dispose();
       show.current = null;
