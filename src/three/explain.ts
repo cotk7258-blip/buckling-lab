@@ -25,6 +25,15 @@ const SHRINK_MEAN = SHRINK.reduce((a, b) => a + b, 0) / N;
 // 踏ん張り(Σ 距離²)。端の1本が働かなくなると、残り6本の中心まわりで 17.5/28 = 62.5%
 const K_LOST = 17.5 / 28;
 const BAR_H = 3.2;
+// 溶接の場面の導入(H形鋼のどこを溶接するか)。手前のフランジ = バネの束と同じ位置・大きさ
+const H_W = N * GAP + 0.3; // フランジの幅
+const H_D = 3.9; // 柱の奥行き(ウェブの長さ + フランジの厚み)
+const H_TF = 0.14; // フランジの厚み
+const H_TW = 0.1; // ウェブの厚み
+const WELD_INTRO = 8; // 導入の秒数
+/** 場面の1回分の長さ(秒) */
+type ExplainCam = { az: number; el: number; tz: number; scale: number; cy: number };
+const cycleOf = (mode: ExplainMode) => (mode === 'spring' ? 17 : mode === 'weld' ? 23 + WELD_INTRO : 23);
 
 export function springGeometry(): THREE.BufferGeometry {
   const pts: THREE.Vector3[] = [];
@@ -54,6 +63,16 @@ export class ExplainScene {
   private torch: THREE.Mesh;
   private torchLight: THREE.PointLight;
   private weldLabels = new THREE.Group();
+  // 溶接の導入: H形鋼(手前のフランジ・ウェブ・奥のフランジ)、溶接ビード4本、トーチ2つ
+  private hGroup = new THREE.Group();
+  private hFront: THREE.MeshStandardMaterial;
+  private hRest: THREE.MeshStandardMaterial;
+  private beads: THREE.Mesh[] = [];
+  private beadFront: boolean[] = [];
+  private hTorches: THREE.Mesh[] = [];
+  private hLabels: THREE.Sprite[] = [];
+  /** 導入の間だけ使うカメラ(null なら いつものカメラ) */
+  private cam: ExplainCam | null = null;
   private armLong: THREE.Line;
   private armShort: THREE.Line;
   private armLabels = new THREE.Group();
@@ -77,7 +96,52 @@ export class ExplainScene {
     const key = new THREE.DirectionalLight('#ffffff', 2.2);
     key.position.set(3, 6, 7);
     this.scene.add(key);
-    this.scene.add(this.bundle, this.barGroup);
+    this.scene.add(this.bundle, this.barGroup, this.hGroup);
+    // 溶接の導入の H形鋼。手前のフランジは z = 0(バネの束と重なる位置)、ウェブは奥(−z)へ
+    this.hFront = new THREE.MeshStandardMaterial({ color: '#8794a8', metalness: 0.55, roughness: 0.4, transparent: true });
+    this.hRest = new THREE.MeshStandardMaterial({ color: '#8794a8', metalness: 0.55, roughness: 0.4, transparent: true });
+    const fFront = new THREE.Mesh(new THREE.BoxGeometry(H_W, L0, H_TF), this.hFront);
+    fFront.position.set(0, L0 / 2, 0);
+    const fBack = new THREE.Mesh(new THREE.BoxGeometry(H_W, L0, H_TF), this.hRest);
+    fBack.position.set(0, L0 / 2, -H_D);
+    const web = new THREE.Mesh(new THREE.BoxGeometry(H_TW, L0, H_D - H_TF), this.hRest);
+    web.position.set(0, L0 / 2, -H_D / 2);
+    this.hGroup.add(fFront, fBack, web);
+    // 溶接ビード: フランジとウェブのつなぎ目(ウェブの両側 × 手前・奥のフランジ = 4本)。長さ方向(y)に伸びる
+    const r = 0.055;
+    for (const front of [true, false])
+      for (const side of [-1, 1]) {
+        const b = new THREE.Mesh(
+          new THREE.CylinderGeometry(r, r, 1, 10),
+          new THREE.MeshStandardMaterial({ color: '#6b7280', emissive: '#f59e0b', emissiveIntensity: 0, transparent: true }),
+        );
+        b.position.set(side * (H_TW / 2 + r), 0, front ? -(H_TF / 2 + r) : -H_D + H_TF / 2 + r);
+        this.hGroup.add(b);
+        this.beads.push(b);
+        this.beadFront.push(front);
+      }
+    // トーチ(手前のつなぎ目2本を進む光)
+    for (let i = 0; i < 2; i++) {
+      const tch = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), new THREE.MeshBasicMaterial({ color: '#fde68a' }));
+      const lt = new THREE.PointLight('#ffb347', 6, 4, 1.5);
+      tch.add(lt);
+      this.hGroup.add(tch);
+      this.hTorches.push(tch);
+    }
+    for (const [text, color] of [
+      ['フランジ', '#1f2a44'],
+      ['ウェブ', '#1f2a44'],
+      ['溶接するつなぎ目', '#d97706'],
+    ] as const) {
+      const sp = label(text, color, text.length > 5 ? 1.6 : 1);
+      sp.scale.multiplyScalar(0.7);
+      this.hGroup.add(sp);
+      this.hLabels.push(sp);
+    }
+    this.hLabels[0].position.set(-H_W / 2 + 0.6, L0 + 0.35, 0.1);
+    this.hLabels[1].position.set(0.5, L0 + 0.35, -H_D * 0.55);
+    this.hLabels[2].position.set(1.3, L0 * 0.45, -0.4);
+    this.hGroup.visible = false;
 
     const plate = new THREE.MeshStandardMaterial({ color: '#6f7d94', metalness: 0.45, roughness: 0.5 });
     const bright = new THREE.MeshStandardMaterial({ color: '#c9d3e3', metalness: 0.9, roughness: 0.25 });
@@ -174,16 +238,62 @@ export class ExplainScene {
 
   /** 再生位置を p(0〜1)へ移す。見終えていれば見終わりのまま */
   seek(mode: ExplainMode, p: number) {
-    const T = mode === 'spring' ? 17 : 23;
+    const T = cycleOf(mode);
     const q = Math.max(0, Math.min(0.999, p));
     this.clock = (this.clock >= T ? T : 0) + q * T;
   }
 
-  /** 場面の動きの進み具合(1回分は spring が 17 秒、ほかは 23 秒でくり返す) */
+  /** 場面の動きの進み具合(1回分は spring が 17 秒、weld が 31 秒(導入 8 秒 + 23 秒)、ほかは 23 秒でくり返す) */
   clip(mode: ExplainMode) {
-    const T = mode === 'spring' ? 17 : 23;
+    const T = cycleOf(mode);
     const k = this.clock / T;
     return { p: k % 1, done: k >= 1, loop: true };
+  }
+
+  /**
+   * 溶接の場面の導入(8 秒): H形鋼を斜め上から見せる → フランジとウェブのつなぎ目4か所を、トーチが長さ方向に溶接していく
+   * → 手前のフランジへ回り込み、ウェブと奥のフランジを消す → 手前のフランジが透けて、中のバネ7本に置きかわる
+   */
+  private weldIntro(tw: number) {
+    this.hGroup.visible = true;
+    const grow = ramp(tw, 1.6, 4.6); // ビードの伸び
+    const cool = ramp(tw, 4.8, 6.2); // 光が冷める
+    const restA = 1 - ramp(tw, 5.4, 6.4); // ウェブ・奥のフランジ
+    const frontA = 1 - ramp(tw, 6.4, 7.8); // 手前のフランジ(透けてバネが見える)
+    this.hRest.opacity = restA;
+    this.hRest.depthWrite = restA > 0.5;
+    this.hFront.opacity = 0.15 + 0.85 * frontA;
+    this.hFront.depthWrite = frontA > 0.5;
+    this.beads.forEach((b, i) => {
+      const len = Math.max(0.001, grow * L0);
+      b.scale.y = len;
+      b.position.y = len / 2;
+      const m = b.material as THREE.MeshStandardMaterial;
+      m.emissiveIntensity = 1.6 * (1 - cool);
+      m.opacity = this.beadFront[i] ? frontA : restA;
+      b.visible = grow > 0.01 && m.opacity > 0.02;
+    });
+    this.hTorches.forEach((tc, i) => {
+      tc.visible = tw > 1.6 && tw < 4.6;
+      tc.position.set((i ? 1 : -1) * (H_TW / 2 + 0.1), grow * L0, -(H_TF / 2 + 0.1));
+    });
+    this.hLabels[0].visible = this.hLabels[1].visible = tw < 5.4;
+    this.hLabels[2].visible = tw > 2 && tw < 6.2;
+    // バネの束は、手前のフランジが透け始めたら中から見せる
+    this.bundle.visible = tw > 6.4;
+    this.weldLabels.visible = tw > 6.4;
+    // カメラ: 斜め上から H の形が見える向き → 手前のフランジの正面へ
+    const u = ramp(tw, 5.0, 7.4);
+    const e = u * u * (3 - 2 * u);
+    this.cam = { az: 48 + (14 - 48) * e, el: 30 + (12 - 30) * e, tz: -H_D / 2 + (H_D / 2) * e, scale: 1.45 + (1 - 1.45) * e, cy: 1.2 + 0.1 * e };
+    this.caption =
+      tw < 1.6
+        ? '柱の H形鋼は、3枚の板を溶接して作る'
+        : tw < 4.8
+          ? 'フランジとウェブのつなぎ目(4か所)を、長さ全体にわたって溶接する'
+          : tw < 6.4
+            ? '手前のフランジに注目。溶接したのは、その真ん中'
+            : 'このフランジを、バネ7本で表す。真ん中のバネが溶接した所';
   }
 
   /** バネ i の長さ・色を決める。s は応力(圧縮を正、-1〜1)、hot は熱、dead は降伏して働かない度合い */
@@ -208,6 +318,8 @@ export class ExplainScene {
     for (const a of this.small) a.visible = false;
     for (const a of this.big) a.visible = false;
     this.bundle.visible = mode !== 'domino';
+    this.hGroup.visible = false;
+    this.cam = null;
     this.barGroup.visible = mode === 'domino';
     this.weldLabels.visible = mode === 'weld';
     this.armLabels.visible = false;
@@ -235,7 +347,9 @@ export class ExplainScene {
       if (d > 0) setArrow(this.big[0], 0, topY + 0.1 + 0.5 + d * 1.6, -(0.5 + d * 1.6));
       else if (d < 0) setArrow(this.big[0], 0, topY + 0.1, 0.5 - d * 1.6);
     } else if (mode === 'weld') {
-      const t = t0 % 23;
+      const tw = t0 % cycleOf('weld');
+      // 導入(H形鋼のどこを溶接するか)のあいだは、バネは最初の状態のまま
+      const t = Math.max(0, tw - WELD_INTRO);
       const heat = ramp(t, 2.5, 5) - ramp(t, 6.5, 9.5);
       const cool = ramp(t, 6.5, 9.5); // 縮みの進み
       const join = ramp(t, 11.5, 14); // つなげる
@@ -262,11 +376,12 @@ export class ExplainScene {
           tintArrow(this.small[i], s < 0 ? '#ea580c' : '#0284c7');
         }
       }
-      if (t > 2.5 && t < 5.2) {
+      if (tw >= WELD_INTRO && t > 2.5 && t < 5.2) {
         this.torch.visible = true;
         this.torch.position.set(0, ((t - 2.5) / 2.7) * L0, 0.25);
         this.torchLight.intensity = 8;
       }
+      if (tw < WELD_INTRO) this.weldIntro(tw);
     } else if (mode === 'lever') {
       const t = t0 % 23;
       const lost = ramp(t, 14, 16); // 左端のバネが降伏して働かなくなる
@@ -360,13 +475,16 @@ export class ExplainScene {
     }
 
     const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const cy = mode === 'domino' ? 1.6 : 1.3;
-    const dist = Math.max((mode === 'domino' ? 3.0 : 2.95) / tan, 2.45 / (tan * aspect));
-    const az = THREE.MathUtils.degToRad(mode === 'domino' ? 8 : 14);
-    const el = THREE.MathUtils.degToRad(mode === 'domino' ? 6 : 12);
+    // 導入のカメラは weldIntro が入れる(update の冒頭で null に戻すので、型を明示して読む)
+    const C = this.cam as ExplainCam | null;
+    const cy = C ? C.cy : mode === 'domino' ? 1.6 : 1.3;
+    const tz = C ? C.tz : 0;
+    const dist = Math.max((mode === 'domino' ? 3.0 : 2.95) / tan, 2.45 / (tan * aspect)) * (C ? C.scale : 1);
+    const az = THREE.MathUtils.degToRad(C ? C.az : mode === 'domino' ? 8 : 14);
+    const el = THREE.MathUtils.degToRad(C ? C.el : mode === 'domino' ? 6 : 12);
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
-    this.camera.position.set(dist * Math.sin(az) * Math.cos(el), cy + dist * Math.sin(el), dist * Math.cos(az) * Math.cos(el));
-    this.camera.lookAt(0, cy, 0);
+    this.camera.position.set(dist * Math.sin(az) * Math.cos(el), cy + dist * Math.sin(el), tz + dist * Math.cos(az) * Math.cos(el));
+    this.camera.lookAt(0, cy, tz);
   }
 }
