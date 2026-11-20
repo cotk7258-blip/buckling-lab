@@ -5,7 +5,7 @@ import { ExplainScene } from './explain.ts';
 import type { ExplainMode } from './explain.ts';
 import { BG, addStudioEnvironment, makeGlowMaterial, makeRenderer, writeStressColor } from './common.ts';
 import { arrow, label, placeArrow } from './kit.ts';
-import { VIEW, applyView, smoothView } from './view.ts';
+import { VIEW, applyView, bindCamera, smoothView } from './view.ts';
 
 /** たわみを絵の上で何倍に見せるか */
 export const DEFL_AMP = 12;
@@ -454,7 +454,6 @@ export class Stage3D {
   private glow = { value: 0 };
   private pose: CameraPose = { az: 18, el: 8, focus: 'both' };
   private cur = { az: 18, el: 8, cx: 0, cy: 3, hw: 3.2, hh: 3.3 };
-  private userAz = 0;
   private view = { ...VIEW };
   private shake = 0;
   private wasCollapsed = [false, false];
@@ -511,19 +510,12 @@ export class Stage3D {
     this.cols = COL_X.map((x, i) => new Column3D(x, this.glow, machine, i === 1));
     for (const c of this.cols) this.scene.add(c.group);
 
-    // 横になぞると回り込む(縦のスクロールはページに渡す)
-    canvas.style.touchAction = 'pan-y';
-    let drag: { x: number; az: number } | null = null;
-    canvas.addEventListener('pointerdown', (e) => {
-      drag = { x: e.clientX, az: this.userAz };
-    });
-    window.addEventListener('pointermove', (e) => {
-      if (drag) this.userAz = Math.max(-75, Math.min(75, drag.az - (e.clientX - drag.x) * 0.35));
-    });
-    const end = () => (drag = null);
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', end);
+    // 左ドラッグ = 回転、右ドラッグ = 平行移動、ホイール = 寄る・引く(指は横になぞると回り込み)
+    this.unbind = bindCamera(canvas, this.rot, 75);
   }
+  private unbind: () => void;
+  /** 見る人が回した向き(度)。場面(カメラの構図)が変わると元に戻す */
+  private rot = { az: 0, el: 0 };
 
   resize() {
     const w = this.canvas.clientWidth;
@@ -543,7 +535,10 @@ export class Stage3D {
 
   setPose(pose: CameraPose, resetUser = true) {
     this.pose = pose;
-    if (resetUser) this.userAz = 0;
+    if (resetUser) {
+      this.rot.az = 0;
+      this.rot.el = 0;
+    }
   }
 
   /** 説明用の場面(バネの束)に切り替える。null で試験機に戻す */
@@ -603,8 +598,8 @@ export class Stage3D {
             : { cx: COL_X[1] + real.lastD, cy: BASE_Y + COL_H / 2 - 0.1, hw: Math.max(0.42, real.bw * 1.9), hh: Math.max(0.5, real.bw * 2.2) };
     const k = 1 - Math.exp(-dt * 2.2);
     const c = this.cur;
-    c.az += (this.pose.az + this.userAz - c.az) * (1 - Math.exp(-dt * 5));
-    c.el += (this.pose.el - c.el) * k;
+    c.az += (this.pose.az + this.rot.az - c.az) * (1 - Math.exp(-dt * 5));
+    c.el += (this.pose.el + this.rot.el - c.el) * Math.max(k, 1 - Math.exp(-dt * 5));
     c.cx += (tgt.cx - c.cx) * k;
     c.cy += (tgt.cy - c.cy) * k;
     c.hw += (tgt.hw - c.hw) * k;
@@ -628,6 +623,7 @@ export class Stage3D {
   }
 
   dispose() {
+    this.unbind();
     this.renderer.dispose();
   }
 }

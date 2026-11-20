@@ -204,7 +204,7 @@ export default function Stage5() {
       onScene={go}
       canvasRef={canvasRef}
       capRef={capRef}
-      hint="板の厚みと波の高さは見やすく誇張しています・横になぞると回り込めます"
+      hint="板の厚みと波の高さは見やすく誇張しています・なぞると回転(PC は右ドラッグで移動・ホイールで拡大縮小)"
       side={
         <>
           {SIDE[scene]}

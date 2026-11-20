@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { VIEW, applyView, smoothView } from './view.ts';
+import { VIEW, applyView, bindCamera, smoothView } from './view.ts';
 import { BG, addStudioEnvironment, makeRenderer } from './common.ts';
 
 export const smooth = (t: number) => {
@@ -109,7 +109,6 @@ export abstract class ShowBase {
   private h = 0;
   private tgt = { cx: 0, cy: 1.5, hw: 3, hh: 3, az: 10, el: 8 };
   private cur = { cx: 0, cy: 1.5, hw: 3, hh: 3, az: 10, el: 8 };
-  private userAz = 0;
   private first = true;
   /** 一時停止中は場面の時計と動きを止める(カメラの操作は効く) */
   paused = false;
@@ -126,19 +125,12 @@ export abstract class ShowBase {
     const rim = new THREE.DirectionalLight('#0284c7', 1.0);
     rim.position.set(-6, 4, -5);
     this.scene.add(rim);
-    canvas.style.touchAction = 'pan-y';
-    let drag: { x: number; az: number } | null = null;
-    canvas.addEventListener('pointerdown', (e) => (drag = { x: e.clientX, az: this.userAz }));
-    this.onMove = (e) => {
-      if (drag) this.userAz = Math.max(-70, Math.min(70, drag.az - (e.clientX - drag.x) * 0.35));
-    };
-    this.onUp = () => (drag = null);
-    window.addEventListener('pointermove', this.onMove);
-    window.addEventListener('pointerup', this.onUp);
-    window.addEventListener('pointercancel', this.onUp);
+    // 左ドラッグ = 回転、右ドラッグ = 平行移動、ホイール = 寄る・引く(指は横になぞると回り込み)
+    this.unbind = bindCamera(canvas, this.rot, 70);
   }
-  private onMove: (e: PointerEvent) => void;
-  private onUp: () => void;
+  private unbind: () => void;
+  /** 見る人が回した向き(度)。場面が変わると元に戻す */
+  private rot = { az: 0, el: 0 };
 
   /** 床と目盛り(必要なステージだけ呼ぶ) */
   protected addFloor(y = 0) {
@@ -164,7 +156,8 @@ export abstract class ShowBase {
     if (i === this.sceneIndex && !this.first) return;
     this.sceneIndex = i;
     this.clock = 0;
-    this.userAz = 0;
+    this.rot.az = 0;
+    this.rot.el = 0;
     this.onScene(i);
   }
   protected onScene(_i: number) {}
@@ -228,8 +221,8 @@ export abstract class ShowBase {
     c.cy += (t.cy - c.cy) * k;
     c.hw += (t.hw - c.hw) * k;
     c.hh += (t.hh - c.hh) * k;
-    c.el += (t.el - c.el) * k;
-    c.az += (t.az + this.userAz - c.az) * kAz;
+    c.el += (t.el + this.rot.el - c.el) * kAz;
+    c.az += (t.az + this.rot.az - c.az) * kAz;
     // 見る人の調整(平行移動・引き)を上乗せ
     const vw = applyView(c, c.az, smoothView(this.view, this.first ? 1e3 : dt));
     const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
@@ -242,9 +235,7 @@ export abstract class ShowBase {
   }
 
   dispose() {
-    window.removeEventListener('pointermove', this.onMove);
-    window.removeEventListener('pointerup', this.onUp);
-    window.removeEventListener('pointercancel', this.onUp);
+    this.unbind();
     this.renderer.dispose();
   }
 }

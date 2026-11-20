@@ -92,7 +92,7 @@ export default function Stage6() {
       canvasRef={canvasRef}
       capRef={capRef}
       labLabel="計算へ ▶"
-      hint="柱の絵は、しくみを示す模式図です(曲がりと波は見やすく誇張)・横になぞると回り込めます"
+      hint="柱の絵は、しくみを示す模式図です(曲がりと波は見やすく誇張)・なぞると回転(PC は右ドラッグで移動・ホイールで拡大縮小)"
       side={
         scene >= 6 ? (
           <div className="rounded-xl border border-studio-700 bg-studio-900 px-3 py-2 text-sm">

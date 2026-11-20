@@ -537,7 +537,7 @@ export default function Stage3() {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-ink-dim lg:order-3">
             <Legend />
             <span>
-              <Term id="amp">たわみは {DEFL_AMP} 倍に誇張</Term>・横になぞると回り込めます
+              <Term id="amp">たわみは {DEFL_AMP} 倍に誇張</Term>・なぞると回転(PC は右ドラッグで移動・ホイールで拡大縮小)
             </span>
           </div>
 
