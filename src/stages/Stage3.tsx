@@ -128,18 +128,6 @@ const SCENES: SceneDef[] = [
     explain: 'lever',
   },
   {
-    kicker: 'なぜ連鎖',
-    head: () => '曲がるほど、押す力が「曲げる力」に化ける',
-    body: () =>
-      '曲がると、押す力 × ずれ が、さらに曲げる力になります(映像2 の綱引き)。踏ん張りが十分なら止まる。でも踏ん張りが落ちると、曲がる → 曲げる力が増える → さらに曲がる、が止まりません。(模式図)',
-    stress: false,
-    target: (c) => c.real.Pfy + 0.012,
-    speed: 0.05,
-    pose: { az: 24, el: 9, focus: 'both' },
-    section: false,
-    explain: 'domino',
-  },
-  {
     kicker: '連鎖',
     head: () => '赤が広がる。踏ん張りが落ちる。さらに曲がる',
     body: (c) =>
