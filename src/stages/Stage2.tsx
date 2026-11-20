@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import { SUPPORTS, Stage2Show } from '../three/stage2.ts';
 import type { Lab2, Support } from '../three/stage2.ts';
 import { Card, LabSlider, Steps, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
-import { Tex } from '../ui/Tex.tsx';
+import { FitTex, Tex } from '../ui/Tex.tsx';
 
 const SIDE2: Record<number, React.ReactNode> = {
   1: (
@@ -34,6 +35,76 @@ const SIDE2: Record<number, React.ReactNode> = {
   ),
 };
 
+/**
+ * 綱引きの場面で映像の左側に重ねる「式のカード」と「天秤」。段階(phase)は Stage2Show.tugInfo から読む。
+ *  1 曲げる力 = P × y → 2 戻す力 = EI × 1/R → 3 1/R = (π/l)² × y → 4 戻す力 = π²EI/l² × y
+ *  → 5 両方の × y を消す → 6 天秤: P と π²EI/l²(傾きと % は毎フレーム ref で書く)
+ */
+function TugOverlay(props: { phase: number; beamRef: RefObject<SVGGElement | null>; pRef: RefObject<HTMLSpanElement | null>; stateRef: RefObject<HTMLParagraphElement | null> }) {
+  const { phase } = props;
+  if (phase < 1) return null;
+  const card = 'rounded-xl border bg-white/92 px-2.5 py-1.5 shadow-sm backdrop-blur-sm';
+  const cut = phase >= 5;
+  const yOut = cut ? String.raw`\;\textcolor{#e11d48}{\cancel{\textcolor{#1b2740}{\times\, y}}}` : String.raw`\times y`;
+  return (
+    <div className="pointer-events-none absolute left-2 top-16 flex w-[47%] max-w-[300px] flex-col gap-1.5 sm:left-4">
+      <div className={`${card} border-orange-300 ${phase >= 6 ? 'hidden sm:block' : ''}`}>
+        <p className="text-[11px] font-bold" style={{ color: '#ea580c' }}>曲げる力</p>
+        <FitTex className="text-[17px] sm:text-xl">{String.raw`P ${yOut}`}</FitTex>
+      </div>
+      {phase >= 2 && (
+        <div className={`${card} border-sky-300 ${phase >= 6 ? 'hidden sm:block' : ''}`}>
+          <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>
+            戻す力{phase === 2 && <span className="font-normal text-ink-dim">(映像1 の式)</span>}
+          </p>
+          {phase <= 3 ? (
+            <FitTex className="text-[17px] sm:text-xl">{String.raw`EI \times \dfrac{1}{R}`}</FitTex>
+          ) : (
+            <FitTex className="text-[17px] sm:text-xl">{String.raw`\dfrac{\pi^2EI}{l^2} ${yOut}`}</FitTex>
+          )}
+          {phase === 3 && (
+            <div className="mt-1 border-t border-studio-700 pt-1">
+              <FitTex className="text-[15px]">{String.raw`\dfrac{1}{R} = \left(\dfrac{\pi}{l}\right)^2 \times y`}</FitTex>
+              <p className="text-[10px] leading-tight text-ink-dim">曲がり具合は ずれ y に比例(同じ形のまま膨らむ)</p>
+            </div>
+          )}
+        </div>
+      )}
+      {phase === 5 && <p className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-bold leading-snug text-ink">y は両方に同じだけ。大小には効かない</p>}
+      {phase >= 6 && (
+        <div className={`${card} border-studio-600`}>
+          <p className="text-[11px] font-bold text-ink">重さ比べ(天秤)</p>
+          <svg viewBox="0 0 200 104" className="block w-full">
+            {/* 支点 */}
+            <path d="M100 52 L88 92 L112 92 Z" fill="#94a3b8" />
+            <rect x="76" y="92" width="48" height="6" rx="2" fill="#64748b" />
+            <g ref={props.beamRef} style={{ transformOrigin: '100px 52px', transition: 'transform 0.15s linear' }}>
+              <rect x="18" y="49" width="164" height="6" rx="3" fill="#475569" />
+              {/* 左の皿: 押す力 P(外力・変えられる) */}
+              <line x1="30" y1="55" x2="30" y2="68" stroke="#475569" strokeWidth="1.5" />
+              <rect x="8" y="68" width="44" height="22" rx="6" fill="#fff7ed" stroke="#ea580c" strokeWidth="2" />
+              <text x="30" y="84" textAnchor="middle" fontSize="16" fontWeight="700" fill="#ea580c">P</text>
+              {/* 右の皿: 柱で決まる π²EI/l²(一定) */}
+              <line x1="170" y1="55" x2="170" y2="68" stroke="#475569" strokeWidth="1.5" />
+              <rect x="138" y="68" width="60" height="22" rx="6" fill="#f0f9ff" stroke="#0284c7" strokeWidth="2" />
+              <text x="168" y="84" textAnchor="middle" fontSize="13" fontWeight="700" fill="#0284c7">π²EI/l²</text>
+            </g>
+            <text x="48" y="22" textAnchor="middle" fontSize="10" fill="#9a3412">押す力(変えられる)</text>
+            <text x="152" y="22" textAnchor="middle" fontSize="10" fill="#075985">柱で決まる(一定)</text>
+          </svg>
+          <p className="flex items-baseline justify-between text-[11px]">
+            <span>
+              P = <span ref={props.pRef} className="num font-bold">50%</span>
+            </span>
+            <span className="text-ink-dim">π²EI/l² = 100%</span>
+          </p>
+          <p ref={props.stateRef} className="mt-0.5 text-[11px] font-bold leading-snug" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 const SCENES: SceneText[] = [
   {
     kicker: '現象',
@@ -43,7 +114,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '綱引き',
     head: '曲げる力と、戻す力の綱引き',
-    body: '柱がもし少し曲がったら、真ん中に2つの力が生まれます。曲げる力 P × y と、戻す力 EI × 1/R。曲がりを大きくしても、2つは同じ割合で増えるので、曲がりの大きさでは勝負が決まりません。決めるのは押す力 P。P を上げて、柱で決まる π²EI/l² に追いついた所が座屈荷重です。',
+    body: '柱がもし少し曲がったら(ずれ y)。曲げる力は P × y、戻す力は EI × 1/R です。曲がり具合 1/R は y に比例するので、戻す力は π²EI/l² × y。どちらにも × y が付くので、y は勝負に効きません。残るのは、押す力 P と柱で決まる π²EI/l² の重さ比べ。P が追いついた所が座屈荷重です。',
   },
   {
     kicker: '長さ',
@@ -70,7 +141,32 @@ const PY = (355 * (2 * 300 * 16 + 268 * 10)) / 1000; // kN
 export default function Stage2() {
   const [scene, setScene] = useState(0);
   const [lab, setLab] = useState<Lab2>({ sup: 'pp', L: 8, load: 0.5, yieldFirst: false });
-  const { canvasRef, capRef, show } = useShow((c) => new Stage2Show(c));
+  // 綱引きの場面: 段階が変わったら式のカードを描き直し、天秤の傾き・% は毎フレーム直接書く
+  const [phase, setPhase] = useState(-1);
+  const beamRef = useRef<SVGGElement>(null);
+  const pRef = useRef<HTMLSpanElement>(null);
+  const stateRef = useRef<HTMLParagraphElement>(null);
+  const { canvasRef, capRef, show } = useShow(
+    (c) => new Stage2Show(c),
+    (sh) => {
+      const { phase: ph, p } = sh.tugInfo;
+      setPhase((old) => (old === ph ? old : ph));
+      if (ph >= 6) {
+        // P が π²EI/l² より軽ければ右(戻す側)が下がる。重ければ左(P)が下がる
+        const a = -Math.max(-12, Math.min(12, (p - 1) * 60));
+        if (beamRef.current) beamRef.current.style.transform = `rotate(${a.toFixed(2)}deg)`;
+        if (pRef.current) pRef.current.textContent = `${Math.round(p * 100)}%`;
+        if (stateRef.current) {
+          const [txt, col] =
+            p < 0.995 ? ['戻す方が重い → 曲がっても戻る', '#0284c7'] : p < 1.005 ? ['釣り合い = 座屈荷重', '#6d28d9'] : ['曲げる方が重い → 戻せない(座屈)', '#e11d48'];
+          if (stateRef.current.textContent !== txt) {
+            stateRef.current.textContent = txt;
+            stateRef.current.style.color = col;
+          }
+        }
+      }
+    },
+  );
   const go = (n: number) => {
     const next = Math.max(0, Math.min(SCENES.length - 1, n));
     setScene(next);
@@ -96,6 +192,7 @@ export default function Stage2() {
       onScene={go}
       canvasRef={canvasRef}
       capRef={capRef}
+      overlay={scene === 1 ? <TugOverlay phase={phase} beamRef={beamRef} pRef={pRef} stateRef={stateRef} /> : undefined}
       hint="曲がり方は見やすく誇張しています・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
         <>
@@ -104,8 +201,8 @@ export default function Stage2() {
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip2 color="#1f2a44" text="外力(押す力 P)" />
               <Chip2 color="#64748b" text="反力" />
-              <Chip2 color="#ea580c" text="曲げる力 P × y" />
-              <Chip2 color="#0284c7" text="戻す力 EI × 1/R" />
+              {scene >= 1 && <Chip2 color="#ea580c" text="曲げる力 P × y" />}
+              {scene >= 1 && <Chip2 color="#0284c7" text="戻す力 EI × 1/R" />}
             </div>
           )}
         </>

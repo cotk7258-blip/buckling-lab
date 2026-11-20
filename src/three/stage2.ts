@@ -347,8 +347,14 @@ export class Stage2Show extends ShowBase {
    * 綱引きの場面: 真ん中の断面で、曲げるモーメント P·y(オレンジ、左回り)と戻すモーメント EI/R(青、右回り)を描く。
    * p = P/Pe。両端ピンのサインカーブでは EI/R = Pe·y なので、2つの比は p だけで決まる(y によらない)
    */
+  /** 綱引きの場面で、いま見せる物(段階ごとに1つずつ足していく) */
+  private tugMask = { bend: true, back: true, k: true };
+  /** 綱引きの場面の段階と押す力(画面に重ねる式のカードと天秤が読む)。綱引き以外は phase = -1 */
+  tugInfo = { phase: -1, p: 0 };
+
   private tug(D: number, p: number, show: boolean, pokeLen: number, ghost = 0) {
     this.g1.visible = true;
+    const M = this.tugMask;
     // 回す力は、実際のずれ D か、試しに曲げた形のずれ ghost のどちらかで比べる
     const useGhost = ghost > 0.01 && D < ghost;
     const Dm = ghost > 0.01 ? Math.max(D, ghost) : D;
@@ -359,7 +365,7 @@ export class Stage2Show extends ShowBase {
     this.t1.ghost.visible = useGhost;
     this.t1.ghost.position.set(ghost + 0.95, 2.55, 0.25);
     // 真ん中の曲がり具合(紫の円の一部)。半径 R = l²/(π²·ずれ)(絵の上の値)
-    const kOn = show && Dm > 0.05;
+    const kOn = show && M.k && Dm > 0.05;
     const kKey = kOn ? Dm.toFixed(3) : '';
     if (kKey !== this.kKey) {
       this.kKey = kKey;
@@ -414,8 +420,8 @@ export class Stage2Show extends ShowBase {
     const mb = kM * p * Dm;
     const mk = kM * Dm;
     const on = show && Dm > 0.03;
-    this.mBend.visible = on && mb > 0.02;
-    this.mBack.visible = on;
+    this.mBend.visible = on && M.bend && mb > 0.02;
+    this.mBack.visible = on && M.back;
     this.mBend.position.set(x, y, z);
     this.mBack.position.set(x, y, z);
     // 円弧の半径を回す力に比例させる。互角(p = 1)なら同じ円に重なり、矢じりだけが逆を向く
@@ -426,7 +432,7 @@ export class Stage2Show extends ShowBase {
     this.mBend.position.z = z + 0.04;
     this.t1.bend.visible = this.mBend.visible;
     this.t1.bend.position.set(x + rb * 0.6 + 0.95, y + rb * 0.85 + 0.15, z);
-    this.t1.back.visible = on;
+    this.t1.back.visible = on && M.back;
     this.t1.back.position.set(x + rk * 0.6 + 1.0, y - rk * 0.85 - 0.15, z);
     // 比べるゲージ(左上)
     const gx = -2.75;
@@ -440,15 +446,14 @@ export class Stage2Show extends ShowBase {
     // ゲージは「戻す方を 1」とした比。曲げる方は P/Pe(ずれ y によらない)
     void mb;
     void mk;
-    set(this.gauge[0], L * Math.min(1.3, p) * (Dm > 0.03 ? 1 : 0), gy);
-    set(this.gauge[1], L * (Dm > 0.03 ? 1 : 0), gy - 0.36);
-    this.t1.gt.visible = show;
-    this.t1.gt.position.set(gx + 0.9, gy + 0.62, 0.1);
-    this.t1.gb.visible = show;
-    this.t1.gb.position.set(gx + 0.9, gy + 0.25, 0.1);
-    this.t1.gk.visible = show;
-    this.t1.gk.position.set(gx + 0.9, gy - 0.62, 0.1);
-    this.t1.even.visible = show && Math.abs(p - 1) < 0.02 && Dm > 0.03;
+    // 比べるゲージは使わない(P と π²EI/l² の比べは、画面に重ねる天秤で見せる)
+    set(this.gauge[0], 0, gy);
+    set(this.gauge[1], 0, gy - 0.36);
+    void L;
+    this.t1.gt.visible = false;
+    this.t1.gb.visible = false;
+    this.t1.gk.visible = false;
+    this.t1.even.visible = false;
     this.t1.even.position.set(gx + L * 1.3 + 0.45, gy - 0.18, 0.1);
     // きっかけの指(横から押す)
     placeArrow(this.poke, x - 0.1 - pokeLen, y + 0.35, z, pokeLen, 0);
@@ -458,6 +463,7 @@ export class Stage2Show extends ShowBase {
   }
 
   protected tick(dt: number) {
+    this.tugInfo.phase = -1;
     // 場面 3 以降は旧番号(サインカーブ・式にするの2場面を除いた。導出は「式と Q&A」)
     const s = this.sceneIndex >= 3 ? this.sceneIndex + 2 : this.sceneIndex;
     const c = this.clock;
@@ -467,7 +473,8 @@ export class Stage2Show extends ShowBase {
       const t = this.cyc(15, c);
       const p = Math.min(1, ramp(t, 1, 8) * 1.0) * (1 - ramp(t, 13.5, 15));
       const D = 0.5 * (ramp(t, 7.9, 8.6) - ramp(t, 13.5, 15));
-      this.main.update(D, p, false, p);
+      // 現象の場面は、押す力と反力だけ(曲げる力・戻す力は次の綱引きで)
+      this.main.update(D, p, false);
       this.forces(0, 0, false);
       this.caption =
         t < 1
@@ -478,57 +485,47 @@ export class Stage2Show extends ShowBase {
       this.look(0, 1.45, 2.4, 2.75, 12, 6);
     } else if (s === 1) {
       this.only(this.g0);
-      // 筋道(1本の流れ):
-      //  もし少し曲がったら(点線)、真ん中で 曲げる P·y と 戻す EI·(1/R) を比べる
-      //  → 曲がりを大きくすると 1/R も y に比例して大きくなる。P·y も y に比例。y では勝負がつかない
-      //  → 1/R = (π/l)²·y。比べるのは y の前の係数: P(外力)と EI(π/l)²(柱で決まる)
-      //  → P を上げると追いつく(座屈荷重)→ 超えた瞬間に曲がり出す
-      const t = this.cyc(42, c);
+      // 綱引き(46 秒、行ったり来たりしない1本の流れ)。式のカードと天秤は画面に重ねる(Stage2.tsx が tugInfo を読む)
+      //  0 もし少し曲がったら(ずれ y)→ 1 曲げる力 P × y → 2 戻す力 EI × 1/R → 3 1/R は y に比例(円が小さくなる)
+      //  → 4 戻す力 = π²EI/l² × y → 5 × y は両方に同じ = 大小に効かない → 6 天秤: P を上げて π²EI/l² と比べる
+      const t = this.cyc(46, c);
+      const phase = t < 4 ? 0 : t < 10 ? 1 : t < 16 ? 2 : t < 23 ? 3 : t < 29 ? 4 : t < 33 ? 5 : 6;
       let p = 0.5;
       let D = 0;
-      let ghost = 0;
-      let show = false;
-      if (t < 3) {
-        this.caption = '押している柱が、もし少し曲がったら?(点線)';
-        ghost = 0.22 * ramp(t, 1.5, 3);
-        show = t > 2;
-      } else if (t < 9) {
-        ghost = 0.22;
-        show = true;
-        this.caption = '曲げる力 P × y(オレンジ)と、戻す力 EI × 1/R(青)';
-      } else if (t < 16) {
-        ghost = 0.22 + 0.4 * ramp(t, 9.5, 13);
-        show = true;
-        this.caption =
-          t < 13
-            ? '曲がりを大きくすると、2つとも同じ割合で増える'
-            : 'だから、曲がりの大きさでは勝負がつかない';
-      } else if (t < 20) {
-        ghost = 0.62 - 0.3 * ramp(t, 16, 17);
-        show = true;
-        this.caption = '勝負を決めるのは、押す力 P と、柱で決まる π²EI/l²';
-      } else if (t < 31) {
-        p = 0.5 + 0.5 * ramp(t, 20.5, 28);
-        ghost = 0.32;
-        show = true;
-        this.caption =
-          t < 28
-            ? `P を上げる(${Math.round(p * 100)}%)。まだ戻す方が強い`
-            : '追いついた。これが座屈荷重 π²EI/l²';
-      } else {
-        p = 1 + 0.1 * ramp(t, 31, 32);
-        ghost = 0.32;
-        D = Math.min(0.62, 0.02 * Math.exp((t - 31.5) * 0.9)) * (1 - ramp(t, 40.5, 42));
-        show = t < 40.5;
-        this.caption =
-          t < 35
-            ? '超えた瞬間、曲げる方が勝つ'
-            : '曲がり出して止まらない。これが座屈';
+      let ghost = 0.32 * ramp(t, 1, 3);
+      if (phase === 3) ghost = 0.32 + 0.3 * (ramp(t, 17, 19.5) - ramp(t, 20.5, 22.5));
+      if (phase === 6) {
+        p = 0.5 + 0.5 * ramp(t, 34, 40) + 0.1 * ramp(t, 42, 43);
+        if (t > 42.5) D = Math.min(0.62, 0.02 * Math.exp((t - 42.5) * 1.6));
       }
+      this.tugMask.bend = phase >= 1;
+      this.tugMask.back = phase >= 2;
+      this.tugMask.k = phase >= 2;
+      this.tugInfo.phase = phase;
+      this.tugInfo.p = p;
+      this.caption =
+        phase === 0
+          ? '押している柱が、もし少し曲がったら?(点線)'
+          : phase === 1
+            ? '曲げる力: 押す力 P が、ずれ y を腕にして回す'
+            : phase === 2
+              ? '戻す力: 曲がった柱が戻ろうとする。EI × 1/R(映像1)'
+              : phase === 3
+                ? '曲がりを大きくすると、1/R も同じ割合で大きくなる'
+                : phase === 4
+                  ? 'だから 戻す力も、ずれ y に比例する'
+                  : phase === 5
+                    ? 'y は両方に同じだけ掛かる。大小には効かない'
+                    : t < 40
+                      ? `残るのは P と π²EI/l² の重さ比べ。P を上げる(${Math.round(p * 100)}%)`
+                      : t < 42.5
+                        ? '釣り合った。これが座屈荷重 P = π²EI/l²'
+                        : '超えると、もう戻せない。曲がり出して止まらない';
       this.main.update(D, p);
       this.forces(0, 0, false);
-      this.tug(D, p, show, 0, ghost);
-      this.look(-0.4, 1.55, 3.6, 2.85, 10, 6);
+      this.tug(D, p, true, 0, ghost);
+      // 左側に式のカードと天秤を重ねるので、柱は右寄せに
+      this.look(-1.5, 1.55, 3.5, 2.85, 10, 6);
     } else if (s === 2) {
       this.only(this.g2);
       const t = this.cyc(24, c);
