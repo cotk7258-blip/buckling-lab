@@ -539,7 +539,6 @@ export class Stage5Show extends ShowBase {
     for (const R of [0.5, 1, 1.5, 2]) {
       ax(X(R), Y(0), X(R), Y(0) - 0.07);
       put(R.toFixed(1), X(R), Y(0) - 0.2, '#1f2a44', 0.75);
-      put(`b/t ${Math.round(BT1 * R)}`, X(R), Y(0) - 0.42, '#64748b', 0.55);
     }
     for (const s of [0.5, 1]) {
       ax(X(0), Y(s), X(2.4), Y(s), '#d5dce8');
@@ -590,6 +589,11 @@ export class Stage5Show extends ShowBase {
       this.labPlates[k] = p;
     }
     this.setScene(0);
+  }
+
+  /** 縦長に近い狭い画面か(スマホ)。式のカードを重ねる場面で少し引く */
+  private isNarrow() {
+    return this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight) < 1.2;
   }
 
   /** 左に式のカードを重ねる場面で、絵を画面の右へ d だけ寄せる(カメラの向き az 度に合わせる) */
@@ -796,7 +800,8 @@ export class Stage5Show extends ShowBase {
         this.cutTag.position.set(0.02, 0.12, -0.55);
         this.cutTag.visible = t < 13;
       }
-      this.look(0.15, 0.8, 1.45, 1.25, 72, 10);
+      const zw = this.isNarrow() ? 1.25 : 1;
+      this.look(0.15, 0.8, 1.45 * zw, 1.25 * zw, 72, 10);
     } else if (s === 3) {
       // 幅(36 秒): σel の式の b = 板の幅(紫の寸法線)→ 同じだけ波打たせて戻す力(青)を比べる → 同じ応力で押す
       this.show(this.gPair);
@@ -856,7 +861,8 @@ export class Stage5Show extends ShowBase {
       // 試しに波打たせる間は横寄りから見て、戻す力(青)の長さを見せる
       const az = T >= 3.5 && T < 10 ? 58 : 30;
       this.shiftRight(this.gPair, 0.95, az);
-      this.look(0.05, 0.8, 2.9, 1.75, az, 12);
+      const zw = this.isNarrow() ? 1.15 : 1;
+      this.look(0.05, 0.8, 2.9 * zw, 1.75 * zw, az, 12);
     } else if (s === 5) {
       // 支え方(32 秒): σel の式の k = 支え方の係数 → 同じだけ波打たせて戻す力(青)を比べる → 同じ応力で押す
       this.show(this.gSup);
@@ -898,7 +904,8 @@ export class Stage5Show extends ShowBase {
                 : 'k は支え方の効果。柱の「有効座屈長」にあたる';
       const az = T >= 3 && T < 9.5 ? 58 : 28;
       this.shiftRight(this.gSup, 0.65, az);
-      this.look(0.05, 0.8, 2.9, 1.75, az, 12);
+      const zw = this.isNarrow() ? 1.15 : 1;
+      this.look(0.05, 0.8, 2.9 * zw, 1.75 * zw, az, 12);
     } else if ((s >= 6 && s <= 9) || s > 60) {
       this.show(this.gLine, this.gWall);
       // 板の厚み(濃い色の縁)が見えるよう、少し斜め上から
@@ -951,7 +958,7 @@ export class Stage5Show extends ShowBase {
             ? '同じ幅で、厚みだけが違う板を10枚(左ほど厚い)'
             : t < 10
               ? '横軸は R = √(σy/σel)。R = 1 は、σel = σy になる板'
-              : '両縁支持・σy = 355 なら、R = 1 は b/t ≒ 45';
+              : 'R = 1 より左は厚い板、右は薄い板';
       } else if (s === 61) {
         // 厚い板(R < 1)だけ押す: 波打つ前に降伏する
         for (let i = 0; i < N; i++) if (RS[i] < 1) doneIdeal(i, ramp(t, 1.5 + i * 1.1, 2.8 + i * 1.1));

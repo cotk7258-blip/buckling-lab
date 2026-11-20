@@ -7,7 +7,6 @@ import { Card, LabSlider, Steps, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
 import { FitTex, Tex } from '../ui/Tex.tsx';
 
-const BT = Math.round(BT1);
 
 const SCENES: SceneText[] = [
   {
@@ -33,7 +32,7 @@ const SCENES: SceneText[] = [
   {
     kicker: 'R の導出',
     head: '物差し R = √(σy/σel)',
-    body: `厚みだけが違う板を10枚並べました。横軸は幅厚比パラメータ R = √(σy/σel)。柱の λ と同じ作り方で、R = 1 は σel がちょうど σy になる板です。両縁支持・σy = 355 なら、幅厚比 b/t ≒ ${BT}。`,
+    body: `厚みだけが違う板を10枚並べました。横軸は幅厚比パラメータ R = √(σy/σel)。柱の λ と同じ作り方で、R = 1 は σel がちょうど σy になる板です。左ほど厚い板、右ほど薄い板。`,
   },
   {
     kicker: '厚い板',
@@ -126,7 +125,7 @@ const SIDE: Record<number, React.ReactNode> = {
         ['平方根', String.raw`R=\dfrac{b}{t}\sqrt{\dfrac{12(1-\nu^2)\,\sigma_y}{k\pi^2E}}`, 'd5'],
         ['柱では', String.raw`\lambda=\dfrac{l}{r}\cdot\dfrac{1}{\pi}\sqrt{\dfrac{\sigma_y}{E}}`],
       ]}
-      note={`両縁支持・σy = 355 N/mm² なら R = b/t ÷ ${BT}。`}
+      note="R は幅厚比 b/t に比例する。R = 1 が、降伏と波打ちの分かれ目。"
     />
   ),
   5: (
@@ -201,16 +200,19 @@ const BOX = 'pointer-events-none absolute left-2 top-16 flex w-[44%] max-w-[290p
 /** σel の式(b は紫、k は赤で強調できる) */
 const EL = (b = 'b', k = 'k') => String.raw`\sigma_{el}=\dfrac{${k}\,\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{${b}}\right)^2`;
 
+/** スマホ(狭い画面)では、いちばん新しいカードだけを出す。古いカードに付ける */
+const OLD = 'hidden sm:block';
+
 /**
  * 綱引きの場面で映像の左に重ねる式のカード(映像2 の綱引きと同じ筋。柱の P → σt、y → w、EI → D)。
  *  0 w = 波の高さ → 1 押し出す力 = σt × w → 2 戻す力 = D × 1/R → 3 = kπ²D/b² × w → 4 w は両方に同じ
- *  → 5 σt と kπ²D/b² を比べる(t で割ると σ と σel)→ 6 超えた
+ *  → 5 天秤: σt と kπ²D/b²(t で割ると σ と σel)。傾き・%・状態は毎フレーム ref で書く → 6 超えた
  */
-function PlateTugOverlay({ phase, pRef }: { phase: number; pRef: RefObject<HTMLSpanElement | null> }) {
+function PlateTugOverlay(props: { phase: number; pRef: RefObject<HTMLSpanElement | null>; beamRef: RefObject<SVGGElement | null>; stateRef: RefObject<HTMLParagraphElement | null> }) {
+  const { phase } = props;
   if (phase < 0) return null;
   const cut = phase >= 4;
   const w = cut ? String.raw`\;\textcolor{#e11d48}{\cancel{\textcolor{#1b2740}{\times\, \textcolor{#6d28d9}{w}}}}` : String.raw`\times \textcolor{#6d28d9}{w}`;
-  const hide = phase >= 5 ? 'hidden sm:block' : '';
   return (
     <div className={BOX}>
       {phase === 0 && (
@@ -220,14 +222,14 @@ function PlateTugOverlay({ phase, pRef }: { phase: number; pRef: RefObject<HTMLS
         </div>
       )}
       {phase >= 1 && (
-        <div className={`${CARD} border-orange-300 ${hide}`}>
+        <div className={`${CARD} border-orange-300 ${phase === 1 || phase === 4 ? '' : OLD}`}>
           <p className="text-[11px] font-bold" style={{ color: '#ea580c' }}>押し出す力</p>
           <FitTex className="text-[17px] sm:text-xl">{String.raw`\sigma t ${w}`}</FitTex>
           {phase <= 3 && <p className="text-[10px] leading-tight text-ink-dim">σt = 幅1あたりの押す力(柱の P)。w = 波の高さ(柱の y)</p>}
         </div>
       )}
       {phase >= 2 && (
-        <div className={`${CARD} border-sky-300 ${hide}`}>
+        <div className={`${CARD} border-sky-300 ${phase <= 4 ? '' : OLD}`}>
           <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>戻す力</p>
           {phase === 2 ? (
             <>
@@ -245,16 +247,32 @@ function PlateTugOverlay({ phase, pRef }: { phase: number; pRef: RefObject<HTMLS
       {phase === 4 && <p className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-bold text-rose-600">w は両方に同じだけ。大小には効かない</p>}
       {phase >= 5 && (
         <div className={`${CARD} border-studio-600`}>
-          <p className="text-[11px] font-bold text-ink">くらべるのは w の前</p>
-          <FitTex className="text-[16px] sm:text-lg">{String.raw`\sigma t\quad\text{と}\quad\dfrac{k\pi^2D}{b^2}`}</FitTex>
-          <p className="text-[10px] leading-tight text-ink-dim">両方を t で割ると、σ と σel</p>
-          <FitTex className="text-[15px] sm:text-lg">{String.raw`\sigma_{el}=\dfrac{k\pi^2D}{t\,b^2}`}</FitTex>
-          <p className="mt-0.5 text-[11px] font-bold leading-tight">
-            押す応力 σ = <span ref={pRef}>50%</span>(σel を 100%)
+          <p className="text-[11px] font-bold text-ink">重さ比べ(天秤)</p>
+          <svg viewBox="0 0 200 96" className="block w-full">
+            <path d="M100 46 L88 84 L112 84 Z" fill="#94a3b8" />
+            <rect x="76" y="84" width="48" height="6" rx="2" fill="#64748b" />
+            <g ref={props.beamRef} style={{ transformOrigin: '100px 46px', transition: 'transform 0.15s linear' }}>
+              <rect x="18" y="43" width="164" height="6" rx="3" fill="#475569" />
+              {/* 左の皿: 押す側 σt(変えられる) */}
+              <line x1="30" y1="49" x2="30" y2="60" stroke="#475569" strokeWidth="1.5" />
+              <rect x="8" y="60" width="44" height="22" rx="6" fill="#fff7ed" stroke="#ea580c" strokeWidth="2" />
+              <text x="30" y="76" textAnchor="middle" fontSize="15" fontWeight="700" fill="#ea580c">σt</text>
+              {/* 右の皿: 板で決まる kπ²D/b²(一定) */}
+              <line x1="170" y1="49" x2="170" y2="60" stroke="#475569" strokeWidth="1.5" />
+              <rect x="134" y="60" width="64" height="22" rx="6" fill="#f0f9ff" stroke="#0284c7" strokeWidth="2" />
+              <text x="166" y="76" textAnchor="middle" fontSize="12" fontWeight="700" fill="#0284c7">kπ²D/b²</text>
+            </g>
+            <text x="44" y="18" textAnchor="middle" fontSize="10" fill="#9a3412">押す側(変えられる)</text>
+            <text x="156" y="18" textAnchor="middle" fontSize="10" fill="#075985">板で決まる(一定)</text>
+          </svg>
+          <p className="text-[10px] leading-tight text-ink-dim">両方を t で割ると σ と σel = kπ²D/(t b²)</p>
+          <p className="mt-0.5 flex items-baseline justify-between text-[11px]">
+            <span>
+              σ = <span ref={props.pRef} className="num font-bold">50%</span>
+            </span>
+            <span className="text-ink-dim">σel = 100%</span>
           </p>
-          <p className="text-[11px] font-bold leading-tight" style={{ color: phase >= 6 ? '#e11d48' : '#0284c7' }}>
-            {phase >= 6 ? 'σ が σel を超えた → 波打つ(局部座屈)' : 'σ < σel の間は、波打っても戻る'}
-          </p>
+          <p ref={props.stateRef} className="mt-0.5 text-[11px] font-bold leading-snug" />
         </div>
       )}
     </div>
@@ -267,13 +285,13 @@ function WidthOverlay({ phase }: { phase: number }) {
   const B = String.raw`\textcolor{#6d28d9}{b}`;
   return (
     <div className={BOX}>
-      <div className={`${CARD} border-sky-300 ${phase >= 2 ? 'hidden sm:block' : ''}`}>
+      <div className={`${CARD} border-sky-300 ${phase >= 1 ? OLD : ''}`}>
         <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>板の強さ(戻す力の大きさ)</p>
         <FitTex className="text-[16px] sm:text-lg">{EL(B)}</FitTex>
         <p className="text-[11px] font-bold leading-tight" style={{ color: '#6d28d9' }}>b = 板の幅(紫の寸法)・t = 厚さ</p>
       </div>
       {phase >= 1 && (
-        <div className={`${CARD} border-violet-300`}>
+        <div className={`${CARD} border-violet-300 ${phase >= 3 ? OLD : ''}`}>
           <p className="text-[11px] font-bold" style={{ color: '#6d28d9' }}>幅が b/2 なら</p>
           <FitTex className="text-[15px] sm:text-lg">{String.raw`\left(\dfrac{t}{\textcolor{#6d28d9}{b/2}}\right)^2=4\left(\dfrac{t}{${B}}\right)^2`}</FitTex>
           <p className="text-[10px] leading-tight text-ink-dim">σel も、戻す力(青)も 4倍</p>
@@ -296,13 +314,13 @@ function KOverlay({ phase }: { phase: number }) {
   const K = String.raw`\textcolor{#e11d48}{k}`;
   return (
     <div className={BOX}>
-      <div className={`${CARD} border-sky-300`}>
+      <div className={`${CARD} border-sky-300 ${phase >= 1 ? OLD : ''}`}>
         <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>板の強さ(戻す力の大きさ)</p>
         <FitTex className="text-[16px] sm:text-lg">{EL('b', K)}</FitTex>
         <p className="text-[11px] font-bold leading-tight" style={{ color: '#e11d48' }}>k = 縁の支え方で決まる係数</p>
       </div>
       {phase >= 1 && (
-        <div className={`${CARD} border-rose-300 ${phase >= 2 ? 'hidden sm:block' : ''}`}>
+        <div className={`${CARD} border-rose-300 ${phase >= 2 ? OLD : ''}`}>
           <table className="w-full text-[11px] leading-snug">
             <tbody>
               <tr>
@@ -333,12 +351,25 @@ export default function Stage5() {
   const [lab, setLab] = useState<Lab5>({ b: 900, t: 12, k: 4, load: 0.3 });
   const [phase, setPhase] = useState(-1);
   const pRef = useRef<HTMLSpanElement>(null);
+  const beamRef = useRef<SVGGElement>(null);
+  const stateRef = useRef<HTMLParagraphElement>(null);
   const { canvasRef, capRef, show } = useShow(
     (c) => new Stage5Show(c),
     (sh) => {
       const ph = sh.info.phase;
       setPhase((old) => (old === ph ? old : ph));
-      if (pRef.current) pRef.current.textContent = `${Math.round(sh.info.p * 100)}%`;
+      const p = sh.info.p;
+      if (pRef.current) pRef.current.textContent = `${Math.round(p * 100)}%`;
+      // 天秤: σt が kπ²D/b² より軽ければ右(板の側)が下がる。重ければ左が下がる
+      if (beamRef.current) beamRef.current.style.transform = `rotate(${(-Math.max(-12, Math.min(12, (p - 1) * 60))).toFixed(2)}deg)`;
+      if (stateRef.current) {
+        const [txt, col] =
+          p < 0.995 ? ['板の側が重い → 波打っても戻る', '#0284c7'] : p < 1.005 ? ['釣り合い = σel', '#6d28d9'] : ['押す側が重い → 戻せない(局部座屈)', '#e11d48'];
+        if (stateRef.current.textContent !== txt) {
+          stateRef.current.textContent = txt;
+          stateRef.current.style.color = col;
+        }
+      }
     },
   );
   const go = (n: number) => {
@@ -380,7 +411,7 @@ export default function Stage5() {
       canvasRef={canvasRef}
       capRef={capRef}
       overlay={
-        scene === 1 ? <PlateTugOverlay phase={phase} pRef={pRef} /> : scene === 2 ? <WidthOverlay phase={phase} /> : scene === 3 ? <KOverlay phase={phase} /> : undefined
+        scene === 1 ? <PlateTugOverlay phase={phase} pRef={pRef} beamRef={beamRef} stateRef={stateRef} /> : scene === 2 ? <WidthOverlay phase={phase} /> : scene === 3 ? <KOverlay phase={phase} /> : undefined
       }
       hint="板の厚みと波の高さは見やすく誇張しています(10枚並べた板の厚みは、どれも本当の 3 倍。厚みの比は正しい)・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
