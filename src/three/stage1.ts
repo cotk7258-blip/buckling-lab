@@ -229,6 +229,19 @@ const I_RECT = (RECT.b * RECT.h ** 3) / 12;
 export const iOf = (bf: number, tf: number, hw: number, tw: number) => 2 * ((bf * tf ** 3) / 12 + bf * tf * ((hw + tf) / 2) ** 2) + (tw * hw ** 3) / 12;
 /** 同じ量の鉄を H形にしたとき、踏ん張り(断面二次モーメント)が長方形の何倍になるか */
 export const H_GAIN = iOf(H.b, H.tf, H.hw, H.tw) / I_RECT;
+/** 式の場面の I の比べ: 同じ量の鉄の長方形の棒(幅100)を 1 とした倍率(上下に曲げる) */
+const BOX_IN = Math.sqrt(300 ** 2 - AREA); // 外 300 の角鋼管の内のり(同じ量の鉄。厚さ ≒ 10.6 mm)
+export const I_CMP = {
+  hStrong: H_GAIN,
+  hWeak: (2 * (H.tf * H.b ** 3) / 12 + (H.hw * H.tw ** 3) / 12) / I_RECT,
+  box: (300 ** 4 - BOX_IN ** 4) / 12 / I_RECT,
+};
+/** 式の場面の E の比べ(N/mm²、目安)。曲がりは E に反比例 */
+export const E_CMP = [
+  { name: '鉄(鋼)', e: 200000, text: '約20万', color: '#9aa7ba', metal: 0.55, rough: 0.4, opacity: 1 },
+  { name: 'アルミ', e: 70000, text: '約7万', color: '#e3e8ef', metal: 0.75, rough: 0.3, opacity: 1 },
+  { name: 'ダイヤモンド', e: 1000000, text: '約100万', color: '#a5ecfa', metal: 0.05, rough: 0.05, opacity: 0.7 },
+];
 
 // 曲げ比べの棒の長さ・置き場所・支点の高さ(絵の単位)
 const BEND_L = 6;
@@ -268,11 +281,6 @@ export class Stage1Show extends ShowBase {
   private gA: THREE.Mesh;
   private gB: THREE.Mesh;
   private pairTags: THREE.Sprite[] = [];
-  private gMorph = new THREE.Group();
-  private parts: THREE.Mesh[] = [];
-  private gM0: THREE.Mesh;
-  private gM1: THREE.Mesh;
-  private morphTags: THREE.Sprite[] = [];
   private gBend = new THREE.Group();
   private bendRect: BendBeam;
   private bendH: BendBeam;
@@ -281,6 +289,16 @@ export class Stage1Show extends ShowBase {
   private bendGauges: THREE.Mesh[] = [];
   private bendGTags: THREE.Sprite[] = [];
   private morphKey = -1;
+  // 式の場面: E = 3つの材料の同じ形の棒、I = 同じ量の鉄の4つの断面
+  private gE = new THREE.Group();
+  private eBeams: BendBeam[] = [];
+  private eArrows: THREE.Group[] = [];
+  private eTags: THREE.Sprite[] = [];
+  private gI = new THREE.Group();
+  private iBars: THREE.Mesh[] = [];
+  private iTags: THREE.Sprite[] = [];
+  private iCells: THREE.Group[] = [];
+  private iFoot!: THREE.Sprite;
   /** 式の場面で注目する記号(-1 で自動で順に) */
   focus = -1;
   lab: LabState = { b: 100, h: 150, k: 0.006 };
@@ -289,7 +307,9 @@ export class Stage1Show extends ShowBase {
     super(canvas);
     this.addFloor(-0.05);
     const geo = springGeometry();
-    this.scene.add(this.gRuler, this.gBlock, this.gBank, this.gPair, this.gMorph, this.gBend, this.gSlice);
+    this.scene.add(this.gRuler, this.gBlock, this.gBank, this.gPair, this.gBend, this.gSlice, this.gE, this.gI);
+    this.buildE();
+    this.buildI();
     // 一切れ: 鋼の細い筋7本(上ほど伸び = オレンジ、下ほど縮み = 青)と、切り取る所を示す紫の枠
     for (let i = 0; i < 7; i++) {
       const m = new THREE.Mesh(
@@ -364,23 +384,6 @@ export class Stage1Show extends ShowBase {
       this.pairTags.push(s);
     }
 
-    // 同じ量の鉄: 長方形と H形
-    const steel = () => new THREE.MeshStandardMaterial({ color: '#8794a8', metalness: 0.7, roughness: 0.35 });
-    for (let i = 0; i < 6; i++) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), steel());
-      this.gMorph.add(m);
-      this.parts.push(m);
-    }
-    this.gM0 = gauge('#6d28d9');
-    this.gM1 = gauge('#6d28d9');
-    this.gMorph.add(this.gM0, this.gM1);
-    for (const [t, x, y] of [['1倍', -2.6, 0.05], [`約${Math.round(H_GAIN)}倍`, 1.1, 0.05], ['同じ量の鉄', -0.75, 3.55]] as const) {
-      const s = tag(t, t === '同じ量の鉄' ? '#1f2a44' : '#6d28d9', 0.75);
-      s.position.set(x, y, 0.4);
-      this.gMorph.add(s);
-      this.morphTags.push(s);
-    }
-
     // 同じ量の鉄の長方形の棒と H形鋼を、同じ力で曲げる(断面は同じ縮尺、曲がりは誇張)
     const SB = 1 / 250;
     this.bendRect = new BendBeam(BEND_L, RECT.h * SB, RECT.b * SB, false);
@@ -424,7 +427,7 @@ export class Stage1Show extends ShowBase {
   }
 
   private showOnly(...gs: THREE.Group[]) {
-    for (const g of [this.gRuler, this.gBlock, this.gBank, this.gPair, this.gMorph, this.gBend, this.gSlice]) g.visible = gs.includes(g);
+    for (const g of [this.gRuler, this.gBlock, this.gBank, this.gPair, this.gBend, this.gSlice, this.gE, this.gI]) g.visible = gs.includes(g);
     if (!gs.includes(this.gSlice)) this.fadeBlock(1);
   }
 
@@ -640,56 +643,6 @@ export class Stage1Show extends ShowBase {
     this.look(0, 1.75, 4.0, 2.75, 8, 7);
   }
 
-  /** p: 0 で長方形、1 で H形 */
-  private setMorph(p: number) {
-    const S = 1 / 105;
-    const lerp = (a: number, b: number) => a + (b - a) * p;
-    const cy = 1.9;
-    // 左: 長方形のまま(3分割して置く)。右: 上下がフランジに、中がウェブになる
-    const third = RECT.h / 3;
-    for (let side = 0; side < 2; side++) {
-      const q = side ? p : 0;
-      const x = side ? 1.1 : -2.6;
-      const tf = third + (H.tf - third) * q;
-      const bf = RECT.b + (H.b - RECT.b) * q;
-      const hw = third + (H.hw - third) * q;
-      const tw = RECT.b + (H.tw - RECT.b) * q;
-      const dims: [number, number, number][] = [
-        [bf, tf, (hw + tf) / 2],
-        [tw, hw, 0],
-        [bf, tf, -(hw + tf) / 2],
-      ];
-      dims.forEach(([w, h, y], i) => {
-        const m = this.parts[side * 3 + i];
-        m.scale.set(w * S, h * S, 0.6);
-        m.position.set(x, cy + y * S, 0);
-      });
-    }
-    const third2 = lerp(third, H.tf);
-    const gain = iOf(lerp(RECT.b, H.b), third2, lerp(third, H.hw), lerp(RECT.b, H.tw)) / I_RECT;
-    const k = 3.0 / H_GAIN;
-    setGauge(this.gM0, -3.0, 0.42, k, 0.4);
-    setGauge(this.gM1, 0.0, 0.42, k * gain, 0.4);
-    return gain;
-  }
-
-  private tickMorph(c: number, cap = true) {
-    const t = this.cyc(18, c);
-    const p = ramp(t, 2.5, 7.5) - ramp(t, 17, 18);
-    this.setMorph(p);
-    this.morphTags[1].visible = p > 0.98;
-    if (cap)
-      this.caption =
-        t < 2.5
-          ? '同じ量の鉄でできた、2つの断面'
-          : t < 8
-            ? '鉄を、真ん中から遠い上下へ移していく'
-            : t < 13
-              ? `同じ量の鉄で、踏ん張りは約${Math.round(H_GAIN)}倍`
-              : 'これが、H形鋼があの形をしている理由';
-    this.look(-0.4, 1.75, 3.9, 2.6, 16, 10);
-  }
-
   /** 長い棒のまま、右(奥)の棒の断面を長方形から H形へ変える。p: 0〜1。戻り値は踏ん張りの倍率 */
   private morphBend(p: number) {
     const q = Math.round(p * 60) / 60;
@@ -766,6 +719,152 @@ export class Stage1Show extends ShowBase {
     else this.look(-0.2, 1.1, 4.1, 2.4, 34, 18);
   }
 
+  /** E: 同じ形の棒を3つの材料で作り、真ん中で支えて両端を同じ力で押し下げる */
+  private buildE() {
+    const SB = 1 / 250;
+    E_CMP.forEach((m, j) => {
+      const z = (1 - j) * 2.6;
+      const b = new BendBeam(BEND_L, RECT.h * SB, RECT.b * SB, false, true);
+      b.setSection([[RECT.b * SB, RECT.h * SB, 0]]);
+      const mat = b.mesh.material as THREE.MeshStandardMaterial;
+      mat.vertexColors = false;
+      mat.color.set(m.color);
+      mat.metalness = m.metal;
+      mat.roughness = m.rough;
+      if (m.opacity < 1) {
+        mat.transparent = true;
+        mat.opacity = m.opacity;
+        mat.emissive.set('#67e8f9');
+        mat.emissiveIntensity = 0.25;
+      }
+      mat.needsUpdate = true;
+      b.group.position.set(0, FUL_H + b.h / 2, z);
+      const f = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.32, FUL_H, 4), DARK());
+      f.rotation.y = Math.PI / 4;
+      f.position.set(0, FUL_H / 2, z);
+      this.gE.add(b.group, f);
+      this.eBeams.push(b);
+      for (let i = 0; i < 2; i++) {
+        const a = arrow('#1f2a44');
+        a.scale.set(1.3, 1, 1.3);
+        this.gE.add(a);
+        this.eArrows.push(a);
+      }
+      const rel = 200000 / m.e;
+      const bend = j === 0 ? '曲がり 1' : rel > 1 ? `曲がり 約${rel.toFixed(1)}倍` : `曲がり 約1/${Math.round(1 / rel)}`;
+      for (const [t, c, sz] of [[`${m.name}  E ${m.text} N/mm²`, '#1f2a44', 0.95], [bend, '#6d28d9', 0.95]] as const) {
+        const s = tag(t, c, sz, 2.4);
+        this.gE.add(s);
+        this.eTags.push(s);
+      }
+    });
+  }
+
+  /** I: 同じ量の鉄の4つの断面(長方形・H形の強軸・H形の弱軸・角鋼管)と、踏ん張りの柱 */
+  private buildI() {
+    const S = 1.2 / 300;
+    const Y = 0.85;
+    const steel = () => new THREE.MeshStandardMaterial({ color: '#9aa7ba', metalness: 0.55, roughness: 0.4 });
+    const yf = ((H.hw + H.tf) / 2) * S;
+    const tb = (300 - BOX_IN) / 2;
+    // [幅, 高さ, 中心の横, 中心の高さ](mm を絵の単位に)
+    const shapes: [number, number, number, number][][] = [
+      [[RECT.b * S, RECT.h * S, 0, 0]],
+      [[H.b * S, H.tf * S, 0, yf], [H.tw * S, H.hw * S, 0, 0], [H.b * S, H.tf * S, 0, -yf]],
+      [[H.tf * S, H.b * S, yf, 0], [H.hw * S, H.tw * S, 0, 0], [H.tf * S, H.b * S, -yf, 0]],
+      [[300 * S, tb * S, 0, (150 - tb / 2) * S], [300 * S, tb * S, 0, -(150 - tb / 2) * S], [tb * S, BOX_IN * S, (150 - tb / 2) * S, 0], [tb * S, BOX_IN * S, -(150 - tb / 2) * S, 0]],
+    ];
+    const vals = [1, I_CMP.hStrong, I_CMP.hWeak, I_CMP.box];
+    const names = ['長方形(基準)', 'H形鋼(強軸)', 'H形鋼(弱軸)', '角鋼管'];
+    shapes.forEach((parts, i) => {
+      // 1つの断面 = 1つの入れ物(断面・中心線・踏ん張りの柱・札)。並べ方は画面の形で変える(tickI)
+      const cell = new THREE.Group();
+      this.gI.add(cell);
+      this.iCells.push(cell);
+      const geos = parts.map(([w, h, xc, yc]) => {
+        const g = new THREE.BoxGeometry(w, h, 0.9);
+        g.translate(xc, yc, 0);
+        return g;
+      });
+      const mesh = new THREE.Mesh(mergeGeometries(geos)!, steel());
+      geos.forEach((g) => g.dispose());
+      mesh.position.set(0, Y, 0);
+      // 曲げの中心線(上下に曲げるので、どれも真ん中の横の線)
+      const axis = new THREE.Mesh(
+        new THREE.BoxGeometry(1.9, 0.03, 0.03),
+        new THREE.MeshBasicMaterial({ color: '#6d28d9', transparent: true, opacity: 0.75, fog: false, toneMapped: false }),
+      );
+      axis.position.set(0, Y, 0.46);
+      const bar = new THREE.Mesh(
+        new THREE.BoxGeometry(0.42, 1, 0.42),
+        new THREE.MeshStandardMaterial({ color: '#6d28d9', emissive: '#6d28d9', emissiveIntensity: 0.55, roughness: 0.4 }),
+      );
+      bar.userData.v = vals[i];
+      cell.add(mesh, axis, bar);
+      this.iBars.push(bar);
+      const v = vals[i];
+      const vt = i === 0 ? '1倍' : `約${v >= 10 ? Math.round(v) : v.toFixed(1)}倍`;
+      for (const [t, c, sz] of [[names[i], '#1f2a44', 0.9], [vt, '#6d28d9', 1.15]] as const) {
+        const s = tag(t, c, sz, 1.6);
+        cell.add(s);
+        this.iTags.push(s);
+      }
+      if (i === 0) {
+        const s = tag('中心線', '#6d28d9', 0.6);
+        s.position.set(-0.75, Y + 0.22, 0.5);
+        cell.add(s);
+      }
+    });
+    this.iFoot = tag('どれも同じ量の鉄・上下に曲げる', '#6d28d9', 0.75, 2.6);
+    this.gI.add(this.iFoot);
+  }
+
+  private tickE(t: number) {
+    const push = ramp(t, 1.0, 2.8) - ramp(t, 7.0, 7.8);
+    const K0 = 0.042; // 鉄の棒の曲率(絵の上で誇張)。ほかは E に反比例
+    this.eBeams.forEach((b, j) => {
+      const k = K0 * (200000 / E_CMP[j].e) * push;
+      const z = (1 - j) * 2.6;
+      b.update(k, () => 0, 0);
+      for (let i = 0; i < 2; i++) {
+        const [ex, ey] = b.end(k, i ? 1 : -1);
+        const top = b.group.position.y + ey;
+        setArrow(this.eArrows[j * 2 + i], ex * 0.96, top + 0.08 + 0.8 * push, -0.8 * push, z);
+        this.eArrows[j * 2 + i].visible = push > 0.02;
+      }
+      const ty = FUL_H + 0.95;
+      this.eTags[j * 2].position.set(0, ty + 0.3, z);
+      this.eTags[j * 2 + 1].position.set(0, ty - 0.12, z);
+      this.eTags[j * 2 + 1].visible = push > 0.7;
+    });
+    this.caption = t < 2.8 ? 'E = 材料の硬さ。同じ形の棒を、3つの材料で作る' : '同じ力で押すと、E が小さい材料ほど大きく曲がる(曲がりは誇張)';
+    this.look(0, 1.0, 4.0, 2.7, 12, 32);
+  }
+
+  private tickI(t: number) {
+    // スマホの縦長に近い画面では、間を詰めて柱を低くする
+    const wide = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight) >= 1.2;
+    const GK = (wide ? 2.3 : 1.7) / I_CMP.hStrong;
+    this.iCells.forEach((cell, i) => {
+      cell.position.set((i - 1.5) * (wide ? 2.5 : 2.05), 0, 0);
+      const bar = this.iBars[i];
+      const g = ramp(t, 0.8 + 1.1 * i, 1.8 + 1.1 * i);
+      const h = Math.max(0.001, GK * bar.userData.v * g);
+      bar.visible = g > 0;
+      bar.scale.y = h;
+      bar.position.set(0, 1.75 + h / 2, -0.1);
+      this.iTags[i * 2].position.set(0, -0.4, 0.5);
+      const vt = this.iTags[i * 2 + 1];
+      vt.position.set(0, 1.75 + h + 0.35, 0);
+      vt.visible = g > 0.95;
+    });
+    this.iFoot.position.set(0, -1.05, 0.5);
+    this.caption =
+      t < 5.5 ? 'I = 断面の踏ん張りやすさ。同じ量の鉄でも、並べ方で変わる' : '中心線から遠くに鉄があるほど大きい。H形も向きで約3倍違う';
+    if (wide) this.look(0, 1.65, 5.4, 2.9, 0, 10);
+    else this.look(0, 1.25, 4.3, 3.0, 0, 10);
+  }
+
   protected tick() {
     const s = this.sceneIndex;
     const c = this.clock;
@@ -797,23 +896,16 @@ export class Stage1Show extends ShowBase {
       this.showOnly(this.gBend);
       this.tickBend(t);
     } else if (s === 6) {
-      this.cyc(18);
-      // 式の記号を1つずつ絵で見せる
-      const f = this.focus >= 0 ? this.focus : Math.floor(c / 6) % 3;
+      this.cyc(24);
+      // 式の記号を1つずつ絵で見せる(1つ 8 秒)
+      const f = this.focus >= 0 ? this.focus : Math.floor(c / 8) % 3;
+      const tl = c % 8;
       if (f === 0) {
-        this.showOnly(this.gBank);
-        const stiff = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(c * 1.2));
-        this.bank7.update(0.15, 1, stiff);
-        for (const b of this.bars) b.visible = false;
-        for (const b of this.barTags) b.visible = false;
-        this.arm.visible = false;
-        this.armTag.visible = false;
-        this.caption = 'E = バネ1本の硬さ。材料で決まる(鋼はアルミの約3倍)';
-        this.look(-0.9, 1.6, 2.6, 2.4, 10, 8);
+        this.showOnly(this.gE);
+        this.tickE(tl);
       } else if (f === 1) {
-        this.showOnly(this.gMorph);
-        this.tickMorph(c, false);
-        this.caption = 'I = バネの並び方。形で決まる(断面二次モーメント)';
+        this.showOnly(this.gI);
+        this.tickI(tl);
       } else {
         this.showOnly(this.gBlock);
         this.block.setSize(1.0, 0.7);

@@ -65,23 +65,27 @@ export function smoothView(cur: { x: number; y: number; zoom: number }, dt: numb
  * 映像のキャンバスにマウス・指の操作を付ける(全映像で共通)。
  *  左ドラッグ = 回転(横: 回り込み rot.az、縦: 見下ろす角度 rot.el。縦はマウスだけ。指の縦はページのスクロールに渡す)
  *  右ドラッグ = 平行移動(VIEW.x・y)、ホイール = 寄る・引く(VIEW.zoom)
+ *  動かさずに短く押す = 'canvas-tap'(映像の枠では 一時停止 ⇄ 再生)
  *  指: 1本で横になぞる = 回り込み(縦はページのスクロール)、2本 = ピンチで寄る・引く + 2本そろえて動かすと平行移動
  * rot は呼び出し側が持つ向きの上乗せ(度)。戻り値は後片付け。
  */
 export function bindCamera(canvas: HTMLCanvasElement, rot: { az: number; el: number }, azMax = 70) {
   canvas.style.touchAction = 'pan-y';
-  let drag: { x: number; y: number; az: number; el: number; vx: number; vy: number; pan: boolean; mouse: boolean } | null = null;
+  let drag: { x: number; y: number; az: number; el: number; vx: number; vy: number; pan: boolean; mouse: boolean; t: number; far: boolean } | null = null;
+  // 2本指の操作をしたら、その指を離すまでは「押しただけ」と見なさない
+  let hadTwo = false;
   // 2本指の操作中は、1本指の回転を止める
   let two: { d: number; mx: number; my: number; zoom: number; vx: number; vy: number } | null = null;
   const down = (e: PointerEvent) => {
     if (two) return;
     const pan = e.button === 2 || (e.button === 0 && e.shiftKey);
-    drag = { x: e.clientX, y: e.clientY, az: rot.az, el: rot.el, vx: VIEW.x, vy: VIEW.y, pan, mouse: e.pointerType === 'mouse' };
+    drag = { x: e.clientX, y: e.clientY, az: rot.az, el: rot.el, vx: VIEW.x, vy: VIEW.y, pan, mouse: e.pointerType === 'mouse', t: performance.now(), far: e.button !== 0 };
   };
   const move = (e: PointerEvent) => {
     if (!drag || two) return;
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
+    if (Math.hypot(dx, dy) > 6) drag.far = true;
     if (drag.pan) {
       // つかんだ所が指先についてくるように(見えている半分の幅・高さ = 構図 × 引き)
       const w = Math.max(1, canvas.clientWidth / 2);
@@ -93,8 +97,13 @@ export function bindCamera(canvas: HTMLCanvasElement, rot: { az: number; el: num
     rot.az = Math.max(-azMax, Math.min(azMax, drag.az - dx * 0.35));
     if (drag.mouse) rot.el = Math.max(-12, Math.min(55, drag.el + dy * 0.25));
   };
-  const up = () => {
+  const up = (e: PointerEvent) => {
     if (drag?.pan) panView(0, 0); // 保存
+    // 動かさずに短く押しただけ = 画面を押した(一時停止 ⇄ 再生)
+    if (drag && !drag.far && !drag.pan && !hadTwo && e.type === 'pointerup' && performance.now() - drag.t < 450) {
+      window.dispatchEvent(new CustomEvent('canvas-tap', { detail: canvas }));
+    }
+    if (e.pointerType !== 'touch' || !two) hadTwo = false;
     drag = null;
   };
   const wheel = (e: WheelEvent) => {
@@ -112,6 +121,7 @@ export function bindCamera(canvas: HTMLCanvasElement, rot: { az: number; el: num
     if (e.touches.length < 2) return;
     e.preventDefault();
     drag = null;
+    hadTwo = true;
     const p = pair(e.touches);
     two = { ...p, zoom: VIEW.zoom, vx: VIEW.x, vy: VIEW.y };
   };

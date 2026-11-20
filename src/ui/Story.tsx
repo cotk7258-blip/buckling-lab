@@ -131,6 +131,28 @@ export function setPaused(v: boolean) {
   PAUSED = v;
 }
 
+// 映像(data-shell の中のキャンバス)を押すと 一時停止 ⇄ 再生。真ん中に記号を一瞬出す
+window.addEventListener('canvas-tap', (e) => {
+  const c = (e as CustomEvent<HTMLCanvasElement>).detail;
+  if (!c?.closest('[data-shell]')) return;
+  setPaused(!PAUSED);
+  const box = c.parentElement;
+  if (!box) return;
+  const f = document.createElement('div');
+  f.textContent = PAUSED ? '❚❚' : '▶';
+  f.setAttribute('aria-hidden', 'true');
+  f.className =
+    'pointer-events-none absolute left-1/2 top-1/2 z-[6] flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-ink/55 text-2xl text-white transition-all duration-500';
+  box.appendChild(f);
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      f.style.opacity = '0';
+      f.style.transform = 'translate(-50%, -50%) scale(1.4)';
+    }),
+  );
+  setTimeout(() => f.remove(), 600);
+});
+
 /** 場面の中の再生位置を移す(p は 0〜1)。映像の部品(useShow・Stage3)が受け取る */
 export function seekScene(p: number) {
   window.dispatchEvent(new CustomEvent('seek-scene', { detail: p }));
