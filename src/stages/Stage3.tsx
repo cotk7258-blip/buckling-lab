@@ -5,7 +5,7 @@ import { Stage3D, DEFL_AMP } from '../three/stage.ts';
 import type { CameraPose } from '../three/stage.ts';
 import { Section3D } from '../three/section.ts';
 import { FitTex, Tex } from '../ui/Tex.tsx';
-import { ClipBar, ClipLabel, updateClip } from '../ui/Story.tsx';
+import { ClipBar, ClipLabel, ViewControls, updateClip } from '../ui/Story.tsx';
 import { Rich, Term } from '../ui/glossary.tsx';
 
 const E_OVER_FY = 200000 / 355; // E = 2.0×10^5 N/mm²、σy = 355 N/mm²(SM490Y 相当)
@@ -88,7 +88,7 @@ const SCENES: SceneDef[] = [
     kicker: '載荷',
     head: (c) => `降伏の ${pct(c.real.Pfy * 0.85)} まで押す`,
     body: () =>
-      '柱の中ほどの矢印は、曲げる力(橙)と、それと釣り合って柱が発揮している戻す力(青)。ガラスの管は、柱が戻せる力の上限です。現実の柱は、先端だけ残留応力が上乗せされ、もう降伏のすぐ手前です。',
+      '柱の中ほどの矢印は、曲げる力(橙)と、それと釣り合う戻す力(青)。赤い点線の輪が、柱が持つ本来の戻す力(上限)です。現実の柱は、先端だけ残留応力が上乗せされ、もう降伏のすぐ手前です。',
     stress: true,
     target: (c) => c.real.Pfy * 0.85,
     speed: 0.12,
@@ -99,7 +99,7 @@ const SCENES: SceneDef[] = [
     kicker: '異変',
     head: (c) => `まだ ${pct(c.real.Pfy)}。なのに、先端が降伏した`,
     body: () =>
-      '平均ではまだ余裕があるのに、先端が降伏して赤くなりました。赤い部分は、もう押し返せません。柱が戻せる力の上限が、ここから削られ始めます。',
+      '平均ではまだ余裕があるのに、先端が降伏して赤くなりました。赤い部分は、もう押し返せません。降伏が広がると、やがて戻す力の上限が削られ始めます。',
     stress: true,
     target: (c) => c.real.Pfy + 0.012,
     speed: 0.05,
@@ -134,7 +134,7 @@ const SCENES: SceneDef[] = [
     kicker: '連鎖',
     head: () => '赤が広がる。踏ん張りが落ちる。さらに曲がる',
     body: (c) =>
-      `本物の柱に戻ります。曲げる力と戻す力(青)は、まだ釣り合っています。ところがその陰で、降伏した部分の分だけ、戻せる上限(ガラスの管)が赤く削られていく。青が管の先に届いた所が限界、降伏の ${pct(c.real.Pu)} です。`,
+      `本物の柱に戻ります。曲げる力と戻す力(青)は、まだ釣り合っています。ところがその陰で、降伏した部分の分だけ、柱が持つ本来の戻す力(上限)が赤く削られ、管が短くなっていく。青が管の先に届いた所が限界、降伏の ${pct(c.real.Pu)} です。`,
     stress: true,
     target: (c) => c.real.Pu - 0.002,
     speed: 0.018,
@@ -156,7 +156,7 @@ const SCENES: SceneDef[] = [
     kicker: '理論値',
     head: (c) => `理想の柱は ${pct(c.ideal.Pu)} まで耐えた`,
     body: (c) =>
-      `理想の柱は、全体が降伏する(100%)まで管が削られず、そこまで耐えます。この長さでは、本来の上限(オイラーの座屈荷重 ${pct(c.ideal.Pe)})より降伏が先だからです。現実の柱は、先端の降伏で管が早く削られた分だけ低く、理想の ${pct(
+      `理想の柱は管が削られず、戻す力が本来の上限(100%)に届いた瞬間に座屈しました。この長さでは、オイラーの座屈荷重(${pct(c.ideal.Pe)})より降伏が低いので、本来の上限は降伏で決まります。現実の柱は、管が削られた分だけ早く、理想の ${pct(
         c.real.Pu / c.ideal.Pu,
       )}。設計の線が理論より下にあるのは、この差のためです。`,
     stress: true,
@@ -356,11 +356,12 @@ export default function Stage3() {
         <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
           <canvas ref={mainRef} className="block h-[37dvh] min-h-[280px] w-full lg:h-[72dvh]" />
           <ClipBar />
+          <ViewControls />
           <ColumnLabel refEl={labelRefs[0]} name="理想の柱" term="ideal" load={hud.pI} buckled={hud.cI} color="#16a34a" />
           <ColumnLabel refEl={labelRefs[1]} name="現実の柱" term="real" load={hud.pR} buckled={hud.cR} color="#1f2a44" />
           <p
             ref={capRef}
-            className="pointer-events-none absolute inset-x-3 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
+            className="pointer-events-none absolute inset-x-14 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
             style={{ opacity: 0 }}
           />
           <div
@@ -427,15 +428,15 @@ export default function Stage3() {
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: '#0284c7' }} />
-                <Term id="exert">発揮している戻す力</Term>
+                <Term id="exert">戻す力</Term>
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-4 rounded-sm border border-sky-500 bg-sky-200/60" />
-                <Term id="limit">戻せる上限</Term>(管)
+                <Term id="limit">いまの上限</Term>(管)
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2.5 w-4 rounded-sm border border-dashed border-rose-500 bg-rose-200/60" />
-                削られた分・<Term id="capOrig">本来の上限</Term>
+                削られた分・<Term id="capOrig">柱が持つ本来の戻す力(上限)</Term>(輪)
               </span>
               <span className="text-ink-dim">どれも曲がりに比例するので、曲がり1あたりの大きさで描いています</span>
             </div>

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { VIEW, applyView, smoothView } from './view.ts';
 import { BG, addStudioEnvironment, makeRenderer } from './common.ts';
 
 export const smooth = (t: number) => {
@@ -110,6 +111,7 @@ export abstract class ShowBase {
   private cur = { cx: 0, cy: 1.5, hw: 3, hh: 3, az: 10, el: 8 };
   private userAz = 0;
   private first = true;
+  private view = { ...VIEW };
 
   constructor(protected canvas: HTMLCanvasElement) {
     this.renderer = makeRenderer(canvas);
@@ -218,12 +220,14 @@ export abstract class ShowBase {
     c.hh += (t.hh - c.hh) * k;
     c.el += (t.el - c.el) * k;
     c.az += (t.az + this.userAz - c.az) * kAz;
+    // 見る人の調整(平行移動・引き)を上乗せ
+    const vw = applyView(c, c.az, smoothView(this.view, this.first ? 1e3 : dt));
     const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const dist = Math.max(c.hh / tan, c.hw / (tan * this.aspect));
+    const dist = Math.max(vw.hh / tan, vw.hw / (tan * this.aspect));
     const az = THREE.MathUtils.degToRad(c.az + Math.sin(this.time * 0.25) * 1.5);
     const el = THREE.MathUtils.degToRad(c.el);
-    this.camera.position.set(c.cx + dist * Math.sin(az) * Math.cos(el), c.cy + dist * Math.sin(el), dist * Math.cos(az) * Math.cos(el));
-    this.camera.lookAt(c.cx, c.cy, 0);
+    this.camera.position.set(vw.tx + dist * Math.sin(az) * Math.cos(el), vw.ty + dist * Math.sin(el), vw.tz + dist * Math.cos(az) * Math.cos(el));
+    this.camera.lookAt(vw.tx, vw.ty, vw.tz);
     this.renderer.render(this.scene, this.camera);
   }
 

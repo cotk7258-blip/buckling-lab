@@ -5,6 +5,7 @@ import { ExplainScene } from './explain.ts';
 import type { ExplainMode } from './explain.ts';
 import { BG, addStudioEnvironment, makeGlowMaterial, makeRenderer, writeStressColor } from './common.ts';
 import { arrow, label, placeArrow } from './kit.ts';
+import { VIEW, applyView, smoothView } from './view.ts';
 
 /** たわみを絵の上で何倍に見せるか */
 export const DEFL_AMP = 12;
@@ -129,16 +130,15 @@ class Column3D {
       this.group.add(m);
       this.frags.push({ m, v: new THREE.Vector3(), life: 0 });
     }
-    const tags: [string, string][] = withTags
-      ? [
-          ['曲げる力', '#ea580c'],
-          ['発揮している戻す力', '#0284c7'],
-          ['戻せる上限', '#0369a1'],
-          ['本来の上限', '#e11d48'],
-        ]
-      : [['削られない上限', '#0369a1']];
+    // 札: 0 曲げる力、1 戻す力、2 いまの上限(削られた管の先)、3 柱が持つ本来の戻す力(上限)
+    const tags: [string, string][] = [
+      ['曲げる力', '#ea580c'],
+      ['戻す力', '#0284c7'],
+      ['いまの上限', '#0369a1'],
+      ['柱が持つ本来の戻す力(上限)', '#be123c'],
+    ];
     for (const [t, c] of tags) {
-      const sp = label(t, c, t.length > 5 ? 2 : 1);
+      const sp = label(t, c, t.length > 12 ? 2.6 : t.length > 4 ? 1.6 : 1);
       sp.scale.multiplyScalar(0.6);
       sp.visible = false;
       this.group.add(sp);
@@ -325,19 +325,19 @@ class Column3D {
 
   /**
    * 柱の中ほどの「戻す力のガラス管」。どの力も曲がりに比例するので、曲がり1あたりの大きさ(係数)で描く:
-   *  曲げる力(橙)= P、発揮している戻す力(青)= 釣り合っている間は P と同じ(座屈後は上限で頭打ち)、
-   *  ガラス管の長さ = いま戻せる上限 Pe × Ie/I(画面の「いまの限界」)、点線の輪 = 本来の上限 Pe。
-   *  降伏すると Ie/I が下がり、管の先が赤く削られて、かけらが落ちる。理想の柱は全断面が降伏するまで削られない。
+   *  曲げる力(橙)= P、戻す力(青)= 釣り合っている間は P と同じ(座屈後は上限で頭打ち)、
+   *  点線の輪 = 柱が持つ本来の戻す力(上限)= min(Pe, Py)(理想の柱の強さ。降伏が先ならそこで決まる)、
+   *  ガラス管の長さ = いまの上限 min(Pe × Ie/I, Py)(画面の「いまの限界」と同じ量)。
+   *  降伏が広がると Ie/I が下がり、管の先が赤く削られて、かけらが落ちる。理想の柱は削られず、青が輪に届いた瞬間に座屈する。
    *  2本の柱の矢印が間で重ならないよう、理想の柱は少し上、現実の柱は少し下に置く。
    */
   private forces(path: ColumnPath, st: ColumnPath['steps'][number], collapsed: boolean, fyMid: number, D: number, dt: number) {
-    const S = 0.95; // 係数 1(= 降伏荷重)あたりの長さ
-    const MAX = 1.5; // 長すぎる管は、ここで切る(短い柱は Pe が非常に大きい)
+    const S = 1.1; // 係数 1(= 降伏荷重)あたりの長さ
     const fy = fyMid + (this.real ? -0.35 : 0.55);
     const on = st.P > 0.02 && this.cutaway < 0.05;
     const P = st.P;
-    const orig = Math.min(MAX, path.Pe);
-    const cap = Math.min(MAX, path.Pe * st.ieRatio);
+    const orig = Math.min(1, path.Pe);
+    const cap = Math.min(1, path.Pe * st.ieRatio);
     // 釣り合っている間は曲げる力と同じだけ出す。上限を超えては出せない
     const exert = Math.min(P, cap);
     void collapsed;
@@ -356,7 +356,7 @@ class Column3D {
     this.lost.position.set(x0 - lenCap - lostLen / 2, fy, 0.3);
     this.ringNow.visible = on;
     this.ringNow.position.set(x0 - lenCap, fy, 0.3);
-    this.ringOrig.visible = on && lostLen > 0.02;
+    this.ringOrig.visible = on;
     this.ringOrig.position.set(x0 - lenOrig, fy, 0.3);
     // 上限が下がった分だけ、管の先からかけらを落とす
     if (on && this.lastCap >= 0 && cap < this.lastCap - 1e-4) {
@@ -386,21 +386,18 @@ class Column3D {
       }
     }
     const t = this.ftags;
-    if (this.real) {
-      t[0].visible = on;
-      t[0].position.set(xr + S * P + 0.45, fy + 0.22, 0.4);
-      // 発揮している戻す力は柱の根元側の下、上限の2つは管の先の上下に置き、重ならないようにする
-      t[1].visible = on && exert > 0.15;
-      t[1].position.set(x0 - 0.55, fy - 0.32, 0.45);
-      t[2].visible = on;
-      t[2].position.set(x0 - lenCap, fy + 0.3, 0.45);
-      t[3].visible = on && lostLen > 0.12;
-      t[3].position.set(x0 - lenOrig - 0.15, fy + (lostLen > 0.45 ? 0.3 : 0.58), 0.45);
-    } else {
-      // 全体が降伏して削られ始めたら「削られない」とは言えないので消す
-      t[0].visible = on && lostLen < 0.03;
-      t[0].position.set(x0 - lenCap + 0.55, fy + 0.3, 0.45);
-    }
+    const eroded = lostLen > 0.12;
+    t[0].visible = on && this.real;
+    t[0].position.set(xr + S * P + 0.45, fy + 0.22, 0.4);
+    // 現実の柱: 戻す力は根元側の上、いまの上限は管の先の下、本来の上限は輪の下(削られたらさらに下)。
+    // 理想の柱: 本来の上限を輪の上に(現実の柱の札と離す)
+    t[1].visible = on && this.real && exert > 0.15;
+    t[1].position.set(x0 - 0.35, fy + 0.3, 0.45);
+    t[2].visible = on && this.real && eroded;
+    t[2].position.set(x0 - lenCap, fy - 0.32, 0.45);
+    t[3].visible = on;
+    if (this.real) t[3].position.set(x0 - lenOrig - 0.1, fy - (eroded ? 0.62 : 0.32), 0.45);
+    else t[3].position.set(x0 - lenOrig + 0.6, fy + 0.32, 0.45);
   }
 }
 
@@ -422,6 +419,7 @@ export class Stage3D {
   private pose: CameraPose = { az: 18, el: 8, focus: 'both' };
   private cur = { az: 18, el: 8, cx: 0, cy: 3, hw: 3.2, hh: 3.3 };
   private userAz = 0;
+  private view = { ...VIEW };
   private shake = 0;
   private wasCollapsed = [false, false];
   private aspect = 1;
@@ -569,19 +567,21 @@ export class Stage3D {
     c.cy += (tgt.cy - c.cy) * k;
     c.hw += (tgt.hw - c.hw) * k;
     c.hh += (tgt.hh - c.hh) * k;
+    // 見る人の調整(平行移動・引き)を上乗せ
+    const vw = applyView(c, c.az, smoothView(this.view, dt));
     const tan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
-    const dist = Math.max(c.hh / tan, c.hw / (tan * this.aspect));
+    const dist = Math.max(vw.hh / tan, vw.hw / (tan * this.aspect));
     const az = THREE.MathUtils.degToRad(c.az + Math.sin(time * 0.25) * 2.5);
     const el = THREE.MathUtils.degToRad(c.el);
     this.shake *= Math.exp(-dt * 5);
     const sx = this.shake * 0.05 * Math.sin(time * 61);
     const sy = this.shake * 0.05 * Math.sin(time * 47);
     this.camera.position.set(
-      c.cx + dist * Math.sin(az) * Math.cos(el) + sx,
-      c.cy + dist * Math.sin(el) + sy,
-      dist * Math.cos(az) * Math.cos(el),
+      vw.tx + dist * Math.sin(az) * Math.cos(el) + sx,
+      vw.ty + dist * Math.sin(el) + sy,
+      vw.tz + dist * Math.cos(az) * Math.cos(el),
     );
-    this.camera.lookAt(c.cx + sx, c.cy + sy, 0);
+    this.camera.lookAt(vw.tx + sx, vw.ty + sy, vw.tz);
     this.renderer.render(this.scene, this.camera);
   }
 

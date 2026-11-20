@@ -1,8 +1,42 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { panView, resetView, zoomView } from '../three/view.ts';
 import type { ReactNode, RefObject } from 'react';
 import type { ShowBase } from '../three/kit.ts';
 import { Rich, Term } from './glossary.tsx';
 import { FitTex } from './Tex.tsx';
+
+/**
+ * 映像の視点の調整(全映像で共通・保存される)。右上の「視点」を押すと、平行移動・寄り/引き・元に戻すのボタンが出る。
+ * 回り込みは映像を横になぞる。
+ */
+export function ViewControls() {
+  const [open, setOpen] = useState(false);
+  const btn = 'flex h-9 w-9 items-center justify-center rounded-lg border border-studio-600 bg-studio-950/90 text-base font-bold text-ink active:bg-studio-800';
+  return (
+    <div className="absolute right-2 top-2 z-10 flex flex-col items-end gap-1.5">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="rounded-lg border border-studio-600 bg-studio-950/90 px-2.5 py-1 text-xs font-bold text-comp"
+      >
+        {open ? '閉じる' : '視点'}
+      </button>
+      {open && (
+        <div className="grid grid-cols-3 gap-1 rounded-xl border border-studio-600 bg-studio-900/90 p-1.5 shadow">
+          <button className={btn} onClick={() => zoomView(1 / 1.15)} aria-label="寄る">＋</button>
+          <button className={btn} onClick={() => panView(0, 0.15)} aria-label="上へ">↑</button>
+          <button className={btn} onClick={() => zoomView(1.15)} aria-label="引く">－</button>
+          <button className={btn} onClick={() => panView(-0.15, 0)} aria-label="左へ">←</button>
+          <button className={btn} onClick={resetView} aria-label="元に戻す" title="元に戻す">⟲</button>
+          <button className={btn} onClick={() => panView(0.15, 0)} aria-label="右へ">→</button>
+          <span />
+          <button className={btn} onClick={() => panView(0, -0.15)} aria-label="下へ">↓</button>
+          <span />
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** 「式と Q&A」のページを、指定のタブで開く(App が受け取る) */
 export function openFormulas(tab: string, id?: string) {
@@ -177,9 +211,10 @@ export function StoryShell(props: {
         <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
           <canvas ref={props.canvasRef} className="block h-[44dvh] min-h-[300px] w-full lg:h-[72dvh]" />
           <ClipBar />
+          <ViewControls />
           <p
             ref={props.capRef}
-            className="pointer-events-none absolute inset-x-3 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
+            className="pointer-events-none absolute inset-x-14 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
             style={{ opacity: 0 }}
           />
           {props.overlay}
