@@ -118,7 +118,8 @@ class Bar {
 
   /** D: いちばんずれる所のずれ。load: 矢印の長さ(0〜1 くらい)。wave: 赤い目印を出すか */
   /** ratio: 押す力 ÷ 座屈荷重(曲げる力と戻す力の比)。省略すると、その矢印は出さない */
-  update(D: number, load: number, showWave = false, ratio?: number) {
+  /** stiff: この棒の座屈荷重 ÷ 基準の座屈荷重。同じずれでも、戻す力(青)はこの倍率で長さが変わる(曲げる力は 押す力 × ずれ なので ratio × stiff) */
+  update(D: number, load: number, showWave = false, ratio?: number, stiff = 1) {
     this.D = D;
     const w = SUPPORTS[this.sup].w;
     const pos = this.mesh.geometry.attributes.position as THREE.BufferAttribute;
@@ -146,7 +147,8 @@ class Bar {
     const xi = this.xiMax;
     const x = D * w(xi);
     const y = xi * H - D * D * this.short[Math.round(xi * 200)];
-    const k = 2.4 * Math.abs(D);
+    // いちばんずれる所で 戻す力 = 座屈荷重 × ずれ、曲げる力 = 押す力 × ずれ
+    const k = 2.4 * Math.abs(D) * stiff;
     placeArrow(this.fOut, x + 0.12, y + 0.15, 0.15, on ? k * (ratio ?? 0) : 0, 0);
     placeArrow(this.fBack, x - 0.12, y - 0.15, 0.15, on ? -k : 0, 0);
     const tg = this.tags;
@@ -229,6 +231,8 @@ export class Stage2Show extends ShowBase {
   private short: Bar;
   private long: Bar;
   private tags2: THREE.Sprite[] = [];
+  /** 長さの場面: 青い矢印の横の「戻す力 1」「戻す力 1/4」 */
+  private backTags: THREE.Sprite[] = [];
   /** 長さの場面: 柱の横の紫の寸法線(式の l がこの長さだと示す) */
   private dims: { g: THREE.Group; v: THREE.Mesh; t0: THREE.Mesh; t1: THREE.Mesh; tag: THREE.Sprite; H: number }[] = [];
   private dims5: { g: THREE.Group; v: THREE.Mesh; t0: THREE.Mesh; t1: THREE.Mesh; tag: THREE.Sprite; H: number }[] = [];
@@ -306,6 +310,11 @@ export class Stage2Show extends ShowBase {
     this.g2.add(this.short.group, this.long.group);
     // 紫の寸法線(棒の左)。式の分母の l = この長さ
     for (const [bar, text] of [[this.short, 'l'], [this.long, '2l']] as const) this.dims.push(this.dimLine(this.g2, bar, text, -0.42));
+    for (const text of ['戻す力 1', '戻す力 1/4']) {
+      const t = tag(text, '#0284c7', 0.62);
+      this.g2.add(t);
+      this.backTags.push(t);
+    }
     for (const [t, x, y, c] of [['長さ l', -1.5, -0.75, '#1f2a44'], ['長さ 2l', 1.0, -0.75, '#1f2a44'], ['限界 100%', -0.35, 1.0, '#e11d48'], ['限界 25%', 2.35, 1.9, '#e11d48']] as const) {
       const s = tag(t, c, 0.75);
       s.position.set(x, y, 0.3);
@@ -581,7 +590,7 @@ export class Stage2Show extends ShowBase {
         this.lenInfo.phase = 1;
         const u = t - 3.5;
         dS = dL = 0.4 * ramp(u, 1, 3) * (1 - ramp(u, 9, 10));
-        this.caption = u < 5 ? '長さ 2l の棒と比べる。同じだけ横にずらすと…' : '長い棒はゆるいカーブ。l が2倍で l² は4倍、戻す力は 1/4';
+        this.caption = u < 5 ? '長さ 2l の棒と比べる。同じだけ横にずらすと…' : '長い棒の戻す力(青)は 1/4。l が2倍で l² が4倍だから';
       } else {
         this.lenInfo.phase = 2;
         const u = t - 3.5;
@@ -590,19 +599,29 @@ export class Stage2Show extends ShowBase {
         dS = 0.4 * ramp(p, 0.99, 1.02);
         this.caption = p < 0.25 ? `2本を同じ力で押す。押す力 ${pct(p)}` : p < 0.99 ? `押す力 ${pct(p)}。長い棒は 25% で座屈した` : '長さが2倍なら、座屈する力は 1/4(長さの2乗に反比例)';
       }
+      // 長い棒は座屈荷重が 1/4 なので、同じずれでも戻す力(青)は 1/4 の長さ
       this.short.update(dS, p, false, Math.min(1.02, p));
-      this.long.update(dL, p, false, Math.min(1.02, p / 0.25));
-      this.tags2[2].visible = dS > 0.3;
+      this.long.update(dL, p, false, Math.min(1.02, p / 0.25), 0.25);
+      // 試しに同じだけずらしている間だけ、青い矢印の下に倍率の札
+      const showBack = t >= 3.5 && t < 13.5 && dS > 0.3;
+      [this.short, this.long].forEach((bar, i) => {
+        const [x, y] = bar.at(0.5);
+        this.backTags[i].position.set(bar.group.position.x + x - (i ? 0.45 : 0.75), y - 0.5, 0.3);
+        this.backTags[i].visible = showBack;
+      });
+      this.tags2[2].visible = dS > 0.3 && t >= 13.5;
       this.tags2[3].visible = dL > 0.3 && t >= 13.5;
       // 左側に式のカードを重ねるので、棒は右寄せに
       this.look(-1.6, 1.45, 3.3, 2.8, 10, 6);
     } else if (s === 5) {
-      // 支え方(37 秒): 4本とも長さは l(紫の寸法線)→ 同じ力で押す → 赤い線 = 有効座屈長 le = K × l
+      // 支え方(43 秒): 4本とも長さは l(紫の寸法線)→ 同じ力で押す → 赤い線 = 有効座屈長 le = K × l
       this.only(this.g5);
-      const T = this.cyc(37, c);
-      const t = Math.max(0, T - 4);
+      const T = this.cyc(43, c);
+      // 4〜10 秒: 4本を同じだけ試しに曲げて、戻す力(青)を比べる。10 秒から押していく
+      const trial = T < 10 ? 0.36 * ramp(T, 4.5, 6) * (1 - ramp(T, 9, 10)) : -1;
+      const t = Math.max(0, T - 10);
       // 座屈した形(赤い線 = le)は、式のカードを読めるよう長めに残す
-      const p = T < 4 ? 0 : 4.25 * ramp(t, 2, 19) * (1 - ramp(t, 31, 32));
+      const p = T < 10 ? 0 : 4.25 * ramp(t, 2, 19) * (1 - ramp(t, 31, 32));
       const fade = 1 - ramp(t, 31, 32);
       const grow = ramp(T, 0.4, 2.2) * fade;
       this.dims5.forEach((d) => this.growDim(d, grow, -0.24));
@@ -610,17 +629,20 @@ export class Stage2Show extends ShowBase {
       this.four.forEach((b, i) => {
         const g = SUPPORTS[b.sup].gain;
         const goal = p >= g ? 0.36 : 0;
-        this.dyn[i] += (goal * fade - this.dyn[i]) * (1 - Math.exp(-dt * 6));
-        b.update(this.dyn[i], Math.min(p, g * 1.02) / 4.2 + 0.05 * Math.min(1, p), true, Math.min(p, g * 1.02) / g);
+        if (trial >= 0) this.dyn[i] = trial;
+        else this.dyn[i] += (goal * fade - this.dyn[i]) * (1 - Math.exp(-dt * 6));
+        // 戻す力の長さ = 座屈荷重の倍率(両端ピン = 1)。16 倍の幅があるので全体を 1/3 に縮める
+        b.update(this.dyn[i], Math.min(p, g * 1.02) / 4.2 + 0.05 * Math.min(1, p), true, Math.min(p, g * 1.02) / g, g / 3);
         const on = this.dyn[i] > 0.3;
         this.tags5[i][0].visible = on;
         this.tags5[i][1].visible = on;
         if (p >= g) cap = `${SUPPORTS[b.sup].name}が座屈(基準の ${g < 1 ? '1/4' : g === 1 ? '1' : g < 3 ? '約2' : '4'} 倍の力)`;
       });
       if (T < 4) cap = '4本とも長さは同じ l。違うのは、両端の支え方だけ';
+      else if (T < 10) cap = '同じだけ曲げても、戻す力(青)は支え方で違う。le が短いほど強い';
       else if (t > 21) cap = '赤い線 = 有効座屈長 le。式の l の代わりに使う';
       else if (t >= 2 && p < 0.25) cap = `4本を同じ力で押していく(基準の ${p.toFixed(2)} 倍)`;
-      this.lenInfo.phase = T < 4 ? 0 : t <= 21 ? 1 : 2;
+      this.lenInfo.phase = T < 4 ? 0 : T < 10 || t <= 21 ? 1 : 2;
       this.caption = cap;
       // 左側に式のカードを重ねるので、棒は右寄せに
       this.look(-1.9, 1.0, 4.6, 3.6, 8, 5);
