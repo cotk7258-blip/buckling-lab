@@ -96,7 +96,7 @@ export default function Stage2() {
       onScene={go}
       canvasRef={canvasRef}
       capRef={capRef}
-      hint="曲がり方は見やすく誇張しています・なぞると回転(PC は右ドラッグで移動・ホイールで拡大縮小)"
+      hint="曲がり方は見やすく誇張しています・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
         <>
           {SIDE2[scene]}

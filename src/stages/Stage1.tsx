@@ -95,7 +95,7 @@ export default function Stage1() {
       onScene={go}
       canvasRef={canvasRef}
       capRef={capRef}
-      hint="曲がり方は見やすく誇張しています。バネの絵は、しくみを示す模式図です・なぞると回転(PC は右ドラッグで移動・ホイールで拡大縮小)"
+      hint="曲がり方は見やすく誇張しています。バネの絵は、しくみを示す模式図です・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
         scene === 6 ? (
           <div className="rounded-2xl border border-studio-600 bg-studio-900 p-3">

@@ -117,7 +117,7 @@ export default function Stage4() {
       onScene={go}
       canvasRef={canvasRef}
       capRef={capRef}
-      hint={`たわみは ${S4_AMP} 倍、柱の太さは ${S4_FAT} 倍に誇張・なぞると回転(PC は右ドラッグで移動・ホイールで拡大縮小)`}
+      hint={`たわみは ${S4_AMP} 倍、柱の太さは ${S4_FAT} 倍に誇張・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)`}
       side={
         <>
         {SIDE4[scene]}

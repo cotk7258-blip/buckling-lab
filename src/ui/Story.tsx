@@ -17,9 +17,16 @@ export function ViewControls() {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="rounded-lg border border-studio-600 bg-studio-950/90 px-2.5 py-1 text-xs font-bold text-comp"
+        className="w-14 rounded-lg border border-studio-600 bg-studio-950/90 py-1 text-xs font-bold text-comp"
       >
         {open ? '閉じる' : '視点'}
+      </button>
+      <button
+        onClick={resetView}
+        title="既定の視点に戻す(移動・拡大縮小・回転)"
+        className="w-14 rounded-lg border border-studio-600 bg-studio-950/90 py-1 text-xs font-bold text-ink-dim"
+      >
+        初期値
       </button>
       {open && (
         <div className="grid grid-cols-3 gap-1 rounded-xl border border-studio-600 bg-studio-900/90 p-1.5 shadow">
