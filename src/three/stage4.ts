@@ -132,7 +132,6 @@ export class Stage4Show extends ShowBase {
     for (const l of [0.5, 1, 1.5, 2]) {
       axis(X(l), Y(0), X(l), Y(0) - 0.07);
       put(l.toFixed(1), X(l), Y(0) - 0.22, '#1f2a44', 0.85);
-      put(`l/r ${Math.round(l * Math.PI * Math.sqrt(E_OVER_FY))}`, X(l), Y(0) - 0.46, '#64748b', 0.6);
     }
     for (const s of [0.5, 1]) {
       axis(X(0), Y(s), X(2.25), Y(s), '#d5dce8');

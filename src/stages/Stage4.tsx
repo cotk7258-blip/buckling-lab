@@ -29,7 +29,7 @@ const SIDE4: Record<number, React.ReactNode> = {
         ['平方根', String.raw`\lambda=\dfrac{1}{\pi}\sqrt{\dfrac{\sigma_y}{E}}\cdot\dfrac{l}{r}`],
         ['理想の柱', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{1}{\lambda^2}\right)`, 'ds-c2'],
       ]}
-      note={`σy = 355、E = 2.0×10⁵ N/mm² なら λ = 1 は l/r = π√(E/σy) ≒ ${Math.round(Math.PI * Math.sqrt(200000 / 355))}。`}
+      note="λ は細長比 l/r に比例する。λ = 1 が、降伏と座屈の分かれ目。"
     />
   ),
   6: (
