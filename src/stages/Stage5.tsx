@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import { plateState, plateStrength, plateTheory, plateWinter, sigmaEl } from '../physics/plate.ts';
 import { BT1, SIGMA_Y, Stage5Show, labR } from '../three/stage5.ts';
 import type { Lab5 } from '../three/stage5.ts';
 import { Card, LabSlider, Steps, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
-import { Tex } from '../ui/Tex.tsx';
+import { FitTex, Tex } from '../ui/Tex.tsx';
 
 const BT = Math.round(BT1);
 
@@ -27,7 +28,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '幅と厚み',
     head: '幅が半分なら、4倍の応力まで耐える',
-    body: '幅の狭い板ほど、きつく曲がらないと波打てないので、戻す力が強い。幅が半分なら σel は4倍、厚みが2倍でも4倍です。柱の「長さ半分で4倍」と同じ形です。',
+    body: 'σel の式の b は板の幅(紫の寸法)です。幅の狭い板ほど、きつく曲がらないと波打てないので、戻す力が強い。幅が半分なら (t/b)² が4倍で、戻す力も σel も4倍。厚みが2倍でも4倍です。柱の「長さ半分で4倍」と同じ形です。',
   },
   {
     kicker: 'σel の導出',
@@ -37,7 +38,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '支え方',
     head: '支え方の効果は、係数 k に入る',
-    body: '片側の縁が自由な板は、支えが片側だけなので、ずっと低い応力で波打ちます。k は両縁支持の 4 に対して 0.43、約9分の1。柱の有効座屈長にあたるのが、板の k です。',
+    body: 'σel の式の k は、縁の支え方で決まる係数です。片側の縁が自由な板は支えが片側だけなので、同じだけ波打っても戻す力が弱く、ずっと低い応力で波打ちます。k は両縁支持の 4 に対して 0.43、約9分の1。柱の有効座屈長 le にあたるのが、板の k です。',
   },
   {
     kicker: 'R の導出',
@@ -162,10 +163,126 @@ const SIDE: Record<number, React.ReactNode> = {
   ),
 };
 
+const CARD = 'rounded-xl border bg-white/92 px-2.5 py-1.5 shadow-sm backdrop-blur-sm';
+const BOX = 'pointer-events-none absolute left-2 top-16 flex w-[44%] max-w-[290px] flex-col gap-1.5 sm:left-4';
+/** σel の式(b は紫、k は赤で強調できる) */
+const EL = (b = 'b', k = 'k') => String.raw`\sigma_{el}=\dfrac{${k}\,\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{${b}}\right)^2`;
+
+/**
+ * 綱引きの場面で映像の左に重ねる式のカード(映像2 の綱引きと同じ筋)。
+ *  0 もし波打ったら(波の高さ w)→ 1 押し出す力 ∝ σ × w、戻す力 ∝ σel × w → 2 w は両方に同じ → 3 σ と σel を比べる → 4 超えた
+ */
+function PlateTugOverlay({ phase, pRef }: { phase: number; pRef: RefObject<HTMLSpanElement | null> }) {
+  if (phase < 1) return null;
+  const cut = phase >= 2;
+  const w = cut ? String.raw`\;\textcolor{#e11d48}{\cancel{\textcolor{#1b2740}{\times\, w}}}` : String.raw`\times w`;
+  return (
+    <div className={BOX}>
+      <div className={`${CARD} border-orange-300 ${phase >= 3 ? 'hidden sm:block' : ''}`}>
+        <p className="text-[11px] font-bold" style={{ color: '#ea580c' }}>押し出す力(押す応力による)</p>
+        <FitTex className="text-[17px] sm:text-xl">{String.raw`\propto\ \sigma ${w}`}</FitTex>
+      </div>
+      <div className={`${CARD} border-sky-300 ${phase >= 3 ? 'hidden sm:block' : ''}`}>
+        <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>戻す力(板の曲げにくさ+縁の支え)</p>
+        <FitTex className="text-[17px] sm:text-xl">{String.raw`\propto\ \sigma_{el} ${w}`}</FitTex>
+      </div>
+      {phase === 2 && <p className="rounded-lg bg-white/90 px-2 py-1 text-[11px] font-bold text-rose-600">w は両方に同じだけ。大小には効かない</p>}
+      {phase >= 3 && (
+        <div className={`${CARD} border-studio-600`}>
+          <p className="text-[11px] font-bold text-ink">くらべるのは σ と σel</p>
+          <FitTex className="text-[17px] sm:text-xl">{String.raw`\sigma\quad\text{と}\quad\sigma_{el}`}</FitTex>
+          <p className="text-[11px] font-bold leading-tight">
+            押す応力 σ = <span ref={pRef}>50%</span>(σel を 100%)
+          </p>
+          <p className="text-[11px] font-bold leading-tight" style={{ color: phase >= 4 ? '#e11d48' : '#0284c7' }}>
+            {phase >= 4 ? 'σ が σel を超えた → 波打つ(局部座屈)' : 'σ < σel の間は、波打っても戻る'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 幅の場面: σel の式の b(紫)= 板の幅 → 幅 b/2 なら4倍 → 厚み2倍でも4倍 */
+function WidthOverlay({ phase }: { phase: number }) {
+  if (phase < 0) return null;
+  const B = String.raw`\textcolor{#6d28d9}{b}`;
+  return (
+    <div className={BOX}>
+      <div className={`${CARD} border-sky-300 ${phase >= 2 ? 'hidden sm:block' : ''}`}>
+        <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>板の強さ(戻す力の大きさ)</p>
+        <FitTex className="text-[16px] sm:text-lg">{EL(B)}</FitTex>
+        <p className="text-[11px] font-bold leading-tight" style={{ color: '#6d28d9' }}>b = 板の幅(紫の寸法)・t = 厚さ</p>
+      </div>
+      {phase >= 1 && (
+        <div className={`${CARD} border-violet-300`}>
+          <p className="text-[11px] font-bold" style={{ color: '#6d28d9' }}>幅が b/2 なら</p>
+          <FitTex className="text-[15px] sm:text-lg">{String.raw`\left(\dfrac{t}{\textcolor{#6d28d9}{b/2}}\right)^2=4\left(\dfrac{t}{${B}}\right)^2`}</FitTex>
+          <p className="text-[10px] leading-tight text-ink-dim">σel も、戻す力(青)も 4倍</p>
+        </div>
+      )}
+      {phase >= 3 && (
+        <div className={`${CARD} border-studio-600`}>
+          <p className="text-[11px] font-bold text-ink">厚みが 2t でも 4倍</p>
+          <FitTex className="text-[15px] sm:text-lg">{String.raw`\left(\dfrac{2t}{${B}}\right)^2=4\left(\dfrac{t}{${B}}\right)^2`}</FitTex>
+          <p className="text-[10px] leading-tight text-ink-dim">柱の「長さ半分で4倍」と同じ形</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 支え方の場面: σel の式の k(赤)= 支え方の係数。柱の有効座屈長にあたる */
+function KOverlay({ phase }: { phase: number }) {
+  if (phase < 0) return null;
+  const K = String.raw`\textcolor{#e11d48}{k}`;
+  return (
+    <div className={BOX}>
+      <div className={`${CARD} border-sky-300`}>
+        <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>板の強さ(戻す力の大きさ)</p>
+        <FitTex className="text-[16px] sm:text-lg">{EL('b', K)}</FitTex>
+        <p className="text-[11px] font-bold leading-tight" style={{ color: '#e11d48' }}>k = 縁の支え方で決まる係数</p>
+      </div>
+      {phase >= 1 && (
+        <div className={`${CARD} border-rose-300 ${phase >= 2 ? 'hidden sm:block' : ''}`}>
+          <table className="w-full text-[11px] leading-snug">
+            <tbody>
+              <tr>
+                <td className="pr-1 text-ink-dim">両縁支持(左)</td>
+                <td className="whitespace-nowrap text-right font-bold" style={{ color: '#e11d48' }}>k = 4.0</td>
+              </tr>
+              <tr>
+                <td className="pr-1 text-ink-dim">片側の縁が自由(右)</td>
+                <td className="whitespace-nowrap text-right font-bold" style={{ color: '#e11d48' }}>k = 0.43</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="mt-0.5 text-[10px] leading-tight text-ink-dim">0.43 ÷ 4 ≒ 1/9。同じ板でも σel と戻す力(青)は約1/9</p>
+        </div>
+      )}
+      {phase >= 2 && (
+        <div className={`${CARD} border-studio-600`}>
+          <p className="text-[11px] font-bold text-ink">柱の有効座屈長にあたる</p>
+          <FitTex className="text-[14px] sm:text-base">{String.raw`\text{柱 } \dfrac{\pi^2EI}{l_e^{\,2}}\ \leftrightarrow\ \text{板 } ${K}`}</FitTex>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Stage5() {
   const [scene, setScene] = useState(0);
   const [lab, setLab] = useState<Lab5>({ b: 900, t: 12, k: 4, load: 0.3 });
-  const { canvasRef, capRef, show } = useShow((c) => new Stage5Show(c));
+  const [phase, setPhase] = useState(-1);
+  const pRef = useRef<HTMLSpanElement>(null);
+  const { canvasRef, capRef, show } = useShow(
+    (c) => new Stage5Show(c),
+    (sh) => {
+      const ph = sh.info.phase;
+      setPhase((old) => (old === ph ? old : ph));
+      if (pRef.current) pRef.current.textContent = `${Math.round(sh.info.p * 100)}%`;
+    },
+  );
   const go = (n: number) => {
     const next = Math.max(0, Math.min(SCENES.length - 1, n));
     setScene(next);
@@ -204,6 +321,9 @@ export default function Stage5() {
       onScene={go}
       canvasRef={canvasRef}
       capRef={capRef}
+      overlay={
+        scene === 2 ? <PlateTugOverlay phase={phase} pRef={pRef} /> : scene === 3 ? <WidthOverlay phase={phase} /> : scene === 5 ? <KOverlay phase={phase} /> : undefined
+      }
       hint="板の厚みと波の高さは見やすく誇張しています・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
         <>

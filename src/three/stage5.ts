@@ -348,6 +348,12 @@ export class Stage5Show extends ShowBase {
   private both: Plate;
   private free: Plate;
   private supTags: THREE.Sprite[] = [];
+  /** 幅の場面: 板の下の紫の寸法線(b と b/2) */
+  private bDims: { g: THREE.Group; v: THREE.Mesh; t0: THREE.Mesh; t1: THREE.Mesh; tag: THREE.Sprite; W: number }[] = [];
+  /** 幅・支え方の場面: 戻す力(青)の倍率の札 */
+  private backTags: THREE.Sprite[] = [];
+  /** 綱引き・幅・支え方の場面の段階と押す応力(Stage5.tsx が式のカードに使う)。-1 = ほかの場面 */
+  info = { phase: -1, p: 0 };
   private gLine = new THREE.Group();
   private plates: Plate[] = [];
   private keys: string[] = [];
@@ -419,6 +425,26 @@ export class Stage5Show extends ShowBase {
       s.position.set(x, y, 0.3);
       this.gPair.add(s);
       this.pairTags.push(s);
+    }
+
+    // 紫の寸法線(板の下)。σel の式の b = この幅
+    for (const [pl, text] of [[this.wide, '幅 b'], [this.narrow, '幅 b/2']] as const) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshBasicMaterial({ color: '#6d28d9', fog: false, toneMapped: false });
+      const v = new THREE.Mesh(new THREE.BoxGeometry(1, 0.025, 0.025), mat);
+      const t0 = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.16, 0.025), mat);
+      const t1 = t0.clone();
+      const tg = tag(text, '#6d28d9', 0.95);
+      g.add(v, t0, t1, tg);
+      g.position.set(pl.group.position.x, -0.22, 0.15);
+      this.gPair.add(g);
+      this.bDims.push({ g, v, t0, t1, tag: tg, W: pl.b });
+    }
+    for (const [t, parent] of [['戻す力 1', this.gPair], ['戻す力 4', this.gPair], ['戻す力 1', this.gSup], ['戻す力 約1/9', this.gSup]] as const) {
+      const s2 = tag(t, BACK, 0.6);
+      s2.visible = false;
+      parent.add(s2);
+      this.backTags.push(s2);
     }
 
     this.both = new Plate(1.2, 1.4, 0.06, { loads: 3 });
@@ -515,7 +541,15 @@ export class Stage5Show extends ShowBase {
     this.setScene(0);
   }
 
+  /** 左に式のカードを重ねる場面で、絵を画面の右へ d だけ寄せる(カメラの向き az 度に合わせる) */
+  private shiftRight(g: THREE.Group, d: number, az: number) {
+    const r = (az * Math.PI) / 180;
+    g.position.set(d * Math.cos(r), 0, -d * Math.sin(r));
+  }
+
   private show(...gs: THREE.Group[]) {
+    for (const g of [this.gOne, this.gPair, this.gSup]) g.position.set(0, 0, 0);
+    this.info.phase = -1;
     for (const g of [this.gBox, this.gOne, this.gPair, this.gSup, this.gLine, this.gWall, this.gLab, this.gBars]) g.visible = gs.includes(g);
   }
 
@@ -627,6 +661,8 @@ export class Stage5Show extends ShowBase {
       const t = this.cyc(36, c);
       let p = 0.5;
       let A = 0;
+      // 式のカードの段階: 0 もし波打ったら → 1 2つの力 → 2 w は両方に同じ → 3 σ と σel を比べる → 4 超えた
+      this.info.phase = t < 3 ? 0 : t < 9 ? 1 : t < 15 ? 2 : t < 27 ? 3 : 4;
       if (t < 3) {
         A = 0.08 * ramp(t, 1.5, 3);
         this.caption = '押している板が、もし少し波打ったら?';
@@ -648,31 +684,72 @@ export class Stage5Show extends ShowBase {
         A = Math.min(0.26, 0.12 * Math.exp((t - 27) * 0.12)) * (1 - ramp(t, 34.5, 36));
         this.caption = '超えた瞬間、波が大きくなって止まらない';
       }
+      this.info.p = p;
       const fb = 2.2 * A;
       this.one.update({ A, load: p, fOut: fb * p, fBack: fb, railGlow: 1, tags: true });
-      this.look(0.15, 0.85, 1.7, 1.45, 72, 10);
+      // 左に式のカードを重ねるので、板は右寄せに
+      this.shiftRight(this.gOne, 1.0, 72);
+      this.look(0.15, 0.85, 1.9, 1.5, 72, 10);
     } else if (s === 3) {
+      // 幅(36 秒): σel の式の b = 板の幅(紫の寸法線)→ 同じだけ波打たせて戻す力(青)を比べる → 同じ応力で押す
       this.show(this.gPair);
-      const t = this.cyc(24, c);
-      const fade = 1 - ramp(t, 23, 24);
-      const p = 4.2 * ramp(t, 1.5, 15) * fade;
-      this.amp[0] += ((p >= 1 ? 0.2 : 0) * fade - this.amp[0]) * k6;
-      this.amp[1] += ((p >= 4 ? 0.12 : 0) * fade - this.amp[1]) * k6;
-      this.wide.update({ A: this.amp[0], m: 1, load: Math.min(p, 1.05) / 2 + 0.03 });
-      this.narrow.update({ A: this.amp[1], m: 2, load: p / 4 + 0.03 });
-      this.pairTags[2].visible = this.amp[0] > 0.12;
-      this.pairTags[3].visible = this.amp[1] > 0.07;
+      const T = this.cyc(36, c);
+      const grow = ramp(T, 0.4, 2.2);
+      this.bDims.forEach((d) => {
+        const w = Math.max(0.001, d.W * grow);
+        d.v.scale.x = w;
+        d.t0.position.x = -d.W / 2;
+        d.t1.position.x = -d.W / 2 + w;
+        d.v.position.x = -d.W / 2 + w / 2;
+        d.tag.position.set(0, -0.2, 0);
+        d.tag.visible = grow > 0.95;
+      });
+      // 戻す力の長さ = その板の σel の比(広い板 1、狭い板 4)。曲げる力(押し出す力)= 押す応力 × 波の高さ
+      const FB = 4.0;
+      const trial = T >= 3.5 && T < 10 ? 0.12 * ramp(T, 4, 5.5) * (1 - ramp(T, 9, 10)) : -1;
+      const t = Math.max(0, T - 10);
+      const fade = 1 - ramp(t, 25, 26);
+      const p = T < 10 ? 0 : 4.2 * ramp(t, 1.5, 15) * fade;
+      if (trial >= 0) {
+        this.amp[0] = trial;
+        this.amp[1] = trial;
+      } else {
+        this.amp[0] += ((p >= 1 ? 0.2 : 0) * fade - this.amp[0]) * k6;
+        this.amp[1] += ((p >= 4 ? 0.12 : 0) * fade - this.amp[1]) * k6;
+      }
+      const bw = FB * this.amp[0] * 0.25;
+      const bn = FB * this.amp[1];
+      this.wide.update({ A: this.amp[0], m: 1, load: Math.min(p, 1.05) / 2 + 0.03, fBack: bw, fOut: trial >= 0 ? 0 : bw * Math.min(p, 1.02) });
+      this.narrow.update({ A: this.amp[1], m: 2, load: p / 4 + 0.03, fBack: bn, fOut: trial >= 0 ? 0 : (bn * Math.min(p, 4.08)) / 4 });
+      // 幅の札は紫の寸法線の札に置きかえた
+      this.pairTags[0].visible = false;
+      this.pairTags[1].visible = false;
+      this.pairTags[2].visible = trial < 0 && this.amp[0] > 0.12;
+      this.pairTags[3].visible = trial < 0 && this.amp[1] > 0.07;
+      const showBack = trial > 0.1;
+      this.backTags[0].visible = showBack;
+      this.backTags[0].position.set(-1.15, 0.35, 0.25);
+      this.backTags[1].visible = showBack;
+      this.backTags[1].position.set(1.25, 0.2, 0.25);
+      this.info.phase = T < 3.5 ? 0 : T < 10 ? 1 : t < 16.5 ? 2 : 3;
       this.caption =
-        t < 1.5
-          ? '幅が半分の板と比べる(厚みは同じ)'
-          : p < 1
-            ? `同じ応力で押していく(σel の ${p.toFixed(1)} 倍)`
-            : p < 4
-              ? `広い板が波打った。狭い板はまだ平ら(${p.toFixed(1)} 倍)`
-              : t < 18
-                ? '幅が半分なら、4倍の応力まで耐える'
-                : '厚みを2倍にしても4倍。σel は (t/b)² に比例する';
-      this.look(0.05, 0.8, 2.4, 1.6, 30, 12);
+        T < 3.5
+          ? 'σel の式の b は、この板の幅'
+          : T < 10
+            ? '同じだけ波打たせると、狭い板の戻す力(青)は4倍'
+            : t < 1.5
+              ? '同じ応力で押していく(厚みは同じ)'
+              : p < 1
+                ? `同じ応力で押していく(σel の ${p.toFixed(1)} 倍)`
+                : p < 4
+                  ? `広い板が波打った。狭い板はまだ平ら(${p.toFixed(1)} 倍)`
+                  : t < 18
+                    ? '幅が半分なら、4倍の応力まで耐える'
+                    : '厚みを2倍にしても4倍。σel は (t/b)² に比例する';
+      // 試しに波打たせる間は横寄りから見て、戻す力(青)の長さを見せる
+      const az = T >= 3.5 && T < 10 ? 58 : 30;
+      this.shiftRight(this.gPair, 0.95, az);
+      this.look(0.05, 0.8, 2.9, 1.75, az, 12);
     } else if (s === 4) {
       this.show(this.gOne);
       const t = this.cyc(24, c);
@@ -701,25 +778,47 @@ export class Stage5Show extends ShowBase {
       this.one.update({ A, load: p, ghost, strip: t >= 4 && t < 15 ? strip : undefined, railGlow: glow, tags: glow > 0.5 });
       this.look(0, 0.75, 1.6, 1.35, 34, 12);
     } else if (s === 5) {
+      // 支え方(32 秒): σel の式の k = 支え方の係数 → 同じだけ波打たせて戻す力(青)を比べる → 同じ応力で押す
       this.show(this.gSup);
-      const t = this.cyc(24, c);
-      const fade = 1 - ramp(t, 23, 24);
-      const p = 1.05 * ramp(t, 2, 17) * fade;
+      const T = this.cyc(32, c);
       const kr = 0.43 / 4;
-      this.amp[0] += ((p >= 1 ? 0.2 : 0) * fade - this.amp[0]) * k6;
-      this.amp[1] += ((p >= kr ? 0.22 : 0) * fade - this.amp[1]) * k6;
-      this.both.update({ A: this.amp[0], load: Math.min(p, 1.05) * 0.8 + 0.03, railGlow: 1 });
-      this.free.update({ A: this.amp[1], load: Math.min(p, kr * 1.05) * 6 + 0.03, railGlow: 1 });
+      const FB = 4.0;
+      const trial = T >= 3 && T < 9.5 ? 0.12 * ramp(T, 3.5, 5) * (1 - ramp(T, 8.5, 9.5)) : -1;
+      const t = Math.max(0, T - 8);
+      const fade = 1 - ramp(t, 23, 24);
+      const p = T < 9.5 ? 0 : 1.05 * ramp(t, 2, 17) * fade;
+      if (trial >= 0) {
+        this.amp[0] = trial;
+        this.amp[1] = trial;
+      } else {
+        this.amp[0] += ((p >= 1 ? 0.2 : 0) * fade - this.amp[0]) * k6;
+        this.amp[1] += ((p >= kr ? 0.22 : 0) * fade - this.amp[1]) * k6;
+      }
+      // 戻す力の長さ = σel の比(両縁支持 1、自由突出 0.43/4)
+      const bb = FB * this.amp[0];
+      const bf = FB * this.amp[1] * kr;
+      this.both.update({ A: this.amp[0], load: Math.min(p, 1.05) * 0.8 + 0.03, railGlow: 1, fBack: bb, fOut: trial >= 0 ? 0 : bb * Math.min(p, 1.02) });
+      this.free.update({ A: this.amp[1], load: Math.min(p, kr * 1.05) * 6 + 0.03, railGlow: 1, fBack: bf, fOut: trial >= 0 ? 0 : (bf * Math.min(p, kr * 1.02)) / kr });
       this.supTags[2].visible = true;
+      const showBack = trial > 0.1;
+      this.backTags[2].visible = showBack;
+      this.backTags[2].position.set(-1.1, 0.35, 0.25);
+      this.backTags[3].visible = showBack;
+      this.backTags[3].position.set(1.75, 0.35, 0.25);
+      this.info.phase = T < 3 ? 0 : T < 9.5 ? 1 : t <= 17 ? 1 : 2;
       this.caption =
-        t < 2
+        T < 3
           ? '右の板は、片側の縁が自由(フランジの突き出した部分など)'
-          : p < kr
-            ? `同じ応力で押していく(${p.toFixed(2)} 倍)`
-            : p < 1
-              ? `自由な縁のある板が先に波打った(${p.toFixed(2)} 倍)`
-              : 'k は支え方の効果。柱の「有効座屈長」にあたる';
-      this.look(0.05, 0.8, 2.4, 1.6, 28, 12);
+          : T < 9.5
+            ? '同じだけ波打たせても、自由な縁のある板の戻す力(青)は約1/9'
+            : p < kr
+              ? `同じ応力で押していく(${p.toFixed(2)} 倍)`
+              : p < 1
+                ? `自由な縁のある板が先に波打った(${p.toFixed(2)} 倍)`
+                : 'k は支え方の効果。柱の「有効座屈長」にあたる';
+      const az = T >= 3 && T < 9.5 ? 58 : 28;
+      this.shiftRight(this.gSup, 0.65, az);
+      this.look(0.05, 0.8, 2.9, 1.75, az, 12);
     } else if (s >= 6 && s <= 9) {
       this.show(this.gLine, this.gWall);
       this.look(0, 2.05, 4.4, 3.3, 6, 8);
