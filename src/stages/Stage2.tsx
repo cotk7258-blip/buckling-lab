@@ -36,6 +36,42 @@ const SIDE2: Record<number, React.ReactNode> = {
 };
 
 /**
+ * 長さの場面で映像の左側に重ねる式のカード。分母の l(紫)が、図の紫の寸法線 = 柱の長さだと示す。
+ *  0 戻す力 = π²EI/l² × y と「l = 柱の長さ」→ 1 長さ 2l なら 1/4 → 2 座屈荷重も 1/4
+ */
+function LenOverlay({ phase }: { phase: number }) {
+  if (phase < 0) return null;
+  const card = 'rounded-xl border bg-white/92 px-2.5 py-1.5 shadow-sm backdrop-blur-sm';
+  const L = String.raw`\textcolor{#6d28d9}{l}`;
+  return (
+    <div className="pointer-events-none absolute left-2 top-16 flex w-[47%] max-w-[300px] flex-col gap-1.5 sm:left-4">
+      <div className={`${card} border-sky-300`}>
+        <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>
+          戻す力<span className="font-normal text-ink-dim">(映像2 の綱引き)</span>
+        </p>
+        <FitTex className="text-[17px] sm:text-xl">{String.raw`\dfrac{\pi^2EI}{${L}^{\,2}} \times y`}</FitTex>
+        <p className="mt-0.5 text-[11px] font-bold leading-tight" style={{ color: '#6d28d9' }}>
+          l = 柱の長さ(図の紫の寸法)
+        </p>
+      </div>
+      {phase >= 1 && (
+        <div className={`${card} border-violet-300 ${phase >= 2 ? 'hidden sm:block' : ''}`}>
+          <p className="text-[11px] font-bold" style={{ color: '#6d28d9' }}>長さが 2l なら</p>
+          <FitTex className="text-[15px] sm:text-lg">{String.raw`\dfrac{\pi^2EI}{(\textcolor{#6d28d9}{2l})^2}=\dfrac{1}{4}\times\dfrac{\pi^2EI}{${L}^{\,2}}`}</FitTex>
+          <p className="text-[10px] leading-tight text-ink-dim">l² が4倍になるので、戻す力は 1/4</p>
+        </div>
+      )}
+      {phase >= 2 && (
+        <div className={`${card} border-studio-600`}>
+          <p className="text-[11px] font-bold text-ink">座屈荷重も 1/4</p>
+          <FitTex className="text-[15px] sm:text-lg">{String.raw`P_e=\dfrac{\pi^2EI}{${L}^{\,2}}`}</FitTex>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * 綱引きの場面で映像の左側に重ねる「式のカード」と「天秤」。段階(phase)は Stage2Show.tugInfo から読む。
  *  1 曲げる力 = P × y → 2 戻す力 = EI × 1/R → 3 1/R = (π/l)² × y → 4 戻す力 = π²EI/l² × y
  *  → 5 両方の × y を消す → 6 天秤: P と π²EI/l²(傾きと % は毎フレーム ref で書く)
@@ -119,7 +155,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '長さ',
     head: '長さが2倍なら、座屈する力は4分の1',
-    body: '同じだけ横にずれても、長い棒のカーブはゆるく、戻す力が弱い。座屈荷重は長さの2乗に反比例します。2倍なら4分の1、3倍なら9分の1。',
+    body: '綱引きで出した戻す力 π²EI/l² の l は、柱の長さ(図の紫の寸法)です。長さが2倍なら l² は4倍で、戻す力は4分の1。だから座屈荷重も4分の1、3倍なら9分の1です。',
   },
   {
     kicker: '支え方',
@@ -143,6 +179,7 @@ export default function Stage2() {
   const [lab, setLab] = useState<Lab2>({ sup: 'pp', L: 8, load: 0.5, yieldFirst: false });
   // 綱引きの場面: 段階が変わったら式のカードを描き直し、天秤の傾き・% は毎フレーム直接書く
   const [phase, setPhase] = useState(-1);
+  const [lenPhase, setLenPhase] = useState(-1);
   const beamRef = useRef<SVGGElement>(null);
   const pRef = useRef<HTMLSpanElement>(null);
   const stateRef = useRef<HTMLParagraphElement>(null);
@@ -151,6 +188,8 @@ export default function Stage2() {
     (sh) => {
       const { phase: ph, p } = sh.tugInfo;
       setPhase((old) => (old === ph ? old : ph));
+      const lp = sh.lenInfo.phase;
+      setLenPhase((old) => (old === lp ? old : lp));
       if (ph >= 6) {
         // P が π²EI/l² より軽ければ右(戻す側)が下がる。重ければ左(P)が下がる
         const a = -Math.max(-12, Math.min(12, (p - 1) * 60));
@@ -192,7 +231,9 @@ export default function Stage2() {
       onScene={go}
       canvasRef={canvasRef}
       capRef={capRef}
-      overlay={scene === 1 ? <TugOverlay phase={phase} beamRef={beamRef} pRef={pRef} stateRef={stateRef} /> : undefined}
+      overlay={
+        scene === 1 ? <TugOverlay phase={phase} beamRef={beamRef} pRef={pRef} stateRef={stateRef} /> : scene === 2 ? <LenOverlay phase={lenPhase} /> : undefined
+      }
       hint="曲がり方は見やすく誇張しています・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
         <>

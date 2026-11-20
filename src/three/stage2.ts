@@ -229,6 +229,10 @@ export class Stage2Show extends ShowBase {
   private short: Bar;
   private long: Bar;
   private tags2: THREE.Sprite[] = [];
+  /** 長さの場面: 柱の横の紫の寸法線(式の l がこの長さだと示す) */
+  private dims: { g: THREE.Group; v: THREE.Mesh; t0: THREE.Mesh; t1: THREE.Mesh; tag: THREE.Sprite; H: number }[] = [];
+  /** 長さの場面の段階(Stage2.tsx が式のカードに使う)。-1 = ほかの場面 */
+  lenInfo = { phase: -1 };
   private g5 = new THREE.Group(); // 支え方4種
   private four: Bar[] = [];
   private tags5: THREE.Sprite[][] = [];
@@ -299,7 +303,20 @@ export class Stage2Show extends ShowBase {
     this.long = new Bar('pp', 3.2, 0.4);
     this.long.group.position.x = 1.0;
     this.g2.add(this.short.group, this.long.group);
-    for (const [t, x, y, c] of [['長さ 1', -1.5, -0.75, '#1f2a44'], ['長さ 2', 1.0, -0.75, '#1f2a44'], ['限界 100%', -2.55, 1.0, '#6d28d9'], ['限界 25%', 2.35, 1.9, '#6d28d9']] as const) {
+    // 紫の寸法線(棒の左)。式の分母の l = この長さ
+    for (const [bar, text] of [[this.short, 'l'], [this.long, '2l']] as const) {
+      const g = new THREE.Group();
+      const mat = new THREE.MeshBasicMaterial({ color: '#6d28d9', fog: false, toneMapped: false });
+      const v = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1, 0.03), mat);
+      const t0 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.03), mat);
+      const t1 = t0.clone();
+      const tg = tag(text, '#6d28d9', 1.25);
+      g.add(v, t0, t1, tg);
+      g.position.set(bar.group.position.x - 0.42, 0, 0.2);
+      this.g2.add(g);
+      this.dims.push({ g, v, t0, t1, tag: tg, H: bar.H });
+    }
+    for (const [t, x, y, c] of [['長さ l', -1.5, -0.75, '#1f2a44'], ['長さ 2l', 1.0, -0.75, '#1f2a44'], ['限界 100%', -0.35, 1.0, '#e11d48'], ['限界 25%', 2.35, 1.9, '#e11d48']] as const) {
       const s = tag(t, c, 0.75);
       s.position.set(x, y, 0.3);
       this.g2.add(s);
@@ -464,6 +481,7 @@ export class Stage2Show extends ShowBase {
 
   protected tick(dt: number) {
     this.tugInfo.phase = -1;
+    this.lenInfo.phase = -1;
     // 場面 3 以降は旧番号(サインカーブ・式にするの2場面を除いた。導出は「式と Q&A」)
     const s = this.sceneIndex >= 3 ? this.sceneIndex + 2 : this.sceneIndex;
     const c = this.clock;
@@ -527,16 +545,33 @@ export class Stage2Show extends ShowBase {
       // 左側に式のカードと天秤を重ねるので、柱は右寄せに
       this.look(-1.5, 1.55, 3.5, 2.85, 10, 6);
     } else if (s === 2) {
+      // 長さ(28 秒): 式の l = 柱の長さ を寸法線で示す → 同じだけずらして比べる → 同じ力で押す
       this.only(this.g2);
-      const t = this.cyc(24, c);
+      const t = this.cyc(28, c);
       let dS = 0;
       let dL = 0;
       let p = 0;
-      if (t < 10) {
-        dS = dL = 0.4 * ramp(t, 1, 3) * (1 - ramp(t, 9, 10));
-        this.caption = t < 5 ? '長さが2倍の棒と比べる。同じだけ横にずらすと…' : '長い棒はゆるいカーブ。カーブがゆるいと、戻す力が弱い';
+      const grow = ramp(t, 0.4, 2.2);
+      this.dims.forEach((d) => {
+        const h = Math.max(0.001, d.H * grow);
+        d.v.scale.y = h;
+        d.v.position.y = h / 2;
+        d.t1.position.y = h;
+        d.tag.position.set(-0.3, h / 2, 0);
+        d.tag.visible = grow > 0.95;
+      });
+      if (t < 3.5) {
+        this.lenInfo.phase = 0;
+        this.caption = '式の分母の l は、この柱の長さ';
+      } else if (t < 13.5) {
+        this.lenInfo.phase = 1;
+        const u = t - 3.5;
+        dS = dL = 0.4 * ramp(u, 1, 3) * (1 - ramp(u, 9, 10));
+        this.caption = u < 5 ? '長さ 2l の棒と比べる。同じだけ横にずらすと…' : '長い棒はゆるいカーブ。l が2倍で l² は4倍、戻す力は 1/4';
       } else {
-        p = 1.05 * ramp(t, 11, 20) * (1 - ramp(t, 23, 24));
+        this.lenInfo.phase = 2;
+        const u = t - 3.5;
+        p = 1.05 * ramp(u, 11, 20) * (1 - ramp(u, 23, 24));
         dL = 0.4 * ramp(p, 0.245, 0.27);
         dS = 0.4 * ramp(p, 0.99, 1.02);
         this.caption = p < 0.25 ? `2本を同じ力で押す。押す力 ${pct(p)}` : p < 0.99 ? `押す力 ${pct(p)}。長い棒は 25% で座屈した` : '長さが2倍なら、座屈する力は 1/4(長さの2乗に反比例)';
@@ -544,8 +579,9 @@ export class Stage2Show extends ShowBase {
       this.short.update(dS, p, false, Math.min(1.02, p));
       this.long.update(dL, p, false, Math.min(1.02, p / 0.25));
       this.tags2[2].visible = dS > 0.3;
-      this.tags2[3].visible = dL > 0.3 && t >= 10;
-      this.look(-0.2, 1.4, 3.0, 2.8, 10, 6);
+      this.tags2[3].visible = dL > 0.3 && t >= 13.5;
+      // 左側に式のカードを重ねるので、棒は右寄せに
+      this.look(-1.6, 1.45, 3.3, 2.8, 10, 6);
     } else if (s === 5) {
       this.only(this.g5);
       const t = this.cyc(28, c);
