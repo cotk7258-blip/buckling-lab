@@ -111,6 +111,8 @@ export abstract class ShowBase {
   private cur = { cx: 0, cy: 1.5, hw: 3, hh: 3, az: 10, el: 8 };
   private userAz = 0;
   private first = true;
+  /** 一時停止中は場面の時計と動きを止める(カメラの操作は効く) */
+  paused = false;
   private view = { ...VIEW };
 
   constructor(protected canvas: HTMLCanvasElement) {
@@ -211,11 +213,12 @@ export abstract class ShowBase {
       this.camera.aspect = this.aspect;
       this.camera.updateProjectionMatrix();
     }
-    this.clock += dt;
-    this.time += dt;
+    const adv = this.paused ? 0 : dt;
+    this.clock += adv;
+    this.time += adv;
     this.durSet = false;
     this.dur = 0;
-    this.tick(dt);
+    this.tick(adv);
     const k = this.first ? 1 : 1 - Math.exp(-dt * 2.4);
     const kAz = this.first ? 1 : 1 - Math.exp(-dt * 5);
     this.first = false;

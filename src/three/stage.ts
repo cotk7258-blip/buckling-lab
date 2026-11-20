@@ -574,10 +574,10 @@ export class Stage3D {
     return { x: ((v.x + 1) / 2) * this.w, y: Math.max(4, ((1 - v.y) / 2) * this.h) };
   }
 
-  update(paths: ColumnPath[], views: ColumnView[], stressMix: number, time: number, dt: number) {
+  update(paths: ColumnPath[], views: ColumnView[], stressMix: number, time: number, dt: number, paused = false) {
     this.resize();
     if (this.explainMode) {
-      this.explain.update(this.explainMode, dt, this.aspect);
+      this.explain.update(this.explainMode, paused ? 0 : dt, this.aspect);
       this.caption = this.explain.caption;
       this.renderer.render(this.explain.scene, this.explain.camera);
       return;

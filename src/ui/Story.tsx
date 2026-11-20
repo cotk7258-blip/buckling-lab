@@ -98,14 +98,30 @@ export function updateClip(root: Element | null, clip: Clip) {
   if (knob) {
     knob.style.left = w;
     knob.style.borderColor = clip.done ? '#16a34a' : '';
+    // 押すとどうなるかを記号で: 再生中は ❚❚(止める)、一時停止中は ▶(再生)
+    const icon = PAUSED ? '▶' : '❚❚';
+    if (knob.textContent !== icon) knob.textContent = icon;
   }
   if (label) {
     label.style.visibility = 'visible';
-    const text = clip.done ? (clip.loop ? '✓ 見終わり ↻ くり返し中' : '✓ 見終わり ↻ もう一度') : `▶ 再生中 ${Math.round(clip.p * 100)}%`;
+    const text = PAUSED
+      ? `❚❚ 一時停止中 ${Math.round((clip.done && !clip.loop ? 1 : clip.p) * 100)}%`
+      : clip.done
+        ? clip.loop
+          ? '✓ 見終わり ↻ くり返し中'
+          : '✓ 見終わり ↻ もう一度'
+        : `▶ 再生中 ${Math.round(clip.p * 100)}%`;
     if (label.textContent !== text) label.textContent = text;
     label.dataset.done = clip.done ? '1' : '0';
   }
   next?.setAttribute('data-done', clip.done ? '1' : '0');
+}
+
+/** 一時停止(全映像で共通)。場面が変わったり最初から再生したりすると再生に戻る */
+let PAUSED = false;
+export const isPaused = () => PAUSED;
+export function setPaused(v: boolean) {
+  PAUSED = v;
 }
 
 /** 場面の中の再生位置を移す(p は 0〜1)。映像の部品(useShow・Stage3)が受け取る */
@@ -115,10 +131,11 @@ export function seekScene(p: number) {
 
 /**
  * 映像の上端の、場面の動きの進み具合のバー(映像の枠の中に置く)。
- * 先端の丸いつまみを左右にずらす(またはバーを押す)と、その場面の再生位置が移る。
+ * 丸いつまみを押す = 一時停止と再生の切り替え。つまみをドラッグ = 再生位置を移して、離した所で一時停止。
+ * バーのほかの所を押す = そこへ飛ぶ(再生・停止はそのまま)。
  */
 export function ClipBar() {
-  const drag = useRef(false);
+  const g = useRef<{ x: number; moved: boolean; onKnob: boolean } | null>(null);
   const at = (e: React.PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     return Math.max(0, Math.min(1, (e.clientX - r.left) / Math.max(1, r.width)));
@@ -127,26 +144,40 @@ export function ClipBar() {
     <div
       data-clip-track
       role="slider"
-      aria-label="この場面の再生位置"
-      className="absolute inset-x-0 top-0 z-[5] h-5 cursor-pointer touch-none transition-opacity"
+      aria-label="この場面の再生位置(つまみを押すと一時停止・再生)"
+      className="absolute inset-x-0 top-0 z-[5] h-7 cursor-pointer touch-none transition-opacity"
       style={{ opacity: 0, pointerEvents: 'none' }}
       onPointerDown={(e) => {
-        drag.current = true;
         e.currentTarget.setPointerCapture(e.pointerId);
-        seekScene(at(e));
+        const knob = e.currentTarget.querySelector<HTMLElement>('[data-clip-knob]');
+        const kr = knob?.getBoundingClientRect();
+        const onKnob = !!kr && Math.abs(e.clientX - (kr.left + kr.width / 2)) < 18;
+        g.current = { x: e.clientX, moved: false, onKnob };
       }}
       onPointerMove={(e) => {
-        if (drag.current) seekScene(at(e));
+        const st = g.current;
+        if (!st) return;
+        if (!st.moved && Math.abs(e.clientX - st.x) > 5) {
+          st.moved = true;
+          setPaused(true);
+        }
+        if (st.moved) seekScene(at(e));
       }}
-      onPointerUp={() => (drag.current = false)}
-      onPointerCancel={() => (drag.current = false)}
+      onPointerUp={(e) => {
+        const st = g.current;
+        g.current = null;
+        if (!st || st.moved) return; // ドラッグは離した所で一時停止のまま
+        if (st.onKnob) setPaused(!isPaused());
+        else seekScene(at(e));
+      }}
+      onPointerCancel={() => (g.current = null)}
     >
       <div className="absolute inset-x-0 top-0 h-1.5 bg-studio-700/60">
         <div data-clip-bar className="h-full bg-comp" style={{ width: '0%' }} />
       </div>
       <div
         data-clip-knob
-        className="pointer-events-none absolute top-[3px] h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-comp bg-white shadow"
+        className="pointer-events-none absolute top-[4px] flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[3px] border-comp bg-white text-[9px] font-bold leading-none text-comp shadow"
         style={{ left: '0%' }}
       />
     </div>
@@ -159,7 +190,10 @@ export function ClipLabel({ onReplay }: { onReplay?: () => void }) {
     <button
       type="button"
       data-clip-label
-      onClick={onReplay}
+      onClick={() => {
+        setPaused(false);
+        onReplay?.();
+      }}
       className="pointer-events-auto shrink-0 rounded-full border border-studio-600 bg-white/90 px-2 py-0.5 text-[11px] font-bold tracking-normal text-ink-dim data-[done=1]:border-green-600 data-[done=1]:text-green-700"
       style={{ visibility: 'hidden' }}
     />
@@ -195,6 +229,7 @@ export function useShow<T extends ShowBase>(make: (c: HTMLCanvasElement) => T, o
         raf = requestAnimationFrame(tick);
         return;
       }
+      s.paused = PAUSED;
       s.frame(dt);
       const el = capRef.current;
       if (el && el.textContent !== s.caption) {
@@ -253,6 +288,8 @@ export function StoryShell(props: {
   const frac = (scene + 1) / total;
   // 場面の札を押したら、その場面を最初から再生する(ShowBase の時計を 0 に戻す)
   const replay = () => window.dispatchEvent(new CustomEvent('replay-scene'));
+  // 場面が変わったら再生に戻す
+  useEffect(() => setPaused(false), [scene]);
   // 進み具合を App に知らせる(ナビのメーターと「映像に戻る」の表示に使う)
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('scene-change', { detail: { scene, total } }));

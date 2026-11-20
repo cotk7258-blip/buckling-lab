@@ -5,7 +5,7 @@ import { Stage3D, DEFL_AMP } from '../three/stage.ts';
 import type { CameraPose } from '../three/stage.ts';
 import { Section3D } from '../three/section.ts';
 import { FitTex, Tex } from '../ui/Tex.tsx';
-import { ClipBar, ClipLabel, ViewControls, updateClip } from '../ui/Story.tsx';
+import { ClipBar, ClipLabel, ViewControls, isPaused, setPaused, updateClip } from '../ui/Story.tsx';
 import { Rich, Term } from '../ui/glossary.tsx';
 
 const E_OVER_FY = 200000 / 355; // E = 2.0×10^5 N/mm²、σy = 355 N/mm²(SM490Y 相当)
@@ -265,7 +265,10 @@ export default function Stage3() {
       t += dt;
       const L = live.current;
       const c = L.ctx;
-      if (L.auto) {
+      const paused = isPaused();
+      if (L.auto && paused) {
+        // 一時停止中は押す力を動かさない
+      } else if (L.auto) {
         const d = L.target - L.load;
         const stepMax = dt * (d < 0 ? 0.6 : L.speed);
         L.load += Math.max(-stepMax, Math.min(stepMax, d));
@@ -282,19 +285,19 @@ export default function Stage3() {
       if (L.auto && Z) {
         const arrived = Math.abs(L.target - L.load) < 0.002;
         if (!Z.done) {
-          if (arrived) Z.t += dt;
+          if (arrived && !paused) Z.t += dt;
           note = arrived ? '現実の柱の先端が降伏した(赤)。ここから塑性化が始まる' : 'さらに押していく。現実の柱の縁に注目';
           if (Z.t > 3.2) {
             Z.done = true;
             stage.setPose(Z.to, false);
           }
         } else {
-          Z.after += dt;
+          if (!paused) Z.after += dt;
           if (Z.after < 3.5) note = '輪切りにして、中をのぞく';
         }
       }
       stage.note = note;
-      stage.update([c.ideal, c.real], [vI, vR], L.mix, t, dt);
+      stage.update([c.ideal, c.real], [vI, vR], L.mix, t, dt, paused);
       const real = L.secMode !== 'ideal';
       const fp = real ? c.real : c.ideal;
       const fv = real ? vR : vI;
@@ -395,6 +398,7 @@ export default function Stage3() {
     if (next === 0) live.current.load = 0;
     setPlaying(false);
     setSecMode(next < LAB ? SCENES[next].sec ?? 'real' : 'real');
+    setPaused(false);
     setScene(next);
   };
   const setLoad = (v: number) => {
