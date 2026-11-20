@@ -88,7 +88,7 @@ const SCENES: SceneDef[] = [
     kicker: '載荷',
     head: (c) => `降伏の ${pct(c.real.Pfy * 0.85)} まで押す`,
     body: () =>
-      '理想の柱は、どこも同じ青。断面全体で均等に受けています。現実の柱は、先端だけ残留応力が上乗せされ、もう降伏のすぐ手前です。',
+      '柱の中ほどの矢印は、曲げる力(橙)と、それと釣り合って柱が発揮している戻す力(青)。ガラスの管は、柱が戻せる力の上限です。現実の柱は、先端だけ残留応力が上乗せされ、もう降伏のすぐ手前です。',
     stress: true,
     target: (c) => c.real.Pfy * 0.85,
     speed: 0.12,
@@ -99,7 +99,7 @@ const SCENES: SceneDef[] = [
     kicker: '異変',
     head: (c) => `まだ ${pct(c.real.Pfy)}。なのに、先端が降伏した`,
     body: () =>
-      '平均ではまだ余裕があるのに、先端が降伏して赤くなりました。赤い部分は、もう力を受け持てません。柱の踏ん張りが減り始めます。',
+      '平均ではまだ余裕があるのに、先端が降伏して赤くなりました。赤い部分は、もう押し返せません。柱が戻せる力の上限が、ここから削られ始めます。',
     stress: true,
     target: (c) => c.real.Pfy + 0.012,
     speed: 0.05,
@@ -134,7 +134,7 @@ const SCENES: SceneDef[] = [
     kicker: '連鎖',
     head: () => '赤が広がる。踏ん張りが落ちる。さらに曲がる',
     body: (c) =>
-      `本物の柱に戻ります。赤い(降伏した)部分は、もう押し返せません。そのぶん戻す力(青の矢印)が縮み、はみ出した薄い赤が、降伏で失った戻す力です。曲がるほど赤が広がり、青はさらに縮む。限界は降伏の ${pct(c.real.Pu)}。`,
+      `本物の柱に戻ります。曲げる力と戻す力(青)は、まだ釣り合っています。ところがその陰で、降伏した部分の分だけ、戻せる上限(ガラスの管)が赤く削られていく。青が管の先に届いた所が限界、降伏の ${pct(c.real.Pu)} です。`,
     stress: true,
     target: (c) => c.real.Pu - 0.002,
     speed: 0.018,
@@ -145,7 +145,7 @@ const SCENES: SceneDef[] = [
     kicker: '座屈',
     head: (c) => `現実の柱が座屈した。理想の柱の ${pct(c.real.Pu / c.ideal.Pu)}`,
     body: () =>
-      '縮んだ戻す力(青)が、曲げる力(オレンジ)を下回りました。どちらも曲がりに比例するので、一度追い越されると戻れません。一気に曲がります。理想の柱は降伏していないので戻す力が減らず、まだまっすぐです。',
+      '戻す力が、削られた上限に届きました。もうこれ以上は戻せず、曲げる力(橙)が勝って一気に曲がります。管はさらに削られていく。理想の柱は降伏していないので、管は削られず、まだまっすぐです。',
     stress: true,
     target: (c) => c.real.Pu + 0.08,
     speed: 0.03,
@@ -156,7 +156,7 @@ const SCENES: SceneDef[] = [
     kicker: '理論値',
     head: (c) => `理想の柱は ${pct(c.ideal.Pu)} まで耐えた`,
     body: (c) =>
-      `傷のない柱は、降伏(100%)まで戻す力を失わず、そこまで耐えます。この長さでは、オイラーの座屈荷重(${pct(c.ideal.Pe)})より降伏が先だからです。現実の柱は、先端が早く降伏して戻す力を失った分だけ低く、理想の ${pct(
+      `理想の柱は、全体が降伏する(100%)まで管が削られず、そこまで耐えます。この長さでは、本来の上限(オイラーの座屈荷重 ${pct(c.ideal.Pe)})より降伏が先だからです。現実の柱は、先端の降伏で管が早く削られた分だけ低く、理想の ${pct(
         c.real.Pu / c.ideal.Pu,
       )}。設計の線が理論より下にあるのは、この差のためです。`,
     stress: true,
@@ -417,6 +417,29 @@ export default function Stage3() {
               <Meter label="残っている踏ん張り" term="ie" value={hud.ie} color={hud.ie < 0.999 ? '#e11d48' : '#16a34a'} />
             </div>
           </div>
+
+          {/* 柱の中ほどの力の見方(試験機の場面だけ) */}
+          {sc && !sc.explain && scene >= 4 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs lg:order-3">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: '#ea580c' }} />
+                曲げる力
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: '#0284c7' }} />
+                <Term id="exert">発揮している戻す力</Term>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-4 rounded-sm border border-sky-500 bg-sky-200/60" />
+                <Term id="limit">戻せる上限</Term>(管)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-4 rounded-sm border border-dashed border-rose-500 bg-rose-200/60" />
+                削られた分・<Term id="capOrig">本来の上限</Term>
+              </span>
+              <span className="text-ink-dim">どれも曲がりに比例するので、曲がり1あたりの大きさで描いています</span>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-ink-dim lg:order-3">
             <Legend />

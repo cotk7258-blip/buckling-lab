@@ -94,33 +94,66 @@ class Column3D {
     this.light = new THREE.PointLight('#ff2d55', 0, 6, 1.6);
     this.light.position.set(0, BASE_Y + COL_H / 2, 1.2);
     this.group.add(this.light);
-    // 曲げる力(押す力 × たわみ)と、戻す力(回復力)
+    // 曲げる力(橙)と、発揮している戻す力(青)。青は「戻す力のガラス管」の中を伸びる
+    this.real = withTags;
     this.fOut = arrow('#ea580c');
     this.fBack = arrow('#0284c7');
-    // 降伏しなければ出せたはずの戻す力(薄い赤)。青の後ろに重ね、はみ出した分が「降伏で失った分」
-    this.fLost = arrow('#e11d48');
-    this.fLost.traverse((o) => {
-      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-      if (m) {
-        m.transparent = true;
-        m.opacity = 0.35;
-        m.depthWrite = false;
-      }
-    });
-    for (const a of [this.fOut, this.fBack, this.fLost]) a.scale.set(1.5, 1, 1.5);
-    this.group.add(this.fOut, this.fBack, this.fLost);
-    if (withTags)
-      for (const [t, c] of [['曲げる力 P×たわみ', '#ea580c'], ['戻す力(残っている踏ん張り)', '#0284c7'], ['降伏で失った戻す力', '#e11d48']] as const) {
-        const sp = label(t, c, t.length > 5 ? 2 : 1);
-        sp.scale.multiplyScalar(0.6);
-        sp.visible = false;
-        this.group.add(sp);
-        this.ftags.push(sp);
-      }
+    for (const a of [this.fOut, this.fBack]) a.scale.set(1.5, 1, 1.5);
+    this.group.add(this.fOut, this.fBack);
+    // ガラス管 = いま戻せる力の上限。点線の輪 = 本来の上限。赤い管 = 降伏で削られた分
+    const tubeGeo = new THREE.CylinderGeometry(0.13, 0.13, 1, 28, 1, true).rotateZ(Math.PI / 2);
+    this.glass = new THREE.Mesh(
+      tubeGeo,
+      new THREE.MeshStandardMaterial({ color: '#7dd3fc', transparent: true, opacity: 0.32, roughness: 0.1, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    this.lost = new THREE.Mesh(
+      tubeGeo,
+      new THREE.MeshBasicMaterial({ color: '#e11d48', transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    const ringPts: THREE.Vector3[] = [];
+    for (let i = 0; i <= 40; i++) {
+      const a = (i / 40) * Math.PI * 2;
+      ringPts.push(new THREE.Vector3(0, Math.cos(a) * 0.13, Math.sin(a) * 0.13));
+    }
+    this.ringOrig = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), new THREE.LineDashedMaterial({ color: '#e11d48', dashSize: 0.05, gapSize: 0.04 }));
+    this.ringOrig.computeLineDistances();
+    this.ringNow = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), new THREE.LineBasicMaterial({ color: '#0369a1' }));
+    this.group.add(this.glass, this.lost, this.ringOrig, this.ringNow);
+    // 削られるときに落ちる、管のかけら
+    for (let i = 0; i < 48; i++) {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(0.045, 0.045, 0.045),
+        new THREE.MeshBasicMaterial({ color: '#e11d48', transparent: true, opacity: 0, depthWrite: false }),
+      );
+      m.visible = false;
+      this.group.add(m);
+      this.frags.push({ m, v: new THREE.Vector3(), life: 0 });
+    }
+    const tags: [string, string][] = withTags
+      ? [
+          ['曲げる力', '#ea580c'],
+          ['発揮している戻す力', '#0284c7'],
+          ['戻せる上限', '#0369a1'],
+          ['本来の上限', '#e11d48'],
+        ]
+      : [['削られない上限', '#0369a1']];
+    for (const [t, c] of tags) {
+      const sp = label(t, c, t.length > 5 ? 2 : 1);
+      sp.scale.multiplyScalar(0.6);
+      sp.visible = false;
+      this.group.add(sp);
+      this.ftags.push(sp);
+    }
   }
+  private real: boolean;
   private fOut: THREE.Group;
   private fBack: THREE.Group;
-  private fLost: THREE.Group;
+  private glass: THREE.Mesh;
+  private lost: THREE.Mesh;
+  private ringOrig: THREE.Line;
+  private ringNow: THREE.Line;
+  private frags: { m: THREE.Mesh; v: THREE.Vector3; life: number }[] = [];
+  private lastCap = -1;
   private ftags: THREE.Sprite[] = [];
 
   private capPlate(y: number, machine: THREE.Material) {
@@ -287,30 +320,86 @@ class Column3D {
     const pulse = view.collapsed ? 0.6 + 0.4 * Math.sin(time * 7) : 0;
     this.light.intensity = view.collapse > 0 ? (2 + 6 * (1 - view.collapse)) * pulse : 0;
     this.light.position.x = D;
-    // たわみが見えてきたら、柱の中ほどに力の矢印(映像2 の綱引きと同じ見方)。
-    // どちらも たわみ に比例するので、比べるのは前の係数: 曲げる側 = 押す力 P、
-    // 戻す側 = 残っている踏ん張りで決まる強さ Pe × Ie/I(画面の「いまの限界」)。
-    // 降伏した部分は押し返せないので Ie/I が下がり、青が縮む。赤の薄い矢印は降伏しなければ出せた分(Pe)
-    const fy = BASE_Y + COL_H / 2 - shorten / 2;
-    const fon = D > 0.08 && this.cutaway < 0.05;
-    // 矢印の基準の長さ(曲がりが小さいうちも見えるよう、下限を持たせる)
-    const k = 0.35 + 0.6 * D;
-    const P = Math.max(0.05, st.P);
-    const CAP = 2.2;
-    const back = k * Math.min(CAP, (path.Pe * st.ieRatio) / P);
-    const full = k * Math.min(CAP, path.Pe / P);
-    const lost = full - back;
-    const x0 = D - this.bw / 2 - 0.1;
-    placeArrow(this.fOut, D + this.bw / 2 + 0.1, fy + 0.18, 0.3, fon ? k : 0, 0);
-    placeArrow(this.fBack, x0, fy - 0.18, 0.32, fon ? -back : 0, 0);
-    placeArrow(this.fLost, x0, fy - 0.18, 0.26, fon && lost > 0.04 ? -full : 0, 0);
-    if (this.ftags.length) {
-      this.ftags[0].visible = fon;
-      this.ftags[0].position.set(D + this.bw / 2 + 0.1 + k + 0.75, fy + 0.18, 0.4);
-      this.ftags[1].visible = fon;
-      this.ftags[1].position.set(x0 - back - 0.95, fy - 0.5, 0.4);
-      this.ftags[2].visible = fon && lost > 0.12;
-      this.ftags[2].position.set(x0 - full - 0.8, fy + 0.15, 0.4);
+    this.forces(path, st, view.collapsed, BASE_Y + COL_H / 2 - shorten / 2, D, dt);
+  }
+
+  /**
+   * 柱の中ほどの「戻す力のガラス管」。どの力も曲がりに比例するので、曲がり1あたりの大きさ(係数)で描く:
+   *  曲げる力(橙)= P、発揮している戻す力(青)= 釣り合っている間は P と同じ(座屈後は上限で頭打ち)、
+   *  ガラス管の長さ = いま戻せる上限 Pe × Ie/I(画面の「いまの限界」)、点線の輪 = 本来の上限 Pe。
+   *  降伏すると Ie/I が下がり、管の先が赤く削られて、かけらが落ちる。理想の柱は全断面が降伏するまで削られない。
+   *  2本の柱の矢印が間で重ならないよう、理想の柱は少し上、現実の柱は少し下に置く。
+   */
+  private forces(path: ColumnPath, st: ColumnPath['steps'][number], collapsed: boolean, fyMid: number, D: number, dt: number) {
+    const S = 0.95; // 係数 1(= 降伏荷重)あたりの長さ
+    const MAX = 1.5; // 長すぎる管は、ここで切る(短い柱は Pe が非常に大きい)
+    const fy = fyMid + (this.real ? -0.35 : 0.55);
+    const on = st.P > 0.02 && this.cutaway < 0.05;
+    const P = st.P;
+    const orig = Math.min(MAX, path.Pe);
+    const cap = Math.min(MAX, path.Pe * st.ieRatio);
+    // 釣り合っている間は曲げる力と同じだけ出す。上限を超えては出せない
+    const exert = Math.min(P, cap);
+    void collapsed;
+    const x0 = D - this.bw / 2 - 0.08;
+    const xr = D + this.bw / 2 + 0.08;
+    placeArrow(this.fOut, xr, fy, 0.3, on ? S * P : 0, 0);
+    placeArrow(this.fBack, x0, fy, 0.3, on ? -S * exert : 0, 0);
+    const lenCap = S * cap;
+    const lenOrig = S * orig;
+    this.glass.visible = on && lenCap > 0.02;
+    this.glass.scale.x = Math.max(0.001, lenCap);
+    this.glass.position.set(x0 - lenCap / 2, fy, 0.3);
+    const lostLen = lenOrig - lenCap;
+    this.lost.visible = on && lostLen > 0.02;
+    this.lost.scale.x = Math.max(0.001, lostLen);
+    this.lost.position.set(x0 - lenCap - lostLen / 2, fy, 0.3);
+    this.ringNow.visible = on;
+    this.ringNow.position.set(x0 - lenCap, fy, 0.3);
+    this.ringOrig.visible = on && lostLen > 0.02;
+    this.ringOrig.position.set(x0 - lenOrig, fy, 0.3);
+    // 上限が下がった分だけ、管の先からかけらを落とす
+    if (on && this.lastCap >= 0 && cap < this.lastCap - 1e-4) {
+      let n = Math.min(4, Math.ceil(((this.lastCap - cap) * S) / 0.02));
+      for (const f of this.frags) {
+        if (n <= 0) break;
+        if (f.life > 0) continue;
+        f.life = 1.4;
+        f.m.visible = true;
+        f.m.position.set(x0 - lenCap - Math.random() * 0.06, fy + (Math.random() - 0.5) * 0.2, 0.3 + (Math.random() - 0.5) * 0.2);
+        f.v.set(-0.15 - Math.random() * 0.3, 0.2 + Math.random() * 0.4, (Math.random() - 0.5) * 0.4);
+        f.m.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+        n--;
+      }
+    }
+    this.lastCap = on ? cap : -1;
+    for (const f of this.frags) {
+      if (f.life <= 0) continue;
+      f.life -= dt;
+      f.v.y -= 2.2 * dt;
+      f.m.position.addScaledVector(f.v, dt);
+      f.m.rotation.x += dt * 4;
+      (f.m.material as THREE.MeshBasicMaterial).opacity = Math.max(0, Math.min(1, f.life / 0.6)) * 0.9;
+      if (f.life <= 0 || f.m.position.y < 0.2) {
+        f.life = 0;
+        f.m.visible = false;
+      }
+    }
+    const t = this.ftags;
+    if (this.real) {
+      t[0].visible = on;
+      t[0].position.set(xr + S * P + 0.45, fy + 0.22, 0.4);
+      // 発揮している戻す力は柱の根元側の下、上限の2つは管の先の上下に置き、重ならないようにする
+      t[1].visible = on && exert > 0.15;
+      t[1].position.set(x0 - 0.55, fy - 0.32, 0.45);
+      t[2].visible = on;
+      t[2].position.set(x0 - lenCap, fy + 0.3, 0.45);
+      t[3].visible = on && lostLen > 0.12;
+      t[3].position.set(x0 - lenOrig - 0.15, fy + (lostLen > 0.45 ? 0.3 : 0.58), 0.45);
+    } else {
+      // 全体が降伏して削られ始めたら「削られない」とは言えないので消す
+      t[0].visible = on && lostLen < 0.03;
+      t[0].position.set(x0 - lenCap + 0.55, fy + 0.3, 0.45);
     }
   }
 }
