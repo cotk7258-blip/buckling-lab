@@ -97,10 +97,20 @@ class Column3D {
     // 曲げる力(押す力 × たわみ)と、戻す力(回復力)
     this.fOut = arrow('#ea580c');
     this.fBack = arrow('#0284c7');
-    for (const a of [this.fOut, this.fBack]) a.scale.set(1.5, 1, 1.5);
-    this.group.add(this.fOut, this.fBack);
+    // 降伏しなければ出せたはずの戻す力(薄い赤)。青の後ろに重ね、はみ出した分が「降伏で失った分」
+    this.fLost = arrow('#e11d48');
+    this.fLost.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (m) {
+        m.transparent = true;
+        m.opacity = 0.35;
+        m.depthWrite = false;
+      }
+    });
+    for (const a of [this.fOut, this.fBack, this.fLost]) a.scale.set(1.5, 1, 1.5);
+    this.group.add(this.fOut, this.fBack, this.fLost);
     if (withTags)
-      for (const [t, c] of [['曲げる力 P×たわみ', '#ea580c'], ['戻す力', '#0284c7']] as const) {
+      for (const [t, c] of [['曲げる力 P×たわみ', '#ea580c'], ['戻す力(残っている踏ん張り)', '#0284c7'], ['降伏で失った戻す力', '#e11d48']] as const) {
         const sp = label(t, c, t.length > 5 ? 2 : 1);
         sp.scale.multiplyScalar(0.6);
         sp.visible = false;
@@ -110,6 +120,7 @@ class Column3D {
   }
   private fOut: THREE.Group;
   private fBack: THREE.Group;
+  private fLost: THREE.Group;
   private ftags: THREE.Sprite[] = [];
 
   private capPlate(y: number, machine: THREE.Material) {
@@ -276,18 +287,30 @@ class Column3D {
     const pulse = view.collapsed ? 0.6 + 0.4 * Math.sin(time * 7) : 0;
     this.light.intensity = view.collapse > 0 ? (2 + 6 * (1 - view.collapse)) * pulse : 0;
     this.light.position.x = D;
-    // たわみが見えてきたら、柱の中ほどに力の矢印。座屈したら曲げる力が勝つ
+    // たわみが見えてきたら、柱の中ほどに力の矢印(映像2 の綱引きと同じ見方)。
+    // どちらも たわみ に比例するので、比べるのは前の係数: 曲げる側 = 押す力 P、
+    // 戻す側 = 残っている踏ん張りで決まる強さ Pe × Ie/I(画面の「いまの限界」)。
+    // 降伏した部分は押し返せないので Ie/I が下がり、青が縮む。赤の薄い矢印は降伏しなければ出せた分(Pe)
     const fy = BASE_Y + COL_H / 2 - shorten / 2;
     const fon = D > 0.08 && this.cutaway < 0.05;
-    const k = 0.9 * D;
-    const out = view.collapsed ? k * 1.35 : k;
-    placeArrow(this.fOut, D + this.bw / 2 + 0.1, fy + 0.18, 0.3, fon ? out : 0, 0);
-    placeArrow(this.fBack, D - this.bw / 2 - 0.1, fy - 0.18, 0.3, fon ? -k : 0, 0);
+    // 矢印の基準の長さ(曲がりが小さいうちも見えるよう、下限を持たせる)
+    const k = 0.35 + 0.6 * D;
+    const P = Math.max(0.05, st.P);
+    const CAP = 2.2;
+    const back = k * Math.min(CAP, (path.Pe * st.ieRatio) / P);
+    const full = k * Math.min(CAP, path.Pe / P);
+    const lost = full - back;
+    const x0 = D - this.bw / 2 - 0.1;
+    placeArrow(this.fOut, D + this.bw / 2 + 0.1, fy + 0.18, 0.3, fon ? k : 0, 0);
+    placeArrow(this.fBack, x0, fy - 0.18, 0.32, fon ? -back : 0, 0);
+    placeArrow(this.fLost, x0, fy - 0.18, 0.26, fon && lost > 0.04 ? -full : 0, 0);
     if (this.ftags.length) {
       this.ftags[0].visible = fon;
-      this.ftags[0].position.set(D + this.bw / 2 + 0.1 + out + 0.75, fy + 0.18, 0.4);
+      this.ftags[0].position.set(D + this.bw / 2 + 0.1 + k + 0.75, fy + 0.18, 0.4);
       this.ftags[1].visible = fon;
-      this.ftags[1].position.set(D - this.bw / 2 - 0.1 - k - 0.45, fy - 0.18, 0.4);
+      this.ftags[1].position.set(x0 - back - 0.95, fy - 0.5, 0.4);
+      this.ftags[2].visible = fon && lost > 0.12;
+      this.ftags[2].position.set(x0 - full - 0.8, fy + 0.15, 0.4);
     }
   }
 }
