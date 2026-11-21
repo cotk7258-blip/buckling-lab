@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { FigColumnEq, FigLambdaRuler, FigModes, FigStrip } from './figs.tsx';
-import { Eq, MovieLink, P, Section, Step, TabLink, Table } from './ui.tsx';
+import { Callout, Eq, MovieLink, P, Section, Step, TabLink, Table } from './ui.tsx';
 import { FitTex } from '../ui/Tex.tsx';
 
 function Lead({ children }: { children: ReactNode }) {
@@ -188,6 +188,11 @@ export default function Derive({ onStage, go }: { onStage: (n: number) => void; 
                   <Eq n="4" strong tex={String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`} note="弾性局部座屈応力" />
                 板の曲げ剛性 D = Et³/{'{'}12(1−ν²){'}'} で書くと σel = kπ²D/(b²t) で、同じ式です。
       </Step>
+      <Callout title="「帯 = 柱」は覚え方。本当は板の曲げの式を解く">
+        帯を柱とみなす説明は、式の形をつかむための読み替えです。本当の板は、押す向きと幅の向きの2方向に曲がり、ねじれも戻す力に効きます。そのため、ある断面に見える1つの曲がり具合だけで戻す力を表すことはできません。厳密には板の曲げの式(またはエネルギーの釣り合い)に、波の形 w = w₀ sin(mπx/a) sin(πy/b) を入れて解きます。すると、両縁を単純支持した長さ a の板では
+        <Eq tex={String.raw`k=\left(\dfrac{mb}{a}+\dfrac{a}{mb}\right)^2\quad(m:\ \text{押す向きの波の数})`} />
+        となり、波の長さが幅 b に近いとき(a/m = b)に最小の k = 4 になります。長い板では、波がこの長さにそろうので k = 4 を使います。映像5 の綱引きで「戻す力 = (板で決まる値) × w」と言葉で書いているのは、この理由です。
+      </Callout>
       <Table
         head={['縁端の支え方', 'k', '例']}
         rows={[

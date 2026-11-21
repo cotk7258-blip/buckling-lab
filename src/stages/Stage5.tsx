@@ -17,7 +17,7 @@ const SCENES: SceneText[] = [
   {
     kicker: '綱引き',
     head: '押し出す力と、戻す力の綱引き',
-    body: '板が少し波打ったとして、真ん中で切ってみます。断面は曲がった柱と同じ形で、ふくらみの高さ w が柱のずれ y にあたります。押す力 σt が w の腕で波を押し出し(オレンジ)、板の曲げにくさ D が戻そうとします(青)。どちらも w に比例するので、比べるのは w の前。σ が板で決まる σel に追いついた所で波打ちます。',
+    body: '板が少し波打ったとして、真ん中で切ってみます。断面は曲がった柱と同じ形で、ふくらみの高さ w が柱のずれ y にあたります。押す力 σt が w の腕で波を押し出し(オレンジ)、板の曲げにくさ D が戻そうとします(青)。どちらも w に比例するので、比べるのは w の前。押す応力 σ が、板で決まる σel に追いついた所で波打ちます。',
   },
   {
     kicker: '幅と厚み',
@@ -88,11 +88,11 @@ const SIDE: Record<number, React.ReactNode> = {
       title="綱引き(柱の P × y と EI × 1/R と同じ形)"
       steps={[
         ['押し出す力', String.raw`\sigma t\times w`],
-        ['戻す力', String.raw`D\times\dfrac{1}{R}=\dfrac{k\pi^2D}{b^2}\times w`],
-        ['くらべる', String.raw`\sigma t\quad\text{と}\quad\dfrac{k\pi^2D}{b^2}`],
-        ['t で割る', String.raw`\sigma_{el}=\dfrac{k\pi^2D}{t\,b^2}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, 'd3'],
+        ['戻す力', String.raw`(\text{板で決まる値})\times w`],
+        ['くらべる', String.raw`\sigma t\quad\text{と}\quad\text{板で決まる値}`],
+        ['t で割る', String.raw`\sigma\quad\text{と}\quad\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, 'd3'],
       ]}
-      note="w = 波の高さ(柱の y)、σt = 幅1あたりの押す力(柱の P)、D = Et³/{12(1−ν²)} = 板の曲げにくさ(柱の EI にあたる)。わずかな波の範囲の話。D と k の出どころは「導き方」で。"
+      note="w = 波の高さ(柱の y)、σt = 幅1あたりの押す力(柱の P)。板は縦・横の曲がりとねじれで戻すので、柱の EI × 1/R ほど単純な形にはならない。板で決まる値 ÷ t が σel(導き方は補足)。わずかな波の範囲の話。"
     />
   ),
   2: (
@@ -205,8 +205,9 @@ const OLD = 'hidden sm:block';
 
 /**
  * 綱引きの場面で映像の左に重ねる式のカード(映像2 の綱引きと同じ筋。柱の P → σt、y → w、EI → D)。
- *  0 w = 波の高さ → 1 押し出す力 = σt × w → 2 戻す力 = D × 1/R → 3 = kπ²D/b² × w → 4 w は両方に同じ
- *  → 5 天秤: σt と kπ²D/b²(t で割ると σ と σel)。傾き・%・状態は毎フレーム ref で書く → 6 超えた
+ *  0 w = 波の高さ → 1 押し出す力 = σt × w → 2 戻す力 = 板の曲げにくさ D による → 3 = (板で決まる値) × w → 4 w は両方に同じ
+ *  → 5 天秤: σt と 板で決まる値(t で割ると σ と σel)。傾き・%・状態は毎フレーム ref で書く → 6 超えた
+ * 板は縦・横の曲がりとねじれで戻すので、柱の EI × 1/R のような1つの曲率の式にはしない(Codex レビュー 2026-11-21)
  */
 function PlateTugOverlay(props: { phase: number; pRef: RefObject<HTMLSpanElement | null>; beamRef: RefObject<SVGGElement | null>; stateRef: RefObject<HTMLParagraphElement | null> }) {
   const { phase } = props;
@@ -233,13 +234,13 @@ function PlateTugOverlay(props: { phase: number; pRef: RefObject<HTMLSpanElement
           <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>戻す力</p>
           {phase === 2 ? (
             <>
-              <FitTex className="text-[17px] sm:text-xl">{String.raw`D \times \dfrac{1}{R}`}</FitTex>
-              <p className="text-[10px] leading-tight text-ink-dim">D = 板の曲げにくさ(柱の EI にあたる)。1/R = 曲がり具合</p>
+              <p className="text-[13px] font-bold leading-snug">板の曲げにくさ D が、波を戻す</p>
+              <p className="text-[10px] leading-tight text-ink-dim">D は柱の EI にあたる。板は縦・横の曲がりとねじれで戻す</p>
             </>
           ) : (
             <>
-              <FitTex className="text-[17px] sm:text-xl">{String.raw`\dfrac{k\pi^2 D}{b^2} ${w}`}</FitTex>
-              {phase === 3 && <p className="text-[10px] leading-tight text-ink-dim">曲がり具合は w に比例(同じ形のまま膨らむ)。k = 縁の支えの効果</p>}
+              <FitTex className="text-[17px] sm:text-xl">{String.raw`(\text{板で決まる値}) ${w}`}</FitTex>
+              {phase === 3 && <p className="text-[10px] leading-tight text-ink-dim">波は同じ形のまま膨らむので、戻す力も w に比例。値の大きさは D・幅 b・縁の支え k で決まる</p>}
             </>
           )}
         </div>
@@ -257,15 +258,15 @@ function PlateTugOverlay(props: { phase: number; pRef: RefObject<HTMLSpanElement
               <line x1="30" y1="49" x2="30" y2="60" stroke="#475569" strokeWidth="1.5" />
               <rect x="8" y="60" width="44" height="22" rx="6" fill="#fff7ed" stroke="#ea580c" strokeWidth="2" />
               <text x="30" y="76" textAnchor="middle" fontSize="15" fontWeight="700" fill="#ea580c">σt</text>
-              {/* 右の皿: 板で決まる kπ²D/b²(一定) */}
+              {/* 右の皿: 板で決まる値(一定) */}
               <line x1="170" y1="49" x2="170" y2="60" stroke="#475569" strokeWidth="1.5" />
-              <rect x="134" y="60" width="64" height="22" rx="6" fill="#f0f9ff" stroke="#0284c7" strokeWidth="2" />
-              <text x="166" y="76" textAnchor="middle" fontSize="12" fontWeight="700" fill="#0284c7">kπ²D/b²</text>
+              <rect x="130" y="60" width="68" height="22" rx="6" fill="#f0f9ff" stroke="#0284c7" strokeWidth="2" />
+              <text x="164" y="75" textAnchor="middle" fontSize="11" fontWeight="700" fill="#0284c7">板で決まる値</text>
             </g>
             <text x="44" y="18" textAnchor="middle" fontSize="10" fill="#9a3412">押す側(変えられる)</text>
             <text x="156" y="18" textAnchor="middle" fontSize="10" fill="#075985">板で決まる(一定)</text>
           </svg>
-          <p className="text-[10px] leading-tight text-ink-dim">両方を t で割ると σ と σel = kπ²D/(t b²)</p>
+          <p className="text-[10px] leading-tight text-ink-dim">両方を t で割ると、押す応力 σ と σel の比べ</p>
           <p className="mt-0.5 flex items-baseline justify-between text-[11px]">
             <span>
               σ = <span ref={props.pRef} className="num font-bold">50%</span>
@@ -360,7 +361,7 @@ export default function Stage5() {
       setPhase((old) => (old === ph ? old : ph));
       const p = sh.info.p;
       if (pRef.current) pRef.current.textContent = `${Math.round(p * 100)}%`;
-      // 天秤: σt が kπ²D/b² より軽ければ右(板の側)が下がる。重ければ左が下がる
+      // 天秤: σt が 板で決まる値 より軽ければ右(板の側)が下がる。重ければ左が下がる
       if (beamRef.current) beamRef.current.style.transform = `rotate(${(-Math.max(-12, Math.min(12, (p - 1) * 60))).toFixed(2)}deg)`;
       if (stateRef.current) {
         const [txt, col] =
