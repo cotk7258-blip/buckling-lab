@@ -51,7 +51,7 @@ function LeOverlay({ phase }: { phase: number }) {
     ['両端固定', '0.5'],
   ];
   return (
-    <div className="pointer-events-none absolute left-2 top-16 flex w-[42%] max-w-[270px] flex-col gap-1.5 sm:left-4">
+    <div className="pointer-events-none ml-2 flex w-[42%] max-w-[270px] flex-col gap-1.5 sm:ml-4">
       <div className={`${card} border-sky-300 ${phase >= 2 ? 'hidden sm:block' : ''}`}>
         <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>
           戻す力<span className="font-normal text-ink-dim">(両端ピンで導いた式)</span>
@@ -98,7 +98,7 @@ function LenOverlay({ phase }: { phase: number }) {
   const card = 'rounded-xl border bg-white/92 px-2.5 py-1.5 shadow-sm backdrop-blur-sm';
   const L = String.raw`\textcolor{#6d28d9}{l}`;
   return (
-    <div className="pointer-events-none absolute left-2 top-16 flex w-[47%] max-w-[300px] flex-col gap-1.5 sm:left-4">
+    <div className="pointer-events-none ml-2 flex w-[47%] max-w-[300px] flex-col gap-1.5 sm:ml-4">
       <div className={`${card} border-sky-300`}>
         <p className="text-[11px] font-bold" style={{ color: '#0284c7' }}>
           戻す力<span className="font-normal text-ink-dim">(映像2 の綱引き)</span>
@@ -137,7 +137,7 @@ function TugOverlay(props: { phase: number; beamRef: RefObject<SVGGElement | nul
   const cut = phase >= 5;
   const yOut = cut ? String.raw`\;\textcolor{#e11d48}{\cancel{\textcolor{#1b2740}{\times\, y}}}` : String.raw`\times y`;
   return (
-    <div className="pointer-events-none absolute left-2 top-16 flex w-[47%] max-w-[300px] flex-col gap-1.5 sm:left-4">
+    <div className="pointer-events-none ml-2 flex w-[47%] max-w-[300px] flex-col gap-1.5 sm:ml-4">
       <div className={`${card} border-orange-300 ${phase >= 6 ? 'hidden sm:block' : ''}`}>
         <p className="text-[11px] font-bold" style={{ color: '#ea580c' }}>曲げる力</p>
         <FitTex className="text-[17px] sm:text-xl">{String.raw`P ${yOut}`}</FitTex>

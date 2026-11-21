@@ -16,22 +16,31 @@ const STAGES = [
   { no: 6, title: '座屈の照査', sub: '軸力・曲げ・安全率' },
 ];
 
-const KEY = 'buckling-lab-progress';
-function loadBest(): Record<number, number> {
+// 見終えた場面(映像ごと)と、映像の場面の数。「見終えた」= 場面の動きを最後まで見た(実験室は開いた)
+const KEY = 'buckling-lab-seen';
+type Seen = { seen: Record<number, number[]>; total: Record<number, number> };
+function loadSeen(): Seen {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-    return v && typeof v === 'object' ? v : {};
+    const v = JSON.parse(localStorage.getItem(KEY) ?? 'null');
+    if (v && typeof v === 'object' && v.seen && v.total) return v;
   } catch {
-    return {};
+    /* 読めなくても動く */
   }
+  return { seen: {}, total: {} };
 }
-function saveBest(v: Record<number, number>) {
+function saveSeen(v: Seen) {
   try {
     localStorage.setItem(KEY, JSON.stringify(v));
   } catch {
     /* 保存できなくても動く */
   }
 }
+/** 映像 k の見終えた場面の数と、場面の数 */
+const seenOf = (v: Seen, k: number) => {
+  const t = v.total[k] ?? 0;
+  const n = (v.seen[k] ?? []).filter((i) => i < t).length;
+  return { n, t, f: t ? n / t : 0 };
+};
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 export default function App() {
@@ -40,7 +49,7 @@ export default function App() {
   const [stage, setStage] = useState(1);
   const [tab, setTab] = useState({ name: '3つの照査', n: 0 });
   const [cur, setCur] = useState({ scene: 0, total: 1 });
-  const [best, setBest] = useState<Record<number, number>>(loadBest);
+  const [seen, setSeen] = useState<Seen>(loadSeen);
   const scroll = useRef({ movie: 0, doc: 0 });
   const stageRef = useRef(stage);
   stageRef.current = stage;
@@ -76,27 +85,41 @@ export default function App() {
     return () => window.removeEventListener('open-formulas', on);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // 映像の場面が進んだら、進み具合を記録する(映像ごとに、いちばん先まで見た割合)。
+  // 場面が変わったら「映像に戻る」の表示と、映像の場面の数を記録する。場面を見終えたら、その場面を記録する。
   // 子の useEffect より先に受け取りを始めるため useLayoutEffect
   useLayoutEffect(() => {
-    const on = (e: Event) => {
+    const onChange = (e: Event) => {
       const d = (e as CustomEvent<{ scene: number; total: number }>).detail;
       setCur(d);
-      const f = (d.scene + 1) / d.total;
-      setBest((b) => {
+      setSeen((v) => {
         const k = stageRef.current;
-        if ((b[k] ?? 0) >= f) return b;
-        const next = { ...b, [k]: f };
-        saveBest(next);
+        if (v.total[k] === d.total) return v;
+        const next = { ...v, total: { ...v.total, [k]: d.total } };
+        saveSeen(next);
         return next;
       });
     };
-    window.addEventListener('scene-change', on);
-    return () => window.removeEventListener('scene-change', on);
+    const onSeen = (e: Event) => {
+      const { scene } = (e as CustomEvent<{ scene: number }>).detail;
+      setSeen((v) => {
+        const k = stageRef.current;
+        const list = v.seen[k] ?? [];
+        if (list.includes(scene)) return v;
+        const next = { ...v, seen: { ...v.seen, [k]: [...list, scene] } };
+        saveSeen(next);
+        return next;
+      });
+    };
+    window.addEventListener('scene-change', onChange);
+    window.addEventListener('scene-seen', onSeen);
+    return () => {
+      window.removeEventListener('scene-change', onChange);
+      window.removeEventListener('scene-seen', onSeen);
+    };
   }, []);
 
   const movie = view === 'movie';
-  const all = STAGES.reduce((a, s) => a + (best[s.no] ?? 0), 0) / STAGES.length;
+  const all = STAGES.reduce((a, s) => a + seenOf(seen, s.no).f, 0) / STAGES.length;
   const st = STAGES[stage - 1];
   return (
     <div className="mx-auto max-w-7xl px-3 pb-12 sm:px-4">
@@ -109,7 +132,7 @@ export default function App() {
             className={`rounded-xl border-2 px-4 py-1.5 text-left transition-colors ${movie ? 'border-comp bg-comp text-white' : 'border-comp bg-studio-900 text-comp'}`}
           >
             <span className="block text-[15px] font-bold leading-tight">映像で学ぶ</span>
-            <span className="block text-[11px] leading-tight opacity-80">6本・全体 {pct(all)}</span>
+            <span className="block text-[11px] leading-tight opacity-80">6本・見終えた {pct(all)}</span>
           </button>
           <button
             onClick={() => (movie ? openDoc() : undefined)}
@@ -124,7 +147,8 @@ export default function App() {
           <nav className="mt-2 -mx-3 flex gap-1.5 overflow-x-auto px-3 pb-1" aria-label="映像">
             {STAGES.map((s) => {
               const on = s.no === stage;
-              const b = best[s.no] ?? 0;
+              const sn = seenOf(seen, s.no);
+              const b = sn.f;
               return (
                 <button
                   key={s.no}
@@ -139,11 +163,11 @@ export default function App() {
                     {s.title}
                   </span>
                   <span className="block text-[11px] leading-tight opacity-70">{s.sub}</span>
-                  <span className="mt-1 flex items-center gap-1.5" aria-label={`見た割合 ${pct(b)}`}>
+                  <span className="mt-1 flex items-center gap-1.5" aria-label={`見終えた場面 ${sn.n} / ${sn.t || '?'}`}>
                     <span className="h-1 flex-1 overflow-hidden rounded-full bg-studio-600">
                       <span className="block h-full rounded-full bg-comp" style={{ width: pct(b) }} />
                     </span>
-                    <span className="num text-[10px] leading-none">{b >= 1 ? '✓' : pct(b)}</span>
+                    <span className="num text-[10px] leading-none">{b >= 1 ? '✓' : sn.t ? `${sn.n}/${sn.t}` : '—'}</span>
                   </span>
                 </button>
               );

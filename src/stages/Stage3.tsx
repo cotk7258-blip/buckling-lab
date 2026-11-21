@@ -5,7 +5,7 @@ import { Stage3D, DEFL_AMP } from '../three/stage.ts';
 import type { CameraPose } from '../three/stage.ts';
 import { Section3D } from '../three/section.ts';
 import { FitTex, Tex } from '../ui/Tex.tsx';
-import { ClipBar, ClipLabel, SceneDots, ViewControls, isPaused, setPaused, updateClip } from '../ui/Story.tsx';
+import { CaptionArea, ClipBar, PlayControls, SceneDots, ViewControls, isPaused, setPaused, updateClip } from '../ui/Story.tsx';
 import { Rich, Term } from '../ui/glossary.tsx';
 
 const E_OVER_FY = 200000 / 355; // E = 2.0×10^5 N/mm²、σy = 355 N/mm²(SM490Y 相当)
@@ -311,7 +311,8 @@ export default function Stage3() {
         const el = r.current;
         if (!el) return;
         el.style.opacity = p ? '1' : '0';
-        if (p) el.style.transform = `translate(-50%, 0) translate(${p.x}px, ${p.y}px)`;
+        // 上の操作の段(高さ約 56px)に重ならないよう、それより下に置く
+        if (p) el.style.transform = `translate(-50%, 0) translate(${p.x}px, ${Math.max(56, p.y)}px)`;
       });
       if (capRef.current && capRef.current.textContent !== stage.caption) {
         capRef.current.textContent = stage.caption;
@@ -420,20 +421,17 @@ export default function Stage3() {
   const kicker = sc ? sc.kicker : '実験室';
 
   return (
-    <div className="mt-1 pb-20 lg:pb-0" data-shell>
+    <div className="mt-1 pb-20 lg:pb-0" data-shell data-scene={scene}>
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-3">
         {/* 3D の舞台。見出しのテロップは映像に重ねる */}
         <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
           <canvas ref={mainRef} className="block h-[37dvh] min-h-[280px] w-full lg:h-[72dvh]" />
           <ClipBar />
+          <PlayControls onReplay={replay} />
           <ViewControls />
           <ColumnLabel refEl={labelRefs[0]} name="理想の柱" term="ideal" load={hud.pI} buckled={hud.cI} color="#16a34a" />
           <ColumnLabel refEl={labelRefs[1]} name="現実の柱" term="real" load={hud.pR} buckled={hud.cR} color="#1f2a44" />
-          <p
-            ref={capRef}
-            className="pointer-events-none absolute inset-x-14 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
-            style={{ opacity: 0 }}
-          />
+          <CaptionArea capRef={capRef} />
           <div
             key={scene}
             className="telop pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-studio-950 via-studio-950/85 to-transparent px-3 pb-2.5 pt-10 sm:px-5 sm:pb-4"
@@ -444,7 +442,6 @@ export default function Stage3() {
                 {String(scene + 1).padStart(2, '0')}
                 <span className="opacity-60"> / {String(LAB + 1).padStart(2, '0')}</span> — {kicker}
               </span>
-              <ClipLabel onReplay={replay} />
             </p>
             <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] sm:text-3xl">
               {head}
@@ -553,7 +550,7 @@ export default function Stage3() {
             <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
               <SceneDots total={LAB + 1} scene={scene} onScene={go} lab="実" />
               <span className="num text-[11px] font-bold leading-none text-ink-dim">
-                {scene + 1} / {LAB + 1} ・ {Math.round(((scene + 1) / (LAB + 1)) * 100)}%
+                場面 {scene + 1} / {LAB + 1}
               </span>
             </div>
             {isLab ? (

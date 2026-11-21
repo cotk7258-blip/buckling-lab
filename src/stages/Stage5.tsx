@@ -196,7 +196,7 @@ const SIDE: Record<number, React.ReactNode> = {
 };
 
 const CARD = 'rounded-xl border bg-white/92 px-2.5 py-1.5 shadow-sm backdrop-blur-sm';
-const BOX = 'pointer-events-none absolute left-2 top-16 flex w-[44%] max-w-[290px] flex-col gap-1.5 sm:left-4';
+const BOX = 'pointer-events-none ml-2 flex w-[44%] max-w-[290px] flex-col gap-1.5 sm:ml-4';
 /** σel の式(b は紫、k は赤で強調できる) */
 const EL = (b = 'b', k = 'k') => String.raw`\sigma_{el}=\dfrac{${k}\,\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{${b}}\right)^2`;
 
@@ -260,8 +260,8 @@ function PlateTugOverlay(props: { phase: number; pRef: RefObject<HTMLSpanElement
               <text x="30" y="76" textAnchor="middle" fontSize="15" fontWeight="700" fill="#ea580c">σt</text>
               {/* 右の皿: 板で決まる値(一定) */}
               <line x1="170" y1="49" x2="170" y2="60" stroke="#475569" strokeWidth="1.5" />
-              <rect x="130" y="60" width="68" height="22" rx="6" fill="#f0f9ff" stroke="#0284c7" strokeWidth="2" />
-              <text x="164" y="75" textAnchor="middle" fontSize="11" fontWeight="700" fill="#0284c7">板で決まる値</text>
+              <rect x="126" y="60" width="74" height="22" rx="6" fill="#f0f9ff" stroke="#0284c7" strokeWidth="2" />
+              <text x="164" y="75" textAnchor="middle" fontSize="10" fontWeight="700" fill="#0284c7">板で決まる値</text>
             </g>
             <text x="44" y="18" textAnchor="middle" fontSize="10" fill="#9a3412">押す側(変えられる)</text>
             <text x="156" y="18" textAnchor="middle" fontSize="10" fill="#075985">板で決まる(一定)</text>

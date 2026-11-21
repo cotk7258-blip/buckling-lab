@@ -13,21 +13,23 @@ export function ViewControls() {
   const [open, setOpen] = useState(false);
   const btn = 'flex h-9 w-9 items-center justify-center rounded-lg border border-studio-600 bg-studio-950/90 text-base font-bold text-ink active:bg-studio-800';
   return (
-    <div className="absolute right-2 top-2 z-10 flex flex-col items-end gap-1.5">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="w-14 rounded-lg border border-studio-600 bg-studio-950/90 py-1 text-xs font-bold text-comp"
-      >
-        {open ? '閉じる' : '視点'}
-      </button>
-      <button
-        onClick={resetView}
-        title="既定の視点に戻す(移動・拡大縮小・回転)"
-        className="w-14 rounded-lg border border-studio-600 bg-studio-950/90 py-1 text-xs font-bold text-ink-dim"
-      >
-        初期値
-      </button>
+    <div className="absolute right-2 top-[18px] z-10 flex flex-col items-end gap-1.5">
+      <div className="flex gap-1.5">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="h-8 w-14 rounded-lg border border-studio-600 bg-studio-950/90 text-xs font-bold text-comp"
+        >
+          {open ? '閉じる' : '視点'}
+        </button>
+        <button
+          onClick={resetView}
+          title="既定の視点に戻す(移動・拡大縮小・回転)"
+          className="h-8 w-14 rounded-lg border border-studio-600 bg-studio-950/90 text-xs font-bold text-ink-dim"
+        >
+          初期値
+        </button>
+      </div>
       {open && (
         <div className="grid grid-cols-3 gap-1 rounded-xl border border-studio-600 bg-studio-900/90 p-1.5 shadow">
           <button className={btn} onClick={() => zoomView(1 / 1.15)} aria-label="寄る">＋</button>
@@ -81,48 +83,65 @@ export type Clip = { p: number; done: boolean; loop: boolean } | null;
  */
 export function updateClip(root: Element | null, clip: Clip) {
   if (!root) return;
+  // 場面を見終えたら(長さのない場面=実験室は開いたら)、一度だけ App に知らせる(ナビの「見終えた場面」に使う)
+  const sc = root.getAttribute('data-scene');
+  if (sc !== null && (clip === null || clip.done) && root.getAttribute('data-seen') !== sc) {
+    root.setAttribute('data-seen', sc);
+    window.dispatchEvent(new CustomEvent('scene-seen', { detail: { scene: Number(sc) } }));
+  }
   const track = root.querySelector<HTMLElement>('[data-clip-track]');
   const bar = root.querySelector<HTMLElement>('[data-clip-bar]');
   const label = root.querySelector<HTMLElement>('[data-clip-label]');
+  const ctrl = root.querySelector<HTMLElement>('[data-clip-ctrl]');
+  const toggle = root.querySelector<HTMLElement>('[data-clip-toggle]');
   const next = root.querySelector<HTMLElement>('[data-next]');
   const knob = root.querySelector<HTMLElement>('[data-clip-knob]');
   if (!clip) {
     if (track) track.style.opacity = '0';
     if (track) track.style.pointerEvents = 'none';
-    if (label) label.style.visibility = 'hidden';
+    if (ctrl) ctrl.style.visibility = 'hidden';
     next?.setAttribute('data-done', '0');
     return;
   }
+  LAST_P = clip.done && !clip.loop ? 1 : clip.p;
   if (track) {
     track.style.opacity = '1';
     track.style.pointerEvents = 'auto';
+    track.setAttribute('aria-valuenow', String(Math.round(LAST_P * 100)));
   }
-  const w = `${(clip.done && !clip.loop ? 1 : clip.p) * 100}%`;
+  const w = `${LAST_P * 100}%`;
   if (bar) {
     bar.style.width = w;
     bar.style.background = clip.done ? '#16a34a' : '';
   }
+  // 押すとどうなるかを記号で: 再生中は ❚❚(止める)、一時停止中は ▶(再生)
+  const icon = PAUSED ? '▶' : '❚❚';
   if (knob) {
     knob.style.left = w;
     knob.style.borderColor = clip.done ? '#16a34a' : '';
-    // 押すとどうなるかを記号で: 再生中は ❚❚(止める)、一時停止中は ▶(再生)
-    const icon = PAUSED ? '▶' : '❚❚';
     if (knob.textContent !== icon) knob.textContent = icon;
   }
+  if (ctrl) ctrl.style.visibility = 'visible';
+  if (toggle && toggle.textContent !== icon) {
+    toggle.textContent = icon;
+    toggle.setAttribute('aria-label', PAUSED ? '再生する' : '一時停止する');
+  }
   if (label) {
-    label.style.visibility = 'visible';
     const text = PAUSED
-      ? `❚❚ 一時停止中 ${Math.round((clip.done && !clip.loop ? 1 : clip.p) * 100)}%`
+      ? `一時停止中 ${Math.round(LAST_P * 100)}%`
       : clip.done
         ? clip.loop
-          ? '✓ 見終わり ↻ くり返し中'
-          : '✓ 見終わり ↻ もう一度'
-        : `▶ 再生中 ${Math.round(clip.p * 100)}%`;
+          ? '✓ 見終わり(くり返し中)'
+          : '✓ 見終わり'
+        : `再生中 ${Math.round(clip.p * 100)}%`;
     if (label.textContent !== text) label.textContent = text;
     label.dataset.done = clip.done ? '1' : '0';
   }
   next?.setAttribute('data-done', clip.done ? '1' : '0');
 }
+
+/** いまの場面の再生位置(0〜1)。矢印キーで動かすときの基準 */
+let LAST_P = 0;
 
 /** 一時停止(全映像で共通)。場面が変わったり最初から再生したりすると再生に戻る */
 let PAUSED = false;
@@ -206,9 +225,22 @@ export function ClipBar() {
     <div
       data-clip-track
       role="slider"
-      aria-label="この場面の再生位置(つまみを押すと一時停止・再生)"
-      className="absolute inset-x-0 top-0 z-[5] h-7 cursor-pointer touch-none transition-opacity"
+      tabIndex={0}
+      aria-label="この場面の再生位置(←→で移動、スペースで一時停止・再生)"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      className="absolute inset-x-0 top-0 z-[7] h-4 cursor-pointer touch-none transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-comp"
       style={{ opacity: 0, pointerEvents: 'none' }}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          setPaused(true);
+          seekScene(Math.max(0, Math.min(1, LAST_P + (e.key === 'ArrowLeft' ? -0.05 : 0.05))));
+        } else if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          setPaused(!isPaused());
+        }
+      }}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
         const knob = e.currentTarget.querySelector<HTMLElement>('[data-clip-knob]');
@@ -246,19 +278,50 @@ export function ClipBar() {
   );
 }
 
-/** テロップの右に出す札。押すとその場面を最初から再生する */
-export function ClipLabel({ onReplay }: { onReplay?: () => void }) {
+/**
+ * 映像の上の操作の段(左): 再生/一時停止のボタン、最初からのボタン、状態の文(再生中 45% など)。
+ * 長さのない場面(実験室)では隠す(updateClip が data-clip-ctrl を切り替える)。
+ */
+export function PlayControls({ onReplay }: { onReplay?: () => void }) {
+  const btn = 'flex h-8 items-center justify-center rounded-lg border border-studio-600 bg-studio-950/90 text-xs font-bold text-comp';
   return (
-    <button
-      type="button"
-      data-clip-label
-      onClick={() => {
-        setPaused(false);
-        onReplay?.();
-      }}
-      className="pointer-events-auto shrink-0 rounded-full border border-studio-600 bg-white/90 px-2 py-0.5 text-[11px] font-bold tracking-normal text-ink-dim data-[done=1]:border-green-600 data-[done=1]:text-green-700"
-      style={{ visibility: 'hidden' }}
-    />
+    <div data-clip-ctrl className="absolute left-2 top-[18px] z-10 flex items-center gap-1.5" style={{ visibility: 'hidden' }}>
+      <button type="button" data-clip-toggle onClick={() => setPaused(!isPaused())} className={`${btn} w-9 text-[11px]`} aria-label="一時停止する">
+        ❚❚
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setPaused(false);
+          onReplay?.();
+        }}
+        className={`${btn} px-2`}
+        aria-label="この場面を最初から"
+      >
+        ⟲ 最初から
+      </button>
+      <span
+        data-clip-label
+        className="rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-bold text-ink-dim data-[done=1]:text-green-700"
+        aria-live="off"
+      />
+    </div>
+  );
+}
+
+/**
+ * 映像の上の説明文と、重ねるカードの置き場(操作の段の下)。説明文は2行分の高さを取っておき、カードが上下に動かないようにする
+ */
+export function CaptionArea({ capRef, children }: { capRef: RefObject<HTMLParagraphElement | null>; children?: ReactNode }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-[56px] flex flex-col gap-1 sm:top-[58px]">
+      <p
+        ref={capRef}
+        className="min-h-[2.75em] px-3 text-center text-[15px] font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:min-h-[1.375em] sm:text-2xl"
+        style={{ opacity: 0 }}
+      />
+      {children}
+    </div>
   );
 }
 
@@ -347,7 +410,6 @@ export function StoryShell(props: {
   const { scene, total, text } = props;
   const isLab = scene === total - 1;
   const labRef = useRef<HTMLDivElement>(null);
-  const frac = (scene + 1) / total;
   // 場面の札を押したら、その場面を最初から再生する(ShowBase の時計を 0 に戻す)
   const replay = () => window.dispatchEvent(new CustomEvent('replay-scene'));
   // 場面が変わったら再生に戻す
@@ -357,18 +419,14 @@ export function StoryShell(props: {
     window.dispatchEvent(new CustomEvent('scene-change', { detail: { scene, total } }));
   }, [scene, total]);
   return (
-    <div className="mt-1 pb-20 lg:pb-0" data-shell>
+    <div className="mt-1 pb-20 lg:pb-0" data-shell data-scene={scene}>
       <div className="grid gap-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-3">
         <div className="relative overflow-hidden rounded-2xl border border-studio-600 bg-studio-950">
           <canvas ref={props.canvasRef} className="block h-[44dvh] min-h-[300px] w-full lg:h-[72dvh]" />
           <ClipBar />
+          <PlayControls onReplay={replay} />
           <ViewControls />
-          <p
-            ref={props.capRef}
-            className="pointer-events-none absolute inset-x-14 top-3 text-center text-base font-bold leading-snug text-ink drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] transition-opacity duration-300 sm:top-5 sm:text-2xl"
-            style={{ opacity: 0 }}
-          />
-          {props.overlay}
+          <CaptionArea capRef={props.capRef}>{props.overlay}</CaptionArea>
           <div
             key={scene}
             className="telop pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-studio-950 via-studio-950/85 to-transparent px-3 pb-2.5 pt-10 sm:px-5 sm:pb-4"
@@ -379,7 +437,6 @@ export function StoryShell(props: {
                 {String(scene + 1).padStart(2, '0')}
                 <span className="opacity-60"> / {String(total).padStart(2, '0')}</span> — {text.kicker}
               </span>
-              <ClipLabel onReplay={replay} />
             </p>
             <p className="mt-0.5 border-l-4 border-comp pl-2.5 text-[19px] font-bold leading-snug drop-shadow-[0_2px_4px_rgba(255,255,255,0.95)] sm:text-3xl">
               {text.head}
@@ -422,10 +479,10 @@ export function StoryShell(props: {
             >
               ◀ 戻る
             </button>
-            <div className="flex min-w-0 flex-1 flex-col items-center gap-1" aria-label={`場面 ${scene + 1} / ${total}(${Math.round(frac * 100)}%)`}>
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-1" aria-label={`場面 ${scene + 1} / ${total}`}>
               <SceneDots total={total} scene={scene} onScene={props.onScene} lab={props.lab === undefined ? undefined : props.labLabel?.startsWith('計算') ? '計' : '実'} />
               <span className="num text-[11px] font-bold leading-none text-ink-dim">
-                {scene + 1} / {total} ・ {Math.round(frac * 100)}%
+                場面 {scene + 1} / {total}
               </span>
             </div>
             {isLab ? (
