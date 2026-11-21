@@ -333,6 +333,15 @@ const ZP = 0.6;
 const ZG = -0.5;
 /** 両縁支持(k = 4)、σy = 355、E = 2.0×10⁵、ν = 0.3 で R = 1 になる幅厚比 */
 export const BT1 = 1 / plateR(1, 1, 355, 4);
+
+/**
+ * 映像5 の場面の並び(柱の説明と同じ順)。3D(このファイル)と文(Stage5.tsx)の両方が、場面を番号でなくこの ID で見分ける。
+ * 並べ替え・足し引きはここだけ直せばよい
+ */
+export const SCENE5 = ['intro', 'tug', 'width', 'support', 'line', 'thick', 'thin', 'elline', 'ideal', 'real', 'weld', 'edge', 'design', 'lab'] as const;
+export type Scene5 = (typeof SCENE5)[number];
+/** 10枚並べてグラフの壁と見せる場面 */
+const LINE_SCENES: readonly Scene5[] = ['line', 'thick', 'thin', 'elline', 'ideal', 'real', 'design'];
 const PB = 0.5; // 並べる板の幅(絵)
 // 応力の柱(場面「縁に寄る」): 下端の高さ、σy の高さ、この板の σel/σy(R = 1.6)、分布の形 1 − sin(πu) の平均
 const NB = 18;
@@ -698,18 +707,12 @@ export class Stage5Show extends ShowBase {
   }
 
   protected tick(dt: number) {
-    const raw = this.sceneIndex;
-    const c0 = this.clock;
-    // 場面の並び(柱の説明と同じ順): 0 現象 → 1 綱引き → 2 幅と厚み → 3 支え方 → 4 10枚並べる → 5 厚い板 → 6 薄い板
-    // → 7 σel の線 → 8 理想の板 → 9 現実の板(点)→ 10 なぜ下がる(溶接)→ 11 なぜ σy まで使えない(縁に寄る)→ 12 設計式 → 13 実験室
-    if (raw === 10) return this.tickWeld(c0);
-    if (raw === 11) return this.tickEdge(c0);
-    // 中で使う番号(0 現象・2 綱引き・3 幅・5 支え方・6 R・61 厚い板・62 薄い板・63 σel の線・7 理想・8 現実・9 設計・10 実験室)
-    const MAP = [0, 2, 3, 5, 6, 61, 62, 63, 7, 8, -1, -1, 9, 10];
-    const s = MAP[Math.min(raw, MAP.length - 1)];
+    const s: Scene5 = SCENE5[Math.min(this.sceneIndex, SCENE5.length - 1)];
     const c = this.clock;
+    if (s === 'weld') return this.tickWeld(c);
+    if (s === 'edge') return this.tickEdge(c);
     const k6 = 1 - Math.exp(-dt * 6);
-    if (s === 0) {
+    if (s === 'intro') {
       // 現象(28 秒): 箱形の柱の板が波打つ(0〜12 秒)→ 壁を1枚取り出して押す → 突然波打つ = σel(12〜28 秒)
       const T = this.cyc(28, c);
       if (T < 12) {
@@ -730,7 +733,7 @@ export class Stage5Show extends ShowBase {
           t < 2 ? '箱の壁を1枚。両側の縁は、隣の板に支えられている(緑)' : t < 8.9 ? `押す力 ${Math.round(p * 100)}%。板は平らなまま` : '突然波打った。この応力が σel(弾性局部座屈応力)';
         this.look(0, 0.75, 1.6, 1.35, 32, 14);
       }
-    } else if (s === 2) {
+    } else if (s === 'tug') {
       this.show(this.gOne);
       // 映像2 の綱引きと同じ筋(44 秒): もし波打ったら → 真ん中で切って w を見せる → 押し出す力 σt × w → 戻す力 = (板で決まる値) × w
       // → w は両方に同じ → σt と 板で決まる値(t で割ると σ と σel)を比べる → 超えた瞬間に波打つ
@@ -802,7 +805,7 @@ export class Stage5Show extends ShowBase {
       }
       const zw = this.isNarrow() ? 1.25 : 1;
       this.look(0.15, 0.8, 1.45 * zw, 1.25 * zw, 72, 10);
-    } else if (s === 3) {
+    } else if (s === 'width') {
       // 幅(36 秒): σel の式の b = 板の幅(紫の寸法線)→ 同じだけ波打たせて戻す力(青)を比べる → 同じ応力で押す
       this.show(this.gPair);
       const T = this.cyc(36, c);
@@ -863,7 +866,7 @@ export class Stage5Show extends ShowBase {
       this.shiftRight(this.gPair, 0.95, az);
       const zw = this.isNarrow() ? 1.15 : 1;
       this.look(0.05, 0.8, 2.9 * zw, 1.75 * zw, az, 12);
-    } else if (s === 5) {
+    } else if (s === 'support') {
       // 支え方(32 秒): σel の式の k = 支え方の係数 → 同じだけ波打たせて戻す力(青)を比べる → 同じ応力で押す
       this.show(this.gSup);
       const T = this.cyc(32, c);
@@ -906,12 +909,12 @@ export class Stage5Show extends ShowBase {
       this.shiftRight(this.gSup, 0.65, az);
       const zw = this.isNarrow() ? 1.15 : 1;
       this.look(0.05, 0.8, 2.9 * zw, 1.75 * zw, az, 12);
-    } else if ((s >= 6 && s <= 9) || s > 60) {
+    } else if (LINE_SCENES.includes(s)) {
       this.show(this.gLine, this.gWall);
       // 板の厚み(濃い色の縁)が見えるよう、少し斜め上から
       this.look(0, 2.05, 4.4, 3.3, 16, 15);
-      const DUR: Record<number, number> = { 6: 15, 61: 12, 62: 14, 63: 12, 7: 9, 8: 17, 9: 15 };
-      const t = this.once(DUR[s], c);
+      const DUR: Partial<Record<Scene5, number>> = { line: 15, thick: 12, thin: 14, elline: 12, ideal: 9, real: 17, design: 15 };
+      const t = this.once(DUR[s] ?? 15, c);
       // 板ごとの押す力と、波の大きさ
       const loads = new Array(N).fill(0);
       const amps = new Array(N).fill(0);
@@ -952,19 +955,19 @@ export class Stage5Show extends ShowBase {
         }
         pR[i] = k >= 1 ? 1 : 0;
       };
-      if (s === 6) {
+      if (s === 'line') {
         this.caption =
           t < 4
             ? '同じ幅で、厚みだけが違う板を10枚(左ほど厚い)'
             : t < 10
               ? '横軸は R = √(σy/σel)。R = 1 は、σel = σy になる板'
               : 'R = 1 より左は厚い板、右は薄い板';
-      } else if (s === 61) {
+      } else if (s === 'thick') {
         // 厚い板(R < 1)だけ押す: 波打つ前に降伏する
         for (let i = 0; i < N; i++) if (RS[i] < 1) doneIdeal(i, ramp(t, 1.5 + i * 1.1, 2.8 + i * 1.1));
         fy = ramp(t, 6.5, 8.5);
         this.caption = t < 6 ? '厚い板(R < 1)を押す。波打たずに、全体が降伏する(赤)' : '強さは σy で頭打ち。これが降伏の天井 1.0';
-      } else if (s === 62) {
+      } else if (s === 'thin') {
         // 薄い板(R > 1)も押す: σy より低い σel で波打つ
         for (let i = 0; i < N; i++) {
           if (RS[i] < 1) doneIdeal(i, 1);
@@ -975,13 +978,13 @@ export class Stage5Show extends ShowBase {
         }
         fy = 1;
         this.caption = t < 8.5 ? '薄い板(R > 1)は、σy に届く前に σel で波打つ' : '薄いほど、低い応力で波打つ';
-      } else if (s === 63) {
+      } else if (s === 'elline') {
         for (let i = 0; i < N; i++) doneIdeal(i, 1);
         fy = 1;
         fe = ramp(t, 1, 5);
         mark = t > 5;
         this.caption = t < 6 ? '波打つ応力の線: σel/σy = 1/R²' : '厚みが半分なら R は2倍、σel は 1/4。柱のオイラーの線と同じ形';
-      } else if (s === 7) {
+      } else if (s === 'ideal') {
         for (let i = 0; i < N; i++) doneIdeal(i, 1);
         fy = 1;
         fe = 1;
@@ -994,7 +997,7 @@ export class Stage5Show extends ShowBase {
         fe = 1;
         fi = 1;
         mark = true;
-        if (s === 8) {
+        if (s === 'real') {
           for (let i = 0; i < N; i++) {
             const t0 = 1 + (N - 1 - i) * 0.6;
             const k = ramp(t, t0, t0 + 0.5);

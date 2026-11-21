@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { plateState, plateStrength, plateTheory, plateWinter, sigmaEl } from '../physics/plate.ts';
-import { BT1, SIGMA_Y, Stage5Show, labR } from '../three/stage5.ts';
-import type { Lab5 } from '../three/stage5.ts';
+import { BT1, SCENE5, SIGMA_Y, Stage5Show, labR } from '../three/stage5.ts';
+import type { Lab5, Scene5 } from '../three/stage5.ts';
 import { Card, LabSlider, Steps, StoryShell, useShow } from '../ui/Story.tsx';
 import type { SceneText } from '../ui/Story.tsx';
 import { FitTex, Tex } from '../ui/Tex.tsx';
@@ -80,10 +80,13 @@ const SCENES: SceneText[] = [
     body: '幅・厚み・支え方を変えると、R が変わり、板が横軸の上を動きます。厚い板はそのまま降伏し、薄い板は波打ってから限界に達します。',
   },
 ];
+// 文の並びと場面の ID の並び(SCENE5)は同じ数でなければならない
+if (SCENES.length !== SCENE5.length) throw new Error(`映像5: 場面の文 ${SCENES.length} と場面の ID ${SCENE5.length} の数が合わない`);
 
-const SIDE: Record<number, React.ReactNode> = {
-  0: <Steps title="弾性局部座屈応力" steps={[['', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, 'd3']]} note="柱の σe にあたる値。" />,
-  1: (
+/** 場面ごとの横の札(場面の ID で引く) */
+const SIDE: Partial<Record<Scene5, React.ReactNode>> = {
+  intro: <Steps title="弾性局部座屈応力" steps={[['', String.raw`\sigma_{el}=\dfrac{k\pi^2E}{12(1-\nu^2)}\left(\dfrac{t}{b}\right)^2`, 'd3']]} note="柱の σe にあたる値。" />,
+  tug: (
     <Steps
       title="綱引き(柱の P × y と EI × 1/R と同じ形)"
       steps={[
@@ -95,7 +98,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="w = 波の高さ(柱の y)、σt = 幅1あたりの押す力(柱の P)。板は縦・横の曲がりとねじれで戻すので、柱の EI × 1/R ほど単純な形にはならない。板で決まる値 ÷ t が σel(導き方は補足)。わずかな波の範囲の話。"
     />
   ),
-  2: (
+  width: (
     <Steps
       title="幅と厚みの効き方"
       steps={[
@@ -105,7 +108,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="(t/b)² の前は、材料と支え方で決まる数。だから σel は (t/b)² に比例する(t/b が2倍なら4倍)。"
     />
   ),
-  3: (
+  support: (
     <Steps
       title="支え方と k(長い板)"
       steps={[
@@ -116,7 +119,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="柱の有効座屈長にあたる。k が大きいほど強い。"
     />
   ),
-  4: (
+  line: (
     <Steps
       title="R の導出(λ と同じ作り方)"
       steps={[
@@ -128,7 +131,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="R は幅厚比 b/t に比例する。R = 1 が、降伏と波打ちの分かれ目。"
     />
   ),
-  5: (
+  thick: (
     <Steps
       title="厚い板(R < 1)"
       steps={[
@@ -138,7 +141,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="柱の「短い柱はつぶれる」にあたる。"
     />
   ),
-  6: (
+  thin: (
     <Steps
       title="薄い板(R > 1)"
       steps={[
@@ -148,7 +151,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="柱の「長い柱は曲がって逃げる」にあたる。"
     />
   ),
-  7: (
+  elline: (
     <Steps
       title="σel の線"
       steps={[
@@ -158,9 +161,9 @@ const SIDE: Record<number, React.ReactNode> = {
       ]}
     />
   ),
-  8: <Steps title="理想の板\" steps={[['', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{\sigma_{el}}{\sigma_y}\right)=\min\left(1,\ \dfrac{1}{R^2}\right)`, 'ds-p1']]} />,
-  9: <Steps title="現実の板の強さの目安(両縁支持)" steps={[['Winter', String.raw`\dfrac{\sigma_u}{\sigma_y}=\dfrac{R-0.22}{R^2}\quad(R>0.673)`, 'ds-p2']]} note="有効幅の考え方による目安(Eurocode 3 の両縁支持板と同じ形)。" />,
-  10: (
+  ideal: <Steps title="理想の板\" steps={[['', String.raw`\dfrac{\sigma_{cr}}{\sigma_y}=\min\left(1,\ \dfrac{\sigma_{el}}{\sigma_y}\right)=\min\left(1,\ \dfrac{1}{R^2}\right)`, 'ds-p1']]} />,
+  real: <Steps title="現実の板の強さの目安(両縁支持)" steps={[['Winter', String.raw`\dfrac{\sigma_u}{\sigma_y}=\dfrac{R-0.22}{R^2}\quad(R>0.673)`, 'ds-p2']]} note="有効幅の考え方による目安(Eurocode 3 の両縁支持板と同じ形)。" />,
+  weld: (
     <Steps
       title="初期たわみは、押すと増える(柱と同じ)"
       steps={[
@@ -172,7 +175,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="中央側は残留応力でもともと押されているので、先に反りがふくらむ。0.78 は Winter の式の R = 1 の値(目安)。"
     />
   ),
-  11: (
+  edge: (
     <Steps
       title="縁に寄る応力と、有効幅"
       steps={[
@@ -183,7 +186,7 @@ const SIDE: Record<number, React.ReactNode> = {
       note="映像の応力の並びは、中央を σel で頭打ちにした簡単なモデル(限界の平均は 0.61σy)。"
     />
   ),
-  12: (
+  design: (
     <Steps
       title="設計式(道路橋示方書・平成24年版まで)"
       steps={[
@@ -383,6 +386,10 @@ export default function Stage5() {
     setLab(next);
     if (show.current) show.current.lab = next;
   };
+  // 場面は ID で見分ける(並びは SCENE5)。pos = いまの場面の位置、at(id) = その場面の位置
+  const id: Scene5 = SCENE5[Math.min(scene, SCENE5.length - 1)];
+  const pos = scene;
+  const at = (x: Scene5) => SCENE5.indexOf(x);
   const R = labR(lab);
   const free = lab.k < 1;
   const design = plateStrength(R);
@@ -412,36 +419,36 @@ export default function Stage5() {
       canvasRef={canvasRef}
       capRef={capRef}
       overlay={
-        scene === 1 ? <PlateTugOverlay phase={phase} pRef={pRef} beamRef={beamRef} stateRef={stateRef} /> : scene === 2 ? <WidthOverlay phase={phase} /> : scene === 3 ? <KOverlay phase={phase} /> : undefined
+        id === 'tug' ? <PlateTugOverlay phase={phase} pRef={pRef} beamRef={beamRef} stateRef={stateRef} /> : id === 'width' ? <WidthOverlay phase={phase} /> : id === 'support' ? <KOverlay phase={phase} /> : undefined
       }
       hint="板の厚みと波の高さは見やすく誇張しています(10枚並べた板の厚みは、どれも本当の 3 倍。厚みの比は正しい)・なぞると回転・2本指で移動と拡大縮小(PC は右ドラッグ・ホイール)"
       side={
         <>
-          {SIDE[scene]}
-          {((scene >= 5 && scene <= 9) || scene >= 12) && (
+          {SIDE[id]}
+          {at('thick') <= pos && (pos <= at('real') || pos >= at('design')) && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip color="#e11d48" text="降伏の天井 1.0" />
-              {scene >= 7 && <Chip color="#6d28d9" text="σel/σy = 1/R²" />}
-              {scene >= 8 && <Chip color="#16a34a" text="理想の板" />}
-              {scene >= 9 && <Chip color="#0f766e" text="現実の板(目安)" />}
-              {scene >= 12 && <Chip color="#0284c7" text="設計式" />}
+              {pos >= at('elline') && <Chip color="#6d28d9" text="σel/σy = 1/R²" />}
+              {pos >= at('ideal') && <Chip color="#16a34a" text="理想の板" />}
+              {pos >= at('real') && <Chip color="#0f766e" text="現実の板(目安)" />}
+              {pos >= at('design') && <Chip color="#0284c7" text="設計式" />}
             </div>
           )}
-          {scene === 10 && (
+          {id === 'weld' && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip color="#0284c7" text="圧縮(残留応力+押す力)" />
               <Chip color="#e11d48" text="降伏(縁側から)" />
               <Chip color="#ea580c" text="引張(溶接した縁の近く)" />
             </div>
           )}
-          {scene === 11 && (
+          {id === 'edge' && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip color="#0284c7" text="幅方向の応力(板の上の柱)" />
               <Chip color="#e11d48" text="σy に届いた所" />
               <Chip color="#6d28d9" text="σel(波打ち始める応力)" />
             </div>
           )}
-          {scene <= 3 && (
+          {pos <= at('support') && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-studio-700 px-3 py-2 text-xs">
               <Chip color="#1f2a44" text="外力(押す力)" />
               <Chip color="#64748b" text="反力" />
